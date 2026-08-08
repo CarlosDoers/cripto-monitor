@@ -5,7 +5,14 @@ import { useSyncExternalStore, useCallback } from 'react'
  * shareable URLs and a working back button without pulling in a router.
  */
 
-export const ROUTES = ['resumen', 'cartera', 'posiciones', 'ordenes', 'historial'] as const
+export const ROUTES = [
+  'resumen',
+  'rendimiento',
+  'cartera',
+  'posiciones',
+  'ordenes',
+  'historial',
+] as const
 export type Route = (typeof ROUTES)[number]
 
 function subscribe(callback: () => void) {

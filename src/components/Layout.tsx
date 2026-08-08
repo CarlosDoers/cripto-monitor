@@ -8,6 +8,7 @@ import {
   IconMoon,
   IconOrders,
   IconOverview,
+  IconPerformance,
   IconPositions,
   IconRefresh,
   IconSun,
@@ -16,6 +17,7 @@ import {
 
 const NAV: Record<Route, { label: string; Icon: typeof IconOverview }> = {
   resumen: { label: 'Resumen', Icon: IconOverview },
+  rendimiento: { label: 'Rendimiento', Icon: IconPerformance },
   cartera: { label: 'Cartera', Icon: IconWallet },
   posiciones: { label: 'Posiciones', Icon: IconPositions },
   ordenes: { label: 'Órdenes', Icon: IconOrders },

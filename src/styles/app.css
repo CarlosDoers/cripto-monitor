@@ -261,6 +261,18 @@ select {
   padding: 12px 0 0;
 }
 
+.card-link {
+  font-size: 12px;
+  color: var(--accent);
+  text-decoration: none;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.card-link:hover {
+  text-decoration: underline;
+}
+
 /* Refetch keeps the previous render, dimmed — never a skeleton flash. */
 .is-refetching {
   opacity: 0.55;
@@ -434,6 +446,190 @@ select {
   font-variant-numeric: tabular-nums;
 }
 
+/* ---------- Filter row ---------- */
+
+/* One row above everything it scopes — never a filter inside a chart card. */
+.filter-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: -4px;
+}
+
+.footnote {
+  color: var(--ink-muted);
+  font-size: 12px;
+  line-height: 1.6;
+  max-width: 68ch;
+}
+
+/* ---------- Win / loss split ---------- */
+
+.winloss {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.winloss-track {
+  display: flex;
+  gap: 2px; /* surface gap, never a border */
+  height: 32px;
+}
+
+.winloss-seg {
+  display: grid;
+  place-items: center;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: #fff;
+  min-width: 4px;
+}
+
+.winloss-seg--win {
+  background: var(--good);
+}
+
+.winloss-seg--loss {
+  background: var(--critical);
+}
+
+.winloss-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+}
+
+/* ---------- Diverging bars ---------- */
+
+.diverging {
+  list-style: none;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+
+.diverging-row {
+  display: grid;
+  grid-template-columns: minmax(64px, max-content) minmax(0, 1fr) minmax(84px, max-content);
+  align-items: center;
+  gap: 12px;
+}
+
+.diverging-label {
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.diverging-track {
+  position: relative;
+  height: 14px;
+  border-radius: 3px;
+  background: var(--surface-inset);
+}
+
+.diverging-zero {
+  position: absolute;
+  top: -2px;
+  bottom: -2px;
+  width: 1px;
+  background: var(--baseline);
+}
+
+.diverging-bar {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+}
+
+.diverging-value {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+/* ---------- Average win vs loss ---------- */
+
+.avg-compare {
+  list-style: none;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.avg-compare li {
+  display: grid;
+  grid-template-columns: minmax(108px, max-content) minmax(0, 1fr) minmax(84px, max-content);
+  align-items: center;
+  gap: 12px;
+}
+
+.avg-label {
+  color: var(--ink-secondary);
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.avg-track {
+  height: 14px;
+  border-radius: 3px;
+  background: var(--surface-inset);
+  overflow: hidden;
+}
+
+.avg-bar {
+  display: block;
+  height: 100%;
+  border-radius: 3px;
+}
+
+.avg-value {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+/* ---------- Metric list ---------- */
+
+.metrics {
+  list-style: none;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 2px;
+}
+
+.metrics li {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 14px 10px 0;
+}
+
+.metric-label {
+  font-size: 12px;
+  color: var(--ink-secondary);
+}
+
+.metric-value {
+  font-size: 17px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.metric-hint {
+  font-size: 11px;
+  color: var(--ink-muted);
+}
+
 /* ---------- Table ---------- */
 
 .table-wrap {
@@ -477,6 +673,13 @@ table.data tbody tr:hover td {
 
 .num {
   text-align: right;
+}
+
+.table-more {
+  display: flex;
+  justify-content: center;
+  padding: 14px 18px 4px;
+  border-top: 1px solid var(--gridline);
 }
 
 .ccy {

@@ -1,31 +1,39 @@
 import { usePortfolio } from '../lib/portfolio'
+import { usePerformance } from '../lib/performance'
 import { useBalance, usePositions } from '../lib/queries'
 import { num, pct, qty, share, signedUsd, usd, usdCompact } from '../lib/format'
 import { AllocationBar } from '../components/AllocationBar'
 import { HoldingsTable } from '../components/HoldingsTable'
-import { Card, Delta, DeltaValue, ErrorNotice, Skeleton, Stat, TableSkeleton } from '../components/ui'
+import { PnlCurve } from '../components/PnlCurve'
+import { IconAlert } from '../components/icons'
+import {
+  Card,
+  Delta,
+  DeltaValue,
+  ErrorNotice,
+  Skeleton,
+  Stat,
+  TableSkeleton,
+} from '../components/ui'
 
 /**
- * OKX reports the account margin ratio as a multiple (1.0 = the maintenance
- * requirement), and shows it as a percentage in its own UI. Below ~150 % the
+ * OKX reports the account margin ratio as a multiple of the maintenance
+ * requirement, and shows it as a percentage in its own UI. Under ~150 % the
  * account is close to liquidation.
  */
-function marginRisk(ratio: number): string {
-  if (ratio < 1.5) return 'Riesgo de liquidación'
-  if (ratio < 3) return 'Precaución'
-  return 'Saludable'
-}
+const MARGIN_WARN = 3
 
 export function Overview() {
   const portfolio = usePortfolio()
   const balance = useBalance()
   const positions = usePositions()
+  const perf = usePerformance('30d')
 
   const account = balance.data?.[0]
   const openPositions = positions.data ?? []
   const unrealised = openPositions.reduce((sum, p) => sum + num(p.upl), 0)
   const marginRatio = num(account?.mgnRatio)
-  const hasLeverage = openPositions.length > 0 && marginRatio > 0
+  const atRisk = openPositions.length > 0 && marginRatio > 0 && marginRatio < MARGIN_WARN
 
   if (portfolio.error) {
     return (
@@ -38,6 +46,21 @@ export function Overview() {
 
   return (
     <>
+      {/* Emphasis: the margin ratio only earns space when it means something. */}
+      {atRisk && (
+        <div className="notice notice--error">
+          <IconAlert />
+          <div className="notice-body">
+            <p className="notice-title">Margen ajustado: {share(marginRatio, 0)}</p>
+            <p className="notice-text">
+              Con {openPositions.length}{' '}
+              {openPositions.length === 1 ? 'posición abierta' : 'posiciones abiertas'}, el margen
+              se acerca al nivel de liquidación.
+            </p>
+          </div>
+        </div>
+      )}
+
       <div className="kpi-row">
         <Stat
           label="Patrimonio total"
@@ -54,12 +77,6 @@ export function Overview() {
           }
         />
         <Stat
-          label="Cuenta de trading"
-          loading={balance.isLoading}
-          value={usdCompact(num(account?.totalEq))}
-          foot={<span>{portfolio.holdings.length} activos</span>}
-        />
-        <Stat
           label="PnL no realizado"
           loading={positions.isLoading}
           value={<DeltaValue value={unrealised}>{signedUsd(unrealised)}</DeltaValue>}
@@ -71,14 +88,37 @@ export function Overview() {
           }
         />
         <Stat
-          label="Ratio de margen"
-          loading={balance.isLoading}
-          value={hasLeverage ? share(marginRatio, 0) : '—'}
+          label="Operaciones ganadas"
+          loading={perf.isLoading}
+          value={perf.count > 0 ? share(perf.winRate, 1) : '—'}
           foot={
-            <span>{hasLeverage ? marginRisk(marginRatio) : 'Sin posiciones apalancadas'}</span>
+            <span>
+              {perf.count > 0 ? `${perf.wins} de ${perf.wins + perf.losses} · 30 días` : '30 días'}
+            </span>
           }
         />
+        <Stat
+          label="PnL realizado"
+          loading={perf.isLoading}
+          value={<DeltaValue value={perf.netPnl}>{signedUsd(perf.netPnl)}</DeltaValue>}
+          foot={<span>30 días · {perf.count} operaciones</span>}
+        />
       </div>
+
+      {perf.count > 1 && (
+        <Card
+          title="Evolución del resultado"
+          subtitle="PnL acumulado, últimos 30 días"
+          dimmed={perf.isFetching && !perf.isLoading}
+          action={
+            <a className="card-link" href="#/rendimiento">
+              Ver rendimiento →
+            </a>
+          }
+        >
+          <PnlCurve points={perf.equityCurve} trades={perf.trades} height={160} />
+        </Card>
+      )}
 
       <Card
         title="Distribución de la cartera"
@@ -97,6 +137,11 @@ export function Overview() {
         subtitle="Los 8 mayores por valor"
         flush
         dimmed={portfolio.isFetching && !portfolio.isLoading}
+        action={
+          <a className="card-link" href="#/cartera">
+            Ver cartera →
+          </a>
+        }
       >
         {portfolio.isLoading ? (
           <TableSkeleton rows={5} cols={5} />
@@ -108,8 +153,16 @@ export function Overview() {
       {openPositions.length > 0 && (
         <Card
           title="Posiciones abiertas"
+          subtitle={
+            marginRatio > 0 ? `Ratio de margen ${share(marginRatio, 0)}` : undefined
+          }
           flush
           dimmed={positions.isFetching && !positions.isLoading}
+          action={
+            <a className="card-link" href="#/posiciones">
+              Ver posiciones →
+            </a>
+          }
         >
           <div className="table-wrap">
             <table className="data">

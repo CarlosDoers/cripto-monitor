@@ -101,6 +101,13 @@ export const IconInbox = (p: Props) => (
   </svg>
 )
 
+export const IconPerformance = (p: Props) => (
+  <svg {...base} className={p.className}>
+    <path d="M3 3v18h18" />
+    <path d="M7 15l3.5-4 3 2.5L20 7" />
+  </svg>
+)
+
 export const IconLock = (p: Props) => (
   <svg {...base} className={p.className}>
     <rect x="4" y="10" width="16" height="11" rx="2" />

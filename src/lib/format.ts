@@ -89,6 +89,39 @@ export function dateTime(ms: string | number): string {
   }).format(new Date(value))
 }
 
+/** A plain ratio like the profit factor — comma decimal separator, as in es-ES. */
+export function ratio(value: number, digits = 2): string {
+  if (!Number.isFinite(value)) return '∞'
+  return new Intl.NumberFormat('es-ES', {
+    minimumFractionDigits: digits,
+    maximumFractionDigits: digits,
+  }).format(value)
+}
+
+/** Axis ticks: no decimals, no "-0", thousands separated. */
+export function axisTick(value: number): string {
+  const v = Object.is(value, -0) || Math.abs(value) < 0.5 ? 0 : value
+  return new Intl.NumberFormat('es-ES', { maximumFractionDigits: 0 }).format(v)
+}
+
+/** A held-for duration, in Spanish notation (comma decimal separator). */
+export function duration(ms: number): string {
+  const dec = (n: number) =>
+    new Intl.NumberFormat('es-ES', { maximumFractionDigits: 1 }).format(n)
+
+  const minutes = ms / 60_000
+  if (minutes < 60) return `${Math.round(minutes)} min`
+  const hours = minutes / 60
+  if (hours < 48) return `${dec(hours)} h`
+  const days = hours / 24
+  return `${dec(days)} ${days < 2 ? 'día' : 'días'}`
+}
+
+/** "1 operación" / "5 operaciones", so counts never read as "1 ops". */
+export function plural(count: number, one: string, many: string): string {
+  return `${count} ${count === 1 ? one : many}`
+}
+
 export function timeAgo(ms: number): string {
   const seconds = Math.round((Date.now() - ms) / 1000)
   if (seconds < 5) return 'ahora mismo'

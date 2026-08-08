@@ -6,6 +6,7 @@ import type {
   AssetValuation,
   Bill,
   Candle,
+  ClosedPosition,
   Fill,
   FundingBalance,
   Order,
@@ -43,6 +44,50 @@ export function useBalance() {
 
 export function usePositions() {
   return useOkx<Position>(['positions'], '/api/v5/account/positions')
+}
+
+/** OKX hard-caps a page at 100; this bounds how many pages we chase. */
+const MAX_PAGES = 5
+const PAGE_SIZE = 100
+
+export interface ClosedPositionsResult {
+  positions: ClosedPosition[]
+  /** True when the account has more history than MAX_PAGES could fetch. */
+  truncated: boolean
+}
+
+/**
+ * Every closed position, paginated.
+ *
+ * Without this the statistics would silently stop at 100 trades and start
+ * lying — a win rate over "all time" that quietly means "the last 100".
+ * `after` asks OKX for records older than the given close time.
+ */
+export function useClosedPositions() {
+  return useQuery<ClosedPositionsResult, ApiError>({
+    queryKey: ['positions-history'],
+    queryFn: async () => {
+      const positions: ClosedPosition[] = []
+      let after: string | undefined
+
+      for (let page = 0; page < MAX_PAGES; page++) {
+        const batch = await okx<ClosedPosition>('/api/v5/account/positions-history', {
+          limit: PAGE_SIZE,
+          after,
+        })
+        positions.push(...batch)
+        if (batch.length < PAGE_SIZE) return { positions, truncated: false }
+
+        after = batch.reduce(
+          (oldest, row) => (Number(row.uTime) < Number(oldest) ? row.uTime : oldest),
+          batch[0].uTime,
+        )
+      }
+
+      return { positions, truncated: true }
+    },
+    refetchInterval: SLOW,
+  })
 }
 
 export function useFunding() {

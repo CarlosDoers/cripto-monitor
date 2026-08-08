@@ -70,6 +70,39 @@ export interface Position {
   uTime: string
 }
 
+/**
+ * A closed derivatives position — OKX's own record of a completed trade, with
+ * the realised PnL already net of fees and funding. This is the only place the
+ * exchange reports per-trade profit: spot fills carry `fillPnl: 0`.
+ */
+export interface ClosedPosition {
+  posId: string
+  instId: string
+  instType: string
+  /** Close reason: 1 partial, 2 full, 3 liquidation, 4 partial liquidation, 5 ADL. */
+  type: string
+  direction: string
+  lever: string
+  mgnMode: string
+  ccy: string
+  openAvgPx: string
+  closeAvgPx: string
+  openMaxPos: string
+  closeTotalPos: string
+  /** Gross PnL, before costs. */
+  pnl: string
+  /** Net of fees and funding — the number that actually hit the balance. */
+  realizedPnl: string
+  pnlRatio: string
+  fee: string
+  fundingFee: string
+  liqPenalty: string
+  /** Opened at. */
+  cTime: string
+  /** Closed at. */
+  uTime: string
+}
+
 export interface FundingBalance {
   ccy: string
   bal: string

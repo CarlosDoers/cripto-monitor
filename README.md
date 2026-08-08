@@ -86,28 +86,38 @@ el directorio `api/` como funciones con el mismo formato web estándar
 (`Request`/`Response`) que ya usa el código. En Netlify habría que mover las
 funciones a `netlify/functions/` y adaptar la firma.
 
+### Primera vez
+
 ```bash
-git init && git add -A && git commit -m "Cripto Monitor"
-# sube el repo a GitHub, luego en vercel.com: Add New → Project → importar
+vercel login
+vercel link             # crea o enlaza el proyecto
+./scripts/push-env.sh   # sube las variables desde .env.local
+vercel --prod
 ```
 
-Vercel detecta Vite solo. En **Settings → Environment Variables** añade:
-
-```
-OKX_API_KEY          = tu key
-OKX_API_SECRET       = tu secret
-OKX_API_PASSPHRASE   = tu passphrase
-APP_ACCESS_TOKEN     = una contraseña larga (openssl rand -base64 32)
-OKX_BASE_URL         = https://eea.okx.com
-```
+`push-env.sh` publica cada variable de `.env.local` en *Production* y *Preview*,
+marcando las cuatro credenciales como **sensibles** para que Vercel las cifre y
+no vuelva a mostrarlas. Omite las variables `VERCEL_*`, que inyecta la propia
+plataforma en cada deployment.
 
 > `OKX_BASE_URL` no es opcional: si tu clave pertenece a una entidad regional,
 > sin esa variable Vercel llamaría al dominio global y OKX respondería
-> `API key doesn't exist`. Usa el mismo valor que tengas en `.env.local`.
+> `API key doesn't exist`.
 
-Marca las cinco para *Production*, *Preview* y *Development*. Después de
-añadirlas, **vuelve a desplegar** (Deployments → ⋯ → Redeploy): las variables
-solo se aplican a builds nuevos.
+Si prefieres el panel, las variables van en **Settings → Environment Variables**.
+En ese caso hay que **volver a desplegar** después de añadirlas (Deployments →
+⋯ → Redeploy): solo se aplican a builds nuevos.
+
+### Cada cambio
+
+```bash
+git push        # publica el código
+vercel --prod   # despliega
+```
+
+Son dos pasos independientes: subir a GitHub no despliega nada. Para que el push
+dispare el deploy hay que conectar el repositorio en *Settings → Git*, lo que
+requiere instalar la app de Vercel en la cuenta de GitHub que sea dueña del repo.
 
 ### Protege el acceso
 

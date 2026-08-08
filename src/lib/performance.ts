@@ -57,6 +57,19 @@ export interface GroupStats {
   pnl: number
 }
 
+/**
+ * Below this many trades a bucket's win rate is noise, not signal — one lucky
+ * trade reads as "100 %". Such buckets are shown but visibly de-emphasised.
+ */
+export const MIN_SAMPLE = 5
+
+export interface TimeBucket extends GroupStats {
+  /** 0–23 for hours, 0–6 (Monday-first) for weekdays. */
+  index: number
+  label: string
+  reliable: boolean
+}
+
 export interface Performance {
   trades: Trade[]
   count: number
@@ -84,6 +97,12 @@ export interface Performance {
   avgDuration?: number
   byInstrument: GroupStats[]
   byDirection: GroupStats[]
+  /** 24 buckets by local hour of entry. */
+  byHour: TimeBucket[]
+  /** 7 buckets by local weekday of entry, Monday first. */
+  byWeekday: TimeBucket[]
+  /** Whether any trade reported an open time — the timing views need it. */
+  hasEntryTimes: boolean
   /** Cumulative net PnL after each trade, oldest first. */
   equityCurve: { t: number; value: number }[]
   liquidations: number
@@ -144,6 +163,51 @@ function group(trades: Trade[], keyOf: (t: Trade) => string): GroupStats[] {
     g.winRate = decided > 0 ? g.wins / decided : 0
   }
   return [...map.values()].sort((a, b) => b.pnl - a.pnl)
+}
+
+const WEEKDAYS = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo']
+
+/**
+ * Buckets trades by when they were *opened*, in the viewer's own timezone —
+ * the entry is the decision being judged, and "do I trade badly at night?" is a
+ * question about local nights.
+ *
+ * Every bucket is emitted, including empty ones, so the axis stays a continuous
+ * timeline instead of silently skipping the hours with no activity.
+ */
+function bucketByTime(
+  trades: Trade[],
+  size: number,
+  indexOf: (d: Date) => number,
+  labelOf: (i: number) => string,
+): TimeBucket[] {
+  const buckets: TimeBucket[] = Array.from({ length: size }, (_, index) => ({
+    key: String(index),
+    index,
+    label: labelOf(index),
+    trades: 0,
+    wins: 0,
+    losses: 0,
+    winRate: 0,
+    pnl: 0,
+    reliable: false,
+  }))
+
+  for (const t of trades) {
+    if (!t.openedAt) continue
+    const b = buckets[indexOf(new Date(t.openedAt))]
+    b.trades++
+    b.pnl += t.pnl
+    if (t.pnl > 0) b.wins++
+    else if (t.pnl < 0) b.losses++
+  }
+
+  for (const b of buckets) {
+    const decided = b.wins + b.losses
+    b.winRate = decided > 0 ? b.wins / decided : 0
+    b.reliable = b.trades >= MIN_SAMPLE
+  }
+  return buckets
 }
 
 export function computePerformance(positions: ClosedPosition[], days: number): Performance {
@@ -210,6 +274,15 @@ export function computePerformance(positions: ClosedPosition[], days: number): P
       : undefined,
     byInstrument: group(trades, (t) => t.symbol),
     byDirection: group(trades, (t) => t.direction),
+    byHour: bucketByTime(trades, 24, (d) => d.getHours(), (i) => `${i}:00`),
+    // getDay() is Sunday-first; shift so the week reads Monday → Sunday.
+    byWeekday: bucketByTime(
+      trades,
+      7,
+      (d) => (d.getDay() + 6) % 7,
+      (i) => WEEKDAYS[i],
+    ),
+    hasEntryTimes: trades.some((t) => t.openedAt > 0),
     equityCurve,
     liquidations: trades.filter((t) => t.liquidated).length,
     firstTradeAt: trades[0]?.closedAt,

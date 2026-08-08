@@ -597,6 +597,109 @@ select {
   font-weight: 500;
 }
 
+/* ---------- Hourly columns ---------- */
+
+.hourly {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* grid-template-rows is set inline: the split between the positive and negative
+   bands follows the data, not a fixed 50/50. */
+.hourly-plot {
+  display: grid;
+  grid-template-columns: repeat(24, 1fr);
+  gap: 2px; /* surface gap between adjacent bars */
+  height: 132px;
+}
+
+.hourly-col {
+  display: grid;
+  grid-template-rows: 1fr 1px 1fr;
+  height: 100%;
+  border-radius: 3px;
+  transition: background 0.12s;
+}
+
+.hourly-col:hover {
+  background: var(--surface-2);
+}
+
+.hourly-col.is-empty {
+  opacity: 0.4;
+}
+
+/* Small samples stay visible but recede — a 100 % win rate over 2 trades
+   should not read as loudly as one over 20. */
+.hourly-col.is-thin .hourly-bar {
+  opacity: 0.45;
+}
+
+.hourly-up {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+
+.hourly-down {
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+}
+
+.hourly-axis {
+  background: var(--baseline);
+}
+
+.hourly-bar {
+  display: block;
+  width: 100%;
+  border-radius: 3px 3px 0 0;
+}
+
+.hourly-bar--down {
+  border-radius: 0 0 3px 3px;
+}
+
+.hourly-ticks {
+  position: relative;
+  height: 14px;
+  font-size: 11px;
+  color: var(--ink-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.hourly-ticks span {
+  position: absolute;
+  transform: translateX(-50%);
+}
+
+.hourly-readout {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  font-size: 12px;
+  color: var(--ink-secondary);
+  min-height: 18px;
+  font-variant-numeric: tabular-nums;
+}
+
+.hourly-table summary {
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--ink-secondary);
+  padding: 4px 0;
+}
+
+.hourly-table summary:hover {
+  color: var(--ink-primary);
+}
+
+.hourly-table .table-wrap {
+  margin: 8px -18px 0;
+}
+
 /* ---------- Metric list ---------- */
 
 .metrics {
@@ -1033,6 +1136,9 @@ table.data tbody tr:hover td {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
   gap: 16px;
+  /* Each card keeps its natural height: stretching a short one to match its
+     neighbour just adds empty space below the content. */
+  align-items: start;
 }
 
 .row {

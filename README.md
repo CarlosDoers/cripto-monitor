@@ -1,8 +1,25 @@
 # Cripto Monitor
 
 Panel de solo lectura para tu cuenta de OKX: patrimonio, cartera, posiciones,
-órdenes e historial. Vite + React + TypeScript, con una función serverless que
-firma las peticiones a la API.
+órdenes, historial y estadísticas de trading. Vite + React + TypeScript, con una
+función serverless que firma las peticiones a la API.
+
+## Secciones
+
+| Vista | Qué muestra |
+| --- | --- |
+| **Resumen** | Patrimonio, PnL abierto y realizado, win rate, curva de resultado y distribución |
+| **Rendimiento** | Win rate, factor de beneficio, curva de PnL, resultado por activo, dirección, hora del día y día de la semana |
+| **Cartera** | Todos los activos con precio, variación 24 h y peso |
+| **Posiciones** | Posiciones abiertas con liquidación, margen y PnL |
+| **Órdenes** | Abiertas e historial por tipo de instrumento |
+| **Historial** | Ejecuciones y movimientos de cuenta |
+
+Las estadísticas de **Rendimiento** salen de `/api/v5/account/positions-history`,
+donde OKX reporta el PnL por operación ya neto de comisiones y financiación. Las
+operaciones de spot quedan fuera a propósito: OKX devuelve `fillPnl: 0` en spot,
+así que un win rate ahí habría que estimarlo con un modelo de coste medio sobre
+un historial truncado, y saldrían cifras con apariencia de fiables sin serlo.
 
 ---
 

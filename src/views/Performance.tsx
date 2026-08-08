@@ -1,5 +1,11 @@
 import { useState, type ReactNode } from 'react'
-import { PERIODS, usePerformance, type PeriodKey, type Trade } from '../lib/performance'
+import {
+  MIN_SAMPLE,
+  PERIODS,
+  usePerformance,
+  type PeriodKey,
+  type Trade,
+} from '../lib/performance'
 import {
   dateTime,
   duration,
@@ -13,6 +19,7 @@ import {
   usd,
 } from '../lib/format'
 import { PnlCurve } from '../components/PnlCurve'
+import { HourlyBars } from '../components/HourlyBars'
 import { AvgCompare, DivergingBars, WinLossBar } from '../components/PerfCharts'
 import {
   Badge,
@@ -304,7 +311,10 @@ export function Performance() {
                 key: g.key,
                 label: g.key,
                 value: g.pnl,
-                meta: `${plural(g.trades, "op", "ops")} · ${share(g.winRate, 0)}`,
+                meta:
+                  g.trades >= MIN_SAMPLE
+                    ? `${plural(g.trades, "op", "ops")} · ${share(g.winRate, 0)}`
+                    : `${plural(g.trades, "op", "ops")} · muestra corta`,
               }))}
             />
           )}
@@ -325,6 +335,41 @@ export function Performance() {
           )}
         </Card>
       </div>
+
+      {p.hasEntryTimes && (
+        <div className="grid-2">
+          <Card
+            title="Resultado por hora de entrada"
+            subtitle={`Hora local · las franjas con menos de ${MIN_SAMPLE} operaciones se muestran atenuadas`}
+            dimmed={dimmed}
+          >
+            {p.isLoading ? <Skeleton height={132} /> : <HourlyBars buckets={p.byHour} />}
+          </Card>
+
+          <Card
+            title="Resultado por día de la semana"
+            subtitle="Según el día en que abriste la posición"
+            dimmed={dimmed}
+          >
+            {p.isLoading ? (
+              <Skeleton height={132} />
+            ) : (
+              <DivergingBars
+                rows={p.byWeekday
+                  .filter((b) => b.trades > 0)
+                  .map((b) => ({
+                    key: b.key,
+                    label: b.label,
+                    value: b.pnl,
+                    meta: b.reliable
+                      ? `${plural(b.trades, 'op', 'ops')} · ${share(b.winRate, 0)}`
+                      : `${plural(b.trades, 'op', 'ops')} · muestra corta`,
+                  }))}
+              />
+            )}
+          </Card>
+        </div>
+      )}
 
       <Card
         title="Operaciones cerradas"

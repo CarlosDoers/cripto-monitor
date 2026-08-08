@@ -84,9 +84,9 @@ APP_ACCESS_TOKEN     = una contraseña larga (openssl rand -base64 32)
 OKX_BASE_URL         = https://eea.okx.com
 ```
 
-> `OKX_BASE_URL` no es opcional en este caso: **esta cuenta está en la entidad
-> europea**. Sin esa variable, Vercel usaría el dominio global y OKX respondería
-> `API key doesn't exist`. Es el mismo valor que tienes en `.env.local`.
+> `OKX_BASE_URL` no es opcional: si tu clave pertenece a una entidad regional,
+> sin esa variable Vercel llamaría al dominio global y OKX respondería
+> `API key doesn't exist`. Usa el mismo valor que tengas en `.env.local`.
 
 Marca las cinco para *Production*, *Preview* y *Development*. Después de
 añadirlas, **vuelve a desplegar** (Deployments → ⋯ → Redeploy): las variables
@@ -154,8 +154,9 @@ Si te acercas al límite de invocaciones del plan Hobby, sube `LIVE` y `SLOW` en
 
 - **Región.** OKX opera entidades regionales separadas y una clave solo existe en
   la suya. `API key doesn't exist` (código `50119`) casi nunca significa que la
-  hayas copiado mal: significa que estás llamando al dominio equivocado. Esta
-  cuenta usa `https://eea.okx.com`; el error de la app ya incluye la pista.
+  hayas copiado mal: significa que estás llamando al dominio equivocado. Prueba
+  `https://eea.okx.com` (Europa) o `https://app.okx.com` (EE. UU.) — el error de
+  la app ya incluye la pista.
 - **Endpoints nuevos.** Para consumir otro endpoint de OKX, añádelo a
   `ALLOWED_PATHS` en [api/_okx.ts](api/_okx.ts) y crea su hook en
   [src/lib/queries.ts](src/lib/queries.ts). Solo lectura.

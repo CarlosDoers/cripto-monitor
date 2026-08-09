@@ -1251,3 +1251,14 @@ table.data tbody tr:hover td {
   white-space: nowrap;
   border: 0;
 }
+
+/* Marks the timeframe that survives trading costs. */
+.tf-mark {
+  display: inline-block;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--good);
+  margin-left: 5px;
+  vertical-align: middle;
+}

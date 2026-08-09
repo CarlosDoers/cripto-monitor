@@ -124,6 +124,26 @@ export function PriceChart({
           'señales',
         )}`}
       >
+        <defs>
+          {(['long', 'short'] as const).map((side) => (
+            <marker
+              key={side}
+              id={`arrow-${side}`}
+              viewBox="0 0 8 8"
+              refX={7}
+              refY={4}
+              markerWidth={5}
+              markerHeight={5}
+              orient="auto-start-reverse"
+            >
+              <path
+                d="M0,1 L7,4 L0,7 z"
+                fill={side === 'long' ? 'var(--good)' : 'var(--critical)'}
+              />
+            </marker>
+          ))}
+        </defs>
+
         {ticks(min, max).map((v) => (
           <g key={v}>
             <line x1={PAD.left} x2={w - PAD.right} y1={y(v)} y2={y(v)} stroke="var(--gridline)" />
@@ -171,22 +191,70 @@ export function PriceChart({
           )
         })}
 
+        {/* Target and stop drawn as dashed rails from the signal to its
+            resolution, plus an arrow from entry to target — the same anatomy the
+            original indicator paints on TradingView. */}
         {visibleSignals.map((s) => {
           const i = s.index - start
           const long = s.side === 'long'
-          const cy = long ? y(candles[s.index].low) + 16 : y(candles[s.index].high) - 16
+          const colour = long ? 'var(--good)' : 'var(--critical)'
+          const endIndex = Math.min(s.closedIndex ?? candles.length - 1, candles.length - 1)
+          const xEnd = x(Math.max(endIndex - start, i + 1))
+          const marker = long ? y(candles[s.index].low) + 16 : y(candles[s.index].high) - 16
+
           return (
             <g key={`${s.index}-${s.side}`}>
+              <line
+                x1={x(i)}
+                x2={xEnd}
+                y1={y(s.target)}
+                y2={y(s.target)}
+                stroke={colour}
+                strokeWidth={1}
+                strokeDasharray="5 4"
+                opacity={0.85}
+              />
+              <line
+                x1={x(i)}
+                x2={xEnd}
+                y1={y(s.stop)}
+                y2={y(s.stop)}
+                stroke={colour}
+                strokeWidth={1}
+                strokeDasharray="2 3"
+                opacity={0.5}
+              />
+              <line
+                x1={x(i)}
+                x2={xEnd}
+                y1={y(s.entry)}
+                y2={y(s.target)}
+                stroke={colour}
+                strokeWidth={1.2}
+                opacity={0.65}
+                markerEnd={`url(#arrow-${s.side})`}
+              />
+
               <path
-                d={
-                  long
-                    ? `M${x(i)},${cy - 7} l5,8 l-10,0 z`
-                    : `M${x(i)},${cy + 7} l5,-8 l-10,0 z`
-                }
-                fill={long ? 'var(--good)' : 'var(--critical)'}
+                d={long ? `M${x(i)},${marker - 7} l5,8 l-10,0 z` : `M${x(i)},${marker + 7} l5,-8 l-10,0 z`}
+                fill={colour}
                 stroke="var(--surface-1)"
                 strokeWidth={1}
               />
+
+              {/* A tick where it reached target, as the original does. */}
+              {s.outcome === 'win' && endIndex >= start && (
+                <text
+                  x={xEnd}
+                  y={long ? y(s.target) - 6 : y(s.target) + 14}
+                  textAnchor="middle"
+                  fontSize={12}
+                  fontWeight={700}
+                  fill={colour}
+                >
+                  ✓
+                </text>
+              )}
             </g>
           )
         })}
@@ -271,6 +339,18 @@ export function PriceChart({
         <li className="legend-item">
           <span style={{ color: 'var(--good)' }}>▲</span> Señal long
           <span style={{ color: 'var(--critical)', marginLeft: 8 }}>▼</span> Señal short
+        </li>
+        <li className="legend-item">
+          <svg width="26" height="8" aria-hidden="true">
+            <line x1="0" y1="4" x2="26" y2="4" stroke="var(--ink-secondary)" strokeDasharray="5 4" />
+          </svg>
+          Objetivo
+        </li>
+        <li className="legend-item">
+          <svg width="26" height="8" aria-hidden="true">
+            <line x1="0" y1="4" x2="26" y2="4" stroke="var(--ink-secondary)" strokeDasharray="2 3" />
+          </svg>
+          Stop
         </li>
       </ul>
     </div>

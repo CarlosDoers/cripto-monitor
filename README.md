@@ -23,7 +23,13 @@ así que un win rate ahí habría que estimarlo con un modelo de coste medio sob
 un historial truncado, y saldrían cifras con apariencia de fiables sin serlo.
 
 **Señales** porta a TypeScript el indicador *Reversal Trap Probability Bands*
-(BigBeluga, TradingView). Los cálculos base (EMA, RMA, ATR, RSI) replican el
+(BigBeluga, TradingView). Un barrido sobre 10 instrumentos y 4 temporalidades
+encontró que **las comisiones deciden en qué gráfico funciona**: el coste en R es
+`comisión / (distancia al stop)`, así que en 15 m un 0,1 % de ida y vuelta cuesta
+0,4 R por señal y hunde la ventaja, mientras que en diario cuesta 0,02 R. Neto:
+15 m −0,30 R · 1 h ≈ 0 R · 4 h −0,01 R · **1 d +0,53 R**. La vista trae dos
+presets: los parámetros originales y unos ajustados (bandas de 2,5 ATR y stop más
+ceñido) que pasan de 4 a 8 instrumentos rentables y aguantan fuera de muestra. Los cálculos base (EMA, RMA, ATR, RSI) replican el
 pseudocódigo publicado de Pine Script, incluida la forma de sembrar las medias,
 que es donde suelen desviarse las traducciones. El backtest es simplificado: sin
 comisiones ni deslizamiento, y una vela que toca objetivo y stop a la vez cuenta

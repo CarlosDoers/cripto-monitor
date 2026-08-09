@@ -1,11 +1,17 @@
 import { useMemo, useState } from 'react'
 import { TIMEFRAMES, useSignals, type Timeframe } from '../lib/signals'
+import {
+  ORIGINAL_SETTINGS,
+  TUNED_SETTINGS,
+  type TrapSettings,
+} from '../lib/indicators/reversalTrap'
 import { useClosedPositions, useInstruments, usePositions } from '../lib/queries'
 import { MIN_SAMPLE } from '../lib/performance'
 import { dateTime, plural, price, ratio, share, timeAgo } from '../lib/format'
 import { PriceChart } from '../components/PriceChart'
 import { DivergingBars } from '../components/PerfCharts'
 import { Badge, Card, EmptyState, ErrorNotice, Skeleton, Stat, TableSkeleton } from '../components/ui'
+import { IconAlert } from '../components/icons'
 import type { Signal } from '../lib/indicators/reversalTrap'
 
 /** Instruments worth offering even with no open position in them. */
@@ -62,8 +68,25 @@ function SignalCard({ signal, last }: { signal: Signal; last: number }) {
   )
 }
 
+const PRESETS: { key: string; label: string; settings: TrapSettings; note: string }[] = [
+  {
+    key: 'tuned',
+    label: 'Ajustada',
+    settings: TUNED_SETTINGS,
+    note: 'Bandas más estrechas (2,5 ATR) y stop más ceñido. Rentable en 8 de 10 instrumentos del barrido, y aguanta fuera de muestra.',
+  },
+  {
+    key: 'original',
+    label: 'Original',
+    settings: ORIGINAL_SETTINGS,
+    note: 'Los valores publicados por BigBeluga: 4 ATR y stop 0,5. En el barrido salió plana o negativa (4 de 10 instrumentos).',
+  },
+]
+
 export function Signals() {
-  const [timeframe, setTimeframe] = useState<Timeframe>('1H')
+  const [timeframe, setTimeframe] = useState<Timeframe>('1D')
+  const [presetKey, setPresetKey] = useState('tuned')
+  const preset = PRESETS.find((p) => p.key === presetKey) ?? PRESETS[0]
 
   const positions = usePositions()
   const closed = useClosedPositions()
@@ -93,7 +116,8 @@ export function Signals() {
   const [instId, setInstId] = useState('')
   const selected = instId || options[0] || 'BTC-USDT'
 
-  const s = useSignals(selected, timeframe)
+  const s = useSignals(selected, timeframe, preset.settings)
+  const currentTf = TIMEFRAMES.find((t) => t.key === timeframe)
   const lastPrice = s.candles.at(-1)?.close ?? 0
   const dimmed = s.isFetching && !s.isLoading
 
@@ -146,8 +170,28 @@ export function Signals() {
                 type="button"
                 aria-pressed={timeframe === t.key}
                 onClick={() => setTimeframe(t.key)}
+                title={
+                  t.verdict === 'good'
+                    ? 'Sobrevive a las comisiones'
+                    : t.verdict === 'marginal'
+                      ? 'Las comisiones se comen casi toda la ventaja'
+                      : 'Las comisiones superan la ventaja'
+                }
               >
                 {t.label}
+                {t.verdict === 'good' && <span className="tf-mark" aria-hidden="true" />}
+              </button>
+            ))}
+          </div>
+          <div className="seg-control">
+            {PRESETS.map((p) => (
+              <button
+                key={p.key}
+                type="button"
+                aria-pressed={presetKey === p.key}
+                onClick={() => setPresetKey(p.key)}
+              >
+                {p.label}
               </button>
             ))}
           </div>
@@ -156,6 +200,22 @@ export function Signals() {
           {s.isLoading ? 'Cargando velas…' : `${s.usableBars} velas analizadas`}
         </p>
       </div>
+
+      {currentTf?.verdict !== 'good' && (
+        <div className="notice">
+          <IconAlert />
+          <div className="notice-body">
+            <p className="notice-title">
+              En {currentTf?.label} las comisiones se llevan la ventaja
+            </p>
+            <p className="notice-text">
+              El stop queda cerca del precio, así que cada ida y vuelta cuesta{' '}
+              <strong>{ratio(s.avgFeeR)} R</strong>. En el barrido sobre 10 instrumentos, solo el
+              gráfico diario quedó claramente rentable después de costes.
+            </p>
+          </div>
+        </div>
+      )}
 
       {s.active && !s.isLoading && (
         <Card title="Señal abierta" subtitle="Sin alcanzar objetivo ni stop todavía">
@@ -199,16 +259,20 @@ export function Signals() {
           foot={<span>Por señal, según objetivo y stop</span>}
         />
         <Stat
-          label="Resultado esperado"
+          label="Resultado esperado neto"
           hero
           loading={s.isLoading}
           value={
-            <span className={s.expectancyR >= 0 ? 'delta--up' : 'delta--down'}>
-              {s.expectancyR >= 0 ? '+' : '−'}
-              {ratio(Math.abs(s.expectancyR))} R
+            <span className={s.expectancyNetR >= 0 ? 'delta--up' : 'delta--down'}>
+              {s.expectancyNetR >= 0 ? '+' : '−'}
+              {ratio(Math.abs(s.expectancyNetR))} R
             </span>
           }
-          foot={<span>Por señal, en múltiplos del riesgo</span>}
+          foot={
+            <span>
+              Bruto {ratio(s.expectancyR)} R − comisión {ratio(s.avgFeeR)} R
+            </span>
+          }
         />
       </div>
 
@@ -245,6 +309,12 @@ export function Signals() {
               {share(1 / (1 + s.avgRiskReward), 0)} de aciertos para quedar en tablas. El resultado
               esperado en R ya combina ambas cosas.
             </p>
+            <p>
+              <strong>Y las comisiones deciden la temporalidad.</strong> Cuanto más corto el
+              gráfico, más cerca queda el stop y más pesa cada ida y vuelta: aquí cuesta{' '}
+              {ratio(s.avgFeeR)} R por señal. Por eso el diario aguanta y los intradía no.
+            </p>
+            <p className="sub">Preset «{preset.label}»: {preset.note}</p>
           </div>
         </Card>
       </div>

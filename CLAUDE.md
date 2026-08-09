@@ -70,6 +70,16 @@ Only confirmed candles are analysed. A signal computed on the still-forming cand
 
 **Win rate alone does not say whether a setup is profitable.** These signals run at ~30–50 % accuracy with a 2.5–3× reward-to-risk, so the expectancy in R is the figure that decides it. Always show both.
 
+#### What a sweep over 10 instruments × 4 timeframes found
+
+Kept here because re-deriving it costs an hour and the conclusions shape the UI:
+
+- **Trading costs decide the timeframe, not the signal quality.** The cost in R is `feeRate / (stop distance / price)`. On 15 m the stop sits ~0.25 % away, so a 0.1 % round trip is **0.4 R per signal** and turns a positive gross edge sharply negative. On the daily the stop is ~4 % away and the same cost is 0.02 R. Net expectancy: 15 m −0.30 R, 1 h ≈ 0.00 R, 4 h −0.01 R, **1 D +0.53 R**. Any new indicator must be scored net of costs or the answer will be wrong.
+- **The published parameters are not the good ones.** `multiplier: 4` scored −0.03 R and was profitable on only 4 of 10 instruments. `multiplier: 2.5, stopMult: 0.25` scored +0.16 R and 8 of 10, and *improved* out-of-sample (+0.22 R on the untouched half), which is evidence of robustness rather than curve-fitting. Both live in `reversalTrap.ts` as `ORIGINAL_SETTINGS` and `TUNED_SETTINGS`.
+- **Per-instrument results scatter wildly** (−0.41 R to +0.25 R on the same config). Never tune or judge on one instrument; always aggregate.
+- The same-bar target-and-stop ambiguity that flatters the backtest turned out to be **1 occurrence in 1 198** — measured, not assumed.
+- An RSI gate and a minimum reward-to-risk filter both *hurt*. A trend filter is structurally incompatible: the signal fires far from the moving average by construction, so "only trade with the trend" leaves almost no signals.
+
 Routing is hash-based in `src/lib/router.ts` (`useSyncExternalStore`, no router dependency). Adding a view means touching `ROUTES`, the `NAV` map in `Layout.tsx`, and the switch in `App.tsx`.
 
 ## Conventions

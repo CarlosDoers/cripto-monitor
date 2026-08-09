@@ -7,14 +7,20 @@ import {
   type TrapSettings,
 } from './indicators/reversalTrap'
 
+/**
+ * `verdict` comes from a sweep over 10 instruments and ~5 700 signals, scored
+ * after trading costs. The cost is what separates them: on 15 m the stop sits
+ * ~0.25 % away, so a 0.1 % round trip eats 0.4 R per signal.
+ */
 export const TIMEFRAMES = [
-  { key: '15m', label: '15 m' },
-  { key: '1H', label: '1 h' },
-  { key: '4H', label: '4 h' },
-  { key: '1D', label: '1 d' },
+  { key: '15m', label: '15 m', verdict: 'poor' },
+  { key: '1H', label: '1 h', verdict: 'marginal' },
+  { key: '4H', label: '4 h', verdict: 'marginal' },
+  { key: '1D', label: '1 d', verdict: 'good' },
 ] as const
 
 export type Timeframe = (typeof TIMEFRAMES)[number]['key']
+export type Verdict = (typeof TIMEFRAMES)[number]['verdict']
 
 /** How long one candle lasts, for projecting a signal's age. */
 export const BAR_MS: Record<Timeframe, number> = {

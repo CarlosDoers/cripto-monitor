@@ -92,10 +92,13 @@ export function dateTime(ms: string | number): string {
 /** A plain ratio like the profit factor — comma decimal separator, as in es-ES. */
 export function ratio(value: number, digits = 2): string {
   if (!Number.isFinite(value)) return '∞'
+  // Round first: a value of -0.001 would otherwise print as "-0,00".
+  const factor = 10 ** digits
+  const rounded = Math.round(value * factor) / factor
   return new Intl.NumberFormat('es-ES', {
     minimumFractionDigits: digits,
     maximumFractionDigits: digits,
-  }).format(value)
+  }).format(rounded === 0 ? 0 : rounded)
 }
 
 /** Axis ticks: no decimals, no "-0", thousands separated. */

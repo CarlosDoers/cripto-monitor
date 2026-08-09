@@ -7,6 +7,7 @@ import type {
   Bill,
   Candle,
   ClosedPosition,
+  Instrument,
   Fill,
   FundingBalance,
   Order,
@@ -138,6 +139,59 @@ export function useBills() {
     '/api/v5/account/bills',
     { limit: 100 },
     { refetchInterval: SLOW },
+  )
+}
+
+/** OKX returns at most 300 candles per request. */
+const CANDLE_PAGE = 300
+
+/**
+ * A long candle history, paginated. The indicator needs a few hundred bars just
+ * to warm up its 100-period ATR, so a single page would leave almost nothing to
+ * analyse.
+ *
+ * Only confirmed candles are kept: the in-progress one changes under your feet,
+ * and a signal computed on it can vanish when it closes.
+ */
+export function useCandleHistory(instId: string, bar: string, pages = 4) {
+  return useQuery<Candle[], ApiError>({
+    queryKey: ['candle-history', instId, bar, pages],
+    queryFn: async () => {
+      const all: Candle[] = []
+      let after: string | undefined
+
+      for (let page = 0; page < pages; page++) {
+        const batch = await okx<Candle>('/api/v5/market/candles', {
+          instId,
+          bar,
+          limit: CANDLE_PAGE,
+          after,
+        })
+        if (batch.length === 0) break
+        all.push(...batch)
+        after = batch[batch.length - 1][0]
+        if (batch.length < CANDLE_PAGE) break
+      }
+
+      // OKX returns newest-first; analysis walks forward through time.
+      return all.sort((a, b) => Number(a[0]) - Number(b[0]))
+    },
+    enabled: Boolean(instId),
+    refetchInterval: LIVE,
+    staleTime: LIVE,
+  })
+}
+
+const DAY = 24 * 60 * 60 * 1000
+
+/** Tradable instruments of one product type, for the signal instrument picker. */
+export function useInstruments(instType: string) {
+  return useOkx<Instrument>(
+    ['instruments', instType],
+    '/api/v5/public/instruments',
+    { instType },
+    // The catalogue barely changes; refetching it hourly would be pure waste.
+    { refetchInterval: DAY, staleTime: DAY },
   )
 }
 

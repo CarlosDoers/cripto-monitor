@@ -597,6 +597,92 @@ select {
   font-weight: 500;
 }
 
+/* ---------- Live signal ---------- */
+
+.signal-live {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 16px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+}
+
+.signal-live--long {
+  border-color: color-mix(in srgb, var(--good) 45%, var(--border));
+  background: color-mix(in srgb, var(--good) 6%, var(--surface-1));
+}
+
+.signal-live--short {
+  border-color: color-mix(in srgb, var(--critical) 45%, var(--border));
+  background: color-mix(in srgb, var(--critical) 6%, var(--surface-1));
+}
+
+.signal-live-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+}
+
+.signal-levels {
+  list-style: none;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 12px;
+}
+
+.signal-levels li {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.signal-progress {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.signal-progress-track {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--surface-inset);
+  overflow: hidden;
+}
+
+.signal-progress-fill {
+  display: block;
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.3s;
+}
+
+.select {
+  padding: 7px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-1);
+  color: var(--ink-primary);
+  font-size: 13px;
+  max-width: 260px;
+}
+
+.prose {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  font-size: 13px;
+  line-height: 1.65;
+  color: var(--ink-secondary);
+}
+
+.prose strong {
+  color: var(--ink-primary);
+}
+
 /* ---------- Hourly columns ---------- */
 
 .hourly {

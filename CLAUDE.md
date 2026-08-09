@@ -55,6 +55,20 @@ Two hooks compose the raw queries into what views actually need:
 
 - `src/lib/portfolio.ts` — merges the trading and funding wallets, prices everything in USD, and exposes `netWorth` (all wallets, from `asset-valuation`) alongside `totalUsd` (the priced holdings). Both Resumen and Cartera read `netWorth` so they can never disagree.
 - `src/lib/performance.ts` — every trading statistic, plus the period filter. `computePerformance()` is a pure function; test ideas belong there.
+- `src/lib/signals.ts` — candles plus the indicator, for the Señales view.
+
+### Indicators
+
+`src/lib/indicators/` ports TradingView indicators to TypeScript.
+
+- `ta.ts` — EMA, RMA, ATR, RSI, highest/lowest, **matching Pine Script exactly**. The seeding rule is the part that is easy to get wrong: both `ta.ema` and `ta.rma` warm up with an SMA of the first `length` values and are `na` before that, and `ta.rma` uses `alpha = 1/length` (not `2/(length+1)`). Getting this wrong shifts every signal to a different candle. Verified against TradingView's documented pseudocode — do not "simplify" the seeding.
+- `reversalTrap.ts` — the Reversal Trap Probability Bands port. Two subtleties keep it bar-for-bar faithful: the outside-the-band counter is read *before* it is updated (Pine's `[1]`), and `close[1]` is compared against the *current* bar's band.
+
+Both are pure functions over an array of candles, so they can be exercised from a script without a browser.
+
+Only confirmed candles are analysed. A signal computed on the still-forming candle can vanish when it closes, which would be worse than showing nothing.
+
+**Win rate alone does not say whether a setup is profitable.** These signals run at ~30–50 % accuracy with a 2.5–3× reward-to-risk, so the expectancy in R is the figure that decides it. Always show both.
 
 Routing is hash-based in `src/lib/router.ts` (`useSyncExternalStore`, no router dependency). Adding a view means touching `ROUTES`, the `NAV` map in `Layout.tsx`, and the switch in `App.tsx`.
 

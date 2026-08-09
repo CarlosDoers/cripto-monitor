@@ -50,7 +50,14 @@ export interface DivergingRow {
  * range, so bar length is comparable across rows and the sign is carried by
  * direction as well as colour. Every row prints its own value.
  */
-export function DivergingBars({ rows }: { rows: DivergingRow[] }) {
+export function DivergingBars({
+  rows,
+  formatValue = signedUsd,
+}: {
+  rows: DivergingRow[]
+  /** Defaults to currency; pass another formatter when the values are not money. */
+  formatValue?: (value: number) => string
+}) {
   if (rows.length === 0) return <p className="muted">Sin datos en este periodo.</p>
 
   // The zero line sits where zero actually falls in the range, rather than at a
@@ -85,7 +92,7 @@ export function DivergingBars({ rows }: { rows: DivergingRow[] }) {
               />
             </span>
             <span className={`diverging-value ${positive ? 'delta--up' : 'delta--down'}`}>
-              {signedUsd(row.value)}
+              {formatValue(row.value)}
             </span>
           </li>
         )

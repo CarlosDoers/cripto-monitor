@@ -101,6 +101,12 @@ export const IconInbox = (p: Props) => (
   </svg>
 )
 
+export const IconSignal = (p: Props) => (
+  <svg {...base} className={p.className}>
+    <path d="M3 12h3l3-7 4 14 3-7h5" />
+  </svg>
+)
+
 export const IconPerformance = (p: Props) => (
   <svg {...base} className={p.className}>
     <path d="M3 3v18h18" />

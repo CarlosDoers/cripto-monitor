@@ -201,6 +201,20 @@ export interface Bill {
 /** `[ts, open, high, low, close, vol, volCcy, volCcyQuote, confirm]` */
 export type Candle = string[]
 
+export interface Instrument {
+  instId: string
+  instType: string
+  /** Underlying, e.g. `ZEC-USD`. */
+  uly: string
+  baseCcy: string
+  quoteCcy: string
+  settleCcy: string
+  ctVal: string
+  ctValCcy: string
+  state: string
+  expTime: string
+}
+
 /** A single position in the portfolio, merged from trading + funding accounts. */
 export interface Holding {
   ccy: string

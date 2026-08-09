@@ -1,7 +1,7 @@
 # Cripto Monitor
 
 Panel de solo lectura para tu cuenta de OKX: patrimonio, cartera, posiciones,
-órdenes, historial y estadísticas de trading. Vite + React + TypeScript, con una
+órdenes, historial, estadísticas de trading e indicadores de señales. Vite + React + TypeScript, con una
 función serverless que firma las peticiones a la API.
 
 ## Secciones
@@ -9,6 +9,7 @@ función serverless que firma las peticiones a la API.
 | Vista | Qué muestra |
 | --- | --- |
 | **Resumen** | Patrimonio, PnL abierto y realizado, win rate, curva de resultado y distribución |
+| **Señales** | Indicador de reversión: envolvente sobre velas, señales long/short con objetivo y stop, y su fiabilidad histórica |
 | **Rendimiento** | Win rate, factor de beneficio, curva de PnL, resultado por activo, dirección, hora del día y día de la semana |
 | **Cartera** | Todos los activos con precio, variación 24 h y peso |
 | **Posiciones** | Posiciones abiertas con liquidación, margen y PnL |
@@ -20,6 +21,15 @@ donde OKX reporta el PnL por operación ya neto de comisiones y financiación. L
 operaciones de spot quedan fuera a propósito: OKX devuelve `fillPnl: 0` en spot,
 así que un win rate ahí habría que estimarlo con un modelo de coste medio sobre
 un historial truncado, y saldrían cifras con apariencia de fiables sin serlo.
+
+**Señales** porta a TypeScript el indicador *Reversal Trap Probability Bands*
+(BigBeluga, TradingView). Los cálculos base (EMA, RMA, ATR, RSI) replican el
+pseudocódigo publicado de Pine Script, incluida la forma de sembrar las medias,
+que es donde suelen desviarse las traducciones. El backtest es simplificado: sin
+comisiones ni deslizamiento, y una vela que toca objetivo y stop a la vez cuenta
+como acierto, igual que en el original. **El porcentaje de aciertos por sí solo
+no dice si un sistema gana**: con beneficio/riesgo cercano a 3, un 30 % de
+acierto ya es rentable, así que la vista muestra el resultado esperado en R.
 
 ---
 
@@ -157,8 +167,11 @@ src/
     colors.ts      asignación estable de color por moneda
     format.ts      formateo de cifras en es-ES
     router.ts      routing por hash, sin dependencias
-  components/      Layout, tarjetas, tablas, barra de distribución, sparklines
-  views/           Resumen, Cartera, Posiciones, Órdenes, Historial
+    performance.ts estadísticas de trading
+    signals.ts     velas + indicador
+    indicators/    ta.ts (EMA/RMA/ATR/RSI, iguales a Pine) + reversalTrap.ts
+  components/      Layout, tarjetas, tablas, gráficos (velas, curva, barras)
+  views/           Resumen, Señales, Rendimiento, Cartera, Posiciones, Órdenes, Historial
   styles/          tokens.css (paleta y temas) + app.css
 vite.config.ts     monta api/ en el servidor de desarrollo
 vercel.json        rewrites de SPA y cabeceras

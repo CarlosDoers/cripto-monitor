@@ -9,6 +9,7 @@ import {
   IconOrders,
   IconOverview,
   IconPerformance,
+  IconSignal,
   IconPositions,
   IconRefresh,
   IconSun,
@@ -17,6 +18,7 @@ import {
 
 const NAV: Record<Route, { label: string; Icon: typeof IconOverview }> = {
   resumen: { label: 'Resumen', Icon: IconOverview },
+  senales: { label: 'Señales', Icon: IconSignal },
   rendimiento: { label: 'Rendimiento', Icon: IconPerformance },
   cartera: { label: 'Cartera', Icon: IconWallet },
   posiciones: { label: 'Posiciones', Icon: IconPositions },

@@ -1,16 +1,13 @@
 import { useMemo } from 'react'
 import { useCandleHistory } from './queries'
-import {
-  analyseTraps,
-  DEFAULT_SETTINGS,
-  type Candle as TrapCandle,
-  type TrapSettings,
-} from './indicators/reversalTrap'
+import { efficiencyRatio, regimeOf, strategyByKey } from './indicators/registry'
+import type { Candle } from './indicators/types'
 
 /**
- * `verdict` comes from a sweep over 10 instruments and ~5 700 signals, scored
- * after trading costs. The cost is what separates them: on 15 m the stop sits
- * ~0.25 % away, so a 0.1 % round trip eats 0.4 R per signal.
+ * `verdict` comes from a sweep over 10 instruments and thousands of signals,
+ * scored after trading costs. Cost is what separates the timeframes: on 15 m the
+ * stop sits ~0.25 % away, so a 0.1 % round trip eats 0.4 R per signal, while on
+ * the daily the same cost is 0.02 R. Both strategies only clear costs on 1 D.
  */
 export const TIMEFRAMES = [
   { key: '15m', label: '15 m', verdict: 'poor' },
@@ -22,22 +19,11 @@ export const TIMEFRAMES = [
 export type Timeframe = (typeof TIMEFRAMES)[number]['key']
 export type Verdict = (typeof TIMEFRAMES)[number]['verdict']
 
-/** How long one candle lasts, for projecting a signal's age. */
-export const BAR_MS: Record<Timeframe, number> = {
-  '15m': 15 * 60_000,
-  '1H': 60 * 60_000,
-  '4H': 4 * 60 * 60_000,
-  '1D': 24 * 60 * 60_000,
-}
-
-export function useSignals(
-  instId: string,
-  bar: Timeframe,
-  settings: TrapSettings = DEFAULT_SETTINGS,
-) {
+export function useSignals(instId: string, bar: Timeframe, strategyKey: string, presetKey: string) {
   const query = useCandleHistory(instId, bar)
+  const strategy = strategyByKey(strategyKey)
 
-  const candles = useMemo<TrapCandle[]>(
+  const candles = useMemo<Candle[]>(
     () =>
       (query.data ?? [])
         .map((row) => ({
@@ -53,13 +39,20 @@ export function useSignals(
     [query.data],
   )
 
-  const analysis = useMemo(() => analyseTraps(candles, settings), [candles, settings])
+  const result = useMemo(
+    () => strategy.run(candles, presetKey),
+    [strategy, candles, presetKey],
+  )
+
+  const efficiency = useMemo(() => efficiencyRatio(candles), [candles])
 
   return {
     candles,
-    ...analysis,
-    /** Bars analysed after the warm-up period. */
-    usableBars: Math.max(0, candles.length - analysis.warmup),
+    result,
+    strategy,
+    efficiency,
+    regime: regimeOf(efficiency),
+    usableBars: Math.max(0, candles.length - result.warmup),
     isLoading: query.isLoading,
     isFetching: query.isFetching,
     error: query.error,

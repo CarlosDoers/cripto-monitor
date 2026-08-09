@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useSize } from '../lib/useSize'
 import { dateTime, price as fmtPrice, plural } from '../lib/format'
-import type { Candle, Signal, TrapAnalysis } from '../lib/indicators/reversalTrap'
+import type { Candle, StrategyResult } from '../lib/indicators/types'
 
 const PAD = { top: 12, right: 66, bottom: 22, left: 10 }
 
@@ -19,20 +19,21 @@ function ticks(min: number, max: number, count = 5): number[] {
 }
 
 /**
- * Candles with the indicator's envelope and its signals.
+ * Candles with a strategy's overlays and signals.
  *
- * Only the visible window is drawn — running the analysis over 1200 bars but
- * plotting them all would give each candle under a pixel. Bodies collapse to a
- * single line as they get thinner, which is what a real chart does too.
+ * The strategy supplies its own lines, so this component works for any of them:
+ * an envelope, a Donchian channel, or whatever comes next. Each signal draws the
+ * anatomy the original TradingView indicators use — dashed rail to the target,
+ * dotted to the stop, an arrow from entry, and a tick where it worked out.
  */
 export function PriceChart({
   candles,
-  analysis,
+  result,
   visible = 160,
   height = 340,
 }: {
   candles: Candle[]
-  analysis: TrapAnalysis
+  result: StrategyResult
   visible?: number
   height?: number
 }) {
@@ -49,10 +50,8 @@ export function PriceChart({
 
   // Widen the window if needed so the most recent signal is always on screen —
   // otherwise a chart of a signal indicator can show no signals at all.
-  const lastSignal = analysis.signals.at(-1)
-  const wanted = lastSignal
-    ? Math.max(visible, candles.length - lastSignal.index + 12)
-    : visible
+  const lastSignal = result.signals.at(-1)
+  const wanted = lastSignal ? Math.max(visible, candles.length - lastSignal.index + 12) : visible
   const span = Math.min(wanted, MAX_VISIBLE, candles.length)
   const start = Math.max(0, candles.length - span)
   const view = candles.slice(start)
@@ -60,13 +59,18 @@ export function PriceChart({
   const plotW = w - PAD.left - PAD.right
   const plotH = height - PAD.top - PAD.bottom
 
-  // Scale to the candles plus whatever band is on screen, so nothing clips.
   let min = Infinity
   let max = -Infinity
   for (let i = 0; i < view.length; i++) {
-    const g = start + i
-    min = Math.min(min, view[i].low, analysis.lower[g] || Infinity)
-    max = Math.max(max, view[i].high, analysis.upper[g] || -Infinity)
+    min = Math.min(min, view[i].low)
+    max = Math.max(max, view[i].high)
+    for (const o of result.overlays) {
+      const v = o.values[start + i]
+      if (Number.isFinite(v)) {
+        min = Math.min(min, v)
+        max = Math.max(max, v)
+      }
+    }
   }
   const padY = (max - min) * 0.04
   min -= padY
@@ -77,32 +81,33 @@ export function PriceChart({
   const x = (i: number) => PAD.left + i * slot + slot / 2
   const y = (v: number) => PAD.top + plotH - ((v - min) / (max - min)) * plotH
 
-  const linePath = (series: number[]) =>
+  const linePath = (values: number[]) =>
     view
       .map((_, i) => {
-        const v = series[start + i]
+        const v = values[start + i]
         return Number.isFinite(v) ? `${i === 0 ? 'M' : 'L'}${x(i).toFixed(1)},${y(v).toFixed(1)}` : ''
       })
       .filter(Boolean)
       .join(' ')
 
-  // Envelope fill, only across the bars where both bands exist.
-  const bandArea = (() => {
-    const top: string[] = []
-    const bottom: string[] = []
+  // A band between two overlays, drawn where both exist.
+  const bandFor = (topKey: string, bottomValues: number[]) => {
+    const top = result.overlays.find((o) => o.key === topKey)
+    if (!top) return ''
+    const upperPts: string[] = []
+    const lowerPts: string[] = []
     view.forEach((_, i) => {
-      const u = analysis.upper[start + i]
-      const l = analysis.lower[start + i]
+      const u = top.values[start + i]
+      const l = bottomValues[start + i]
       if (!Number.isFinite(u) || !Number.isFinite(l)) return
-      top.push(`${x(i).toFixed(1)},${y(u).toFixed(1)}`)
-      bottom.unshift(`${x(i).toFixed(1)},${y(l).toFixed(1)}`)
+      upperPts.push(`${x(i).toFixed(1)},${y(u).toFixed(1)}`)
+      lowerPts.unshift(`${x(i).toFixed(1)},${y(l).toFixed(1)}`)
     })
-    return top.length ? `${top.join(' ')} ${bottom.join(' ')}` : ''
-  })()
+    return upperPts.length ? `${upperPts.join(' ')} ${lowerPts.join(' ')}` : ''
+  }
 
-  const visibleSignals = analysis.signals.filter((s) => s.index >= start)
+  const visibleSignals = result.signals.filter((s) => s.index >= start)
   const hovered = hover !== null ? view[hover] : null
-  const hoveredGlobal = hover !== null ? start + hover : -1
 
   function onMove(event: React.MouseEvent<SVGSVGElement>) {
     const rect = event.currentTarget.getBoundingClientRect()
@@ -118,11 +123,7 @@ export function PriceChart({
         onMouseMove={onMove}
         onMouseLeave={() => setHover(null)}
         role="img"
-        aria-label={`Gráfico de velas con la envolvente del indicador y ${plural(
-          visibleSignals.length,
-          'señal',
-          'señales',
-        )}`}
+        aria-label={`Gráfico de velas con ${plural(visibleSignals.length, 'señal', 'señales')}`}
       >
         <defs>
           {(['long', 'short'] as const).map((side) => (
@@ -136,10 +137,7 @@ export function PriceChart({
               markerHeight={5}
               orient="auto-start-reverse"
             >
-              <path
-                d="M0,1 L7,4 L0,7 z"
-                fill={side === 'long' ? 'var(--good)' : 'var(--critical)'}
-              />
+              <path d="M0,1 L7,4 L0,7 z" fill={side === 'long' ? 'var(--good)' : 'var(--critical)'} />
             </marker>
           ))}
         </defs>
@@ -160,17 +158,23 @@ export function PriceChart({
           </g>
         ))}
 
-        {bandArea && <polygon points={bandArea} fill="var(--accent)" opacity={0.05} />}
-        <path d={linePath(analysis.upper)} fill="none" stroke="var(--critical)" strokeWidth={1.5} opacity={0.55} />
-        <path d={linePath(analysis.lower)} fill="none" stroke="var(--good)" strokeWidth={1.5} opacity={0.55} />
-        <path
-          d={linePath(analysis.basis)}
-          fill="none"
-          stroke="var(--ink-muted)"
-          strokeWidth={1.2}
-          strokeDasharray="4 4"
-          opacity={0.7}
-        />
+        {result.overlays.map((o) =>
+          o.fillTo ? (
+            <polygon key={`fill-${o.key}`} points={bandFor(o.fillTo, o.values)} fill="var(--accent)" opacity={0.05} />
+          ) : null,
+        )}
+
+        {result.overlays.map((o) => (
+          <path
+            key={o.key}
+            d={linePath(o.values)}
+            fill="none"
+            stroke={o.colour}
+            strokeWidth={o.dashed ? 1.2 : 1.5}
+            strokeDasharray={o.dashed ? '4 4' : undefined}
+            opacity={o.dashed ? 0.7 : 0.55}
+          />
+        ))}
 
         {view.map((c, i) => {
           const up = c.close >= c.open
@@ -191,9 +195,6 @@ export function PriceChart({
           )
         })}
 
-        {/* Target and stop drawn as dashed rails from the signal to its
-            resolution, plus an arrow from entry to target — the same anatomy the
-            original indicator paints on TradingView. */}
         {visibleSignals.map((s) => {
           const i = s.index - start
           const long = s.side === 'long'
@@ -201,19 +202,35 @@ export function PriceChart({
           const endIndex = Math.min(s.closedIndex ?? candles.length - 1, candles.length - 1)
           const xEnd = x(Math.max(endIndex - start, i + 1))
           const marker = long ? y(candles[s.index].low) + 16 : y(candles[s.index].high) - 16
+          // Trailing strategies have no fixed target; the exit price is the story.
+          const finish = s.target ?? s.closedPrice
 
           return (
             <g key={`${s.index}-${s.side}`}>
-              <line
-                x1={x(i)}
-                x2={xEnd}
-                y1={y(s.target)}
-                y2={y(s.target)}
-                stroke={colour}
-                strokeWidth={1}
-                strokeDasharray="5 4"
-                opacity={0.85}
-              />
+              {finish !== undefined && (
+                <>
+                  <line
+                    x1={x(i)}
+                    x2={xEnd}
+                    y1={y(finish)}
+                    y2={y(finish)}
+                    stroke={colour}
+                    strokeWidth={1}
+                    strokeDasharray="5 4"
+                    opacity={0.85}
+                  />
+                  <line
+                    x1={x(i)}
+                    x2={xEnd}
+                    y1={y(s.entry)}
+                    y2={y(finish)}
+                    stroke={colour}
+                    strokeWidth={1.2}
+                    opacity={0.65}
+                    markerEnd={`url(#arrow-${s.side})`}
+                  />
+                </>
+              )}
               <line
                 x1={x(i)}
                 x2={xEnd}
@@ -224,29 +241,16 @@ export function PriceChart({
                 strokeDasharray="2 3"
                 opacity={0.5}
               />
-              <line
-                x1={x(i)}
-                x2={xEnd}
-                y1={y(s.entry)}
-                y2={y(s.target)}
-                stroke={colour}
-                strokeWidth={1.2}
-                opacity={0.65}
-                markerEnd={`url(#arrow-${s.side})`}
-              />
-
               <path
                 d={long ? `M${x(i)},${marker - 7} l5,8 l-10,0 z` : `M${x(i)},${marker + 7} l5,-8 l-10,0 z`}
                 fill={colour}
                 stroke="var(--surface-1)"
                 strokeWidth={1}
               />
-
-              {/* A tick where it reached target, as the original does. */}
-              {s.outcome === 'win' && endIndex >= start && (
+              {s.outcome === 'win' && finish !== undefined && (
                 <text
                   x={xEnd}
-                  y={long ? y(s.target) - 6 : y(s.target) + 14}
+                  y={long ? y(finish) - 6 : y(finish) + 14}
                   textAnchor="middle"
                   fontSize={12}
                   fontWeight={700}
@@ -262,17 +266,8 @@ export function PriceChart({
         <text x={PAD.left} y={height - 5} fontSize={11} fill="var(--ink-muted)">
           {new Date(view[0].time).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })}
         </text>
-        <text
-          x={w - PAD.right}
-          y={height - 5}
-          textAnchor="end"
-          fontSize={11}
-          fill="var(--ink-muted)"
-        >
-          {new Date(view.at(-1)!.time).toLocaleDateString('es-ES', {
-            day: 'numeric',
-            month: 'short',
-          })}
+        <text x={w - PAD.right} y={height - 5} textAnchor="end" fontSize={11} fill="var(--ink-muted)">
+          {new Date(view.at(-1)!.time).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })}
         </text>
 
         {hovered && (
@@ -314,41 +309,29 @@ export function PriceChart({
             <span>Cierre</span>
             <span>{fmtPrice(hovered.close)}</span>
           </div>
-          {Number.isFinite(analysis.rsiSeries[hoveredGlobal]) && (
-            <div className="tip-row">
-              <span>RSI</span>
-              <span>{analysis.rsiSeries[hoveredGlobal].toFixed(0)}</span>
-            </div>
-          )}
         </div>
       )}
 
       <ul className="legend" style={{ marginTop: 10 }}>
+        {result.overlays.map((o) => (
+          <li key={o.key} className="legend-item">
+            <span className="legend-swatch" style={{ background: o.colour }} />
+            {o.label}
+          </li>
+        ))}
         <li className="legend-item">
-          <span className="legend-swatch" style={{ background: 'var(--critical)' }} />
-          Techo de la envolvente
+          <span style={{ color: 'var(--good)' }}>▲</span> Long
+          <span style={{ color: 'var(--critical)', marginLeft: 8 }}>▼</span> Short
         </li>
         <li className="legend-item">
-          <span className="legend-swatch" style={{ background: 'var(--ink-muted)' }} />
-          Línea base (objetivo)
-        </li>
-        <li className="legend-item">
-          <span className="legend-swatch" style={{ background: 'var(--good)' }} />
-          Suelo de la envolvente
-        </li>
-        <li className="legend-item">
-          <span style={{ color: 'var(--good)' }}>▲</span> Señal long
-          <span style={{ color: 'var(--critical)', marginLeft: 8 }}>▼</span> Señal short
-        </li>
-        <li className="legend-item">
-          <svg width="26" height="8" aria-hidden="true">
-            <line x1="0" y1="4" x2="26" y2="4" stroke="var(--ink-secondary)" strokeDasharray="5 4" />
+          <svg width="24" height="8" aria-hidden="true">
+            <line x1="0" y1="4" x2="24" y2="4" stroke="var(--ink-secondary)" strokeDasharray="5 4" />
           </svg>
-          Objetivo
+          Salida
         </li>
         <li className="legend-item">
-          <svg width="26" height="8" aria-hidden="true">
-            <line x1="0" y1="4" x2="26" y2="4" stroke="var(--ink-secondary)" strokeDasharray="2 3" />
+          <svg width="24" height="8" aria-hidden="true">
+            <line x1="0" y1="4" x2="24" y2="4" stroke="var(--ink-secondary)" strokeDasharray="2 3" />
           </svg>
           Stop
         </li>
@@ -356,5 +339,3 @@ export function PriceChart({
     </div>
   )
 }
-
-export type { Signal }

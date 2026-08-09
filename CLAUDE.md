@@ -61,6 +61,8 @@ Two hooks compose the raw queries into what views actually need:
 
 `src/lib/indicators/` ports TradingView indicators to TypeScript.
 
+Strategies are registered in `registry.ts` and the Señales view is driven entirely off that list — adding one means adding an entry there, not touching the view. Each implements the `StrategyResult` contract in `types.ts`, which prices everything in **R** so a fixed-target setup and a trailing one stay comparable.
+
 - `ta.ts` — EMA, RMA, ATR, RSI, highest/lowest, **matching Pine Script exactly**. The seeding rule is the part that is easy to get wrong: both `ta.ema` and `ta.rma` warm up with an SMA of the first `length` values and are `na` before that, and `ta.rma` uses `alpha = 1/length` (not `2/(length+1)`). Getting this wrong shifts every signal to a different candle. Verified against TradingView's documented pseudocode — do not "simplify" the seeding.
 - `reversalTrap.ts` — the Reversal Trap Probability Bands port. Two subtleties keep it bar-for-bar faithful: the outside-the-band counter is read *before* it is updated (Pine's `[1]`), and `close[1]` is compared against the *current* bar's band.
 
@@ -78,6 +80,9 @@ Kept here because re-deriving it costs an hour and the conclusions shape the UI:
 - **The published parameters are not the good ones.** `multiplier: 4` scored −0.03 R and was profitable on only 4 of 10 instruments. `multiplier: 2.5, stopMult: 0.25` scored +0.16 R and 8 of 10, and *improved* out-of-sample (+0.22 R on the untouched half), which is evidence of robustness rather than curve-fitting. Both live in `reversalTrap.ts` as `ORIGINAL_SETTINGS` and `TUNED_SETTINGS`.
 - **Per-instrument results scatter wildly** (−0.41 R to +0.25 R on the same config). Never tune or judge on one instrument; always aggregate.
 - The same-bar target-and-stop ambiguity that flatters the backtest turned out to be **1 occurrence in 1 198** — measured, not assumed.
+- **For trend systems the exit IS the strategy.** Donchian 20 scores −0.19 R with a 3.5 ATR trail and **+0.91 R** with an 8 ATR trail. The win rate barely moves; the whole difference is how far winners are allowed to run. Never tighten a trail without re-running the sweep.
+- **Both strategies only clear costs on the daily.** Reversal +0.53 R, Donchian +0.48 R; everything shorter is flat or negative. The Donchian edge is the weaker of the two (n=104, out-of-sample +0.19 R against +0.79 R in-sample) and the UI says so.
+- Kaufman's efficiency ratio (`registry.ts`) reads the current regime. It has sat at 0.08–0.13 across all timeframes — firmly ranging, which is why mean reversion works and trend following struggles. The view surfaces it so the two tabs can be read as complements.
 - An RSI gate and a minimum reward-to-risk filter both *hurt*. A trend filter is structurally incompatible: the signal fires far from the moving average by construction, so "only trade with the trend" leaves almost no signals.
 
 Routing is hash-based in `src/lib/router.ts` (`useSyncExternalStore`, no router dependency). Adding a view means touching `ROUTES`, the `NAV` map in `Layout.tsx`, and the switch in `App.tsx`.

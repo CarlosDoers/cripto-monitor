@@ -1262,3 +1262,227 @@ table.data tbody tr:hover td {
   margin-left: 5px;
   vertical-align: middle;
 }
+
+/* ---------- Strategy tabs ---------- */
+
+.tabs {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.tab {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  align-items: flex-start;
+  padding: 10px 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-1);
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 0.15s, background 0.15s, transform 0.15s;
+  min-width: 190px;
+}
+
+.tab:hover {
+  border-color: color-mix(in srgb, var(--accent) 40%, var(--border));
+  transform: translateY(-1px);
+}
+
+.tab[aria-selected='true'] {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.tab-label {
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.tab[aria-selected='true'] .tab-label {
+  color: var(--accent);
+}
+
+.tab-tagline {
+  font-size: 11.5px;
+  color: var(--ink-muted);
+  line-height: 1.35;
+}
+
+/* ---------- Market regime chip ---------- */
+
+.regime {
+  font-size: 12px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  white-space: nowrap;
+  background: var(--surface-inset);
+  color: var(--ink-secondary);
+}
+
+.regime--trending {
+  background: color-mix(in srgb, var(--good) 14%, transparent);
+  color: var(--delta-up);
+}
+
+.regime--ranging {
+  background: color-mix(in srgb, var(--series-1) 14%, transparent);
+  color: var(--accent);
+}
+
+/* ---------- Backtest list ---------- */
+
+.bt-list {
+  list-style: none;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-variant-numeric: tabular-nums;
+}
+
+.bt-list li {
+  display: flex;
+  justify-content: space-between;
+  padding: 4px 0;
+  border-bottom: 1px solid var(--gridline);
+}
+
+.bt-list li:last-child {
+  border-bottom: 0;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   Motion & depth
+   Everything here is suppressed by the prefers-reduced-motion block at the top
+   of this file. Durations stay under 400 ms: this is a dashboard people read
+   several times a day, and slow entrances get tiring fast.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Cards and tiles fade up in sequence, so a view assembles instead of
+   appearing. The stagger caps at 8 — beyond that the wait is noticeable. */
+.content > *,
+.kpi-row > .stat {
+  animation: rise 0.32s cubic-bezier(0.22, 0.68, 0.3, 1) both;
+}
+
+.content > *:nth-child(1) { animation-delay: 0ms; }
+.content > *:nth-child(2) { animation-delay: 40ms; }
+.content > *:nth-child(3) { animation-delay: 80ms; }
+.content > *:nth-child(4) { animation-delay: 120ms; }
+.content > *:nth-child(5) { animation-delay: 160ms; }
+.content > *:nth-child(n + 6) { animation-delay: 200ms; }
+
+.kpi-row > .stat:nth-child(1) { animation-delay: 30ms; }
+.kpi-row > .stat:nth-child(2) { animation-delay: 70ms; }
+.kpi-row > .stat:nth-child(3) { animation-delay: 110ms; }
+.kpi-row > .stat:nth-child(4) { animation-delay: 150ms; }
+
+/* Lift on hover — small enough to feel responsive, not bouncy. */
+.card,
+.stat {
+  transition: border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
+}
+
+.stat:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-hover);
+  border-color: color-mix(in srgb, var(--accent) 22%, var(--border));
+}
+
+.card:hover {
+  border-color: color-mix(in srgb, var(--accent) 14%, var(--border));
+}
+
+/* The headline tile gets a faint wash so the eye lands there first. */
+.stat:has(.stat-value--hero) {
+  background:
+    radial-gradient(120% 140% at 0% 0%, var(--accent-soft) 0%, transparent 60%),
+    var(--surface-1);
+}
+
+.nav-item {
+  position: relative;
+}
+
+/* A rail that grows in on the active item rather than blinking on. */
+.nav-item[aria-current='page']::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  width: 3px;
+  height: 0;
+  border-radius: 0 2px 2px 0;
+  background: var(--accent);
+  transform: translateY(-50%);
+  animation: railGrow 0.22s ease forwards;
+}
+
+@keyframes railGrow {
+  to {
+    height: 56%;
+  }
+}
+
+@media (max-width: 860px) {
+  .nav-item[aria-current='page']::before {
+    display: none;
+  }
+}
+
+/* The live dot breathes while data is being fetched. */
+@keyframes breathe {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.45; transform: scale(0.82); }
+}
+
+.dot-live {
+  animation: breathe 1.6s ease-in-out infinite;
+}
+
+.btn,
+.tab,
+.nav-item,
+.seg-control button {
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease,
+    transform 0.15s ease;
+}
+
+.btn:active,
+.seg-control button:active {
+  transform: scale(0.97);
+}
+
+/* Rows and bars settle into place instead of snapping. */
+table.data tbody tr {
+  transition: background 0.12s ease;
+}
+
+.rail-fill,
+.alloc-seg,
+.diverging-bar,
+.avg-bar,
+.winloss-seg,
+.hourly-bar {
+  transition: width 0.45s cubic-bezier(0.22, 0.68, 0.3, 1),
+    height 0.45s cubic-bezier(0.22, 0.68, 0.3, 1), flex-grow 0.45s ease;
+}
+
+/* Skeletons should read as "loading", not as content. */
+.skeleton {
+  opacity: 0.7;
+}

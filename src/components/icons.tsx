@@ -114,6 +114,14 @@ export const IconPerformance = (p: Props) => (
   </svg>
 )
 
+export const IconMore = (p: Props) => (
+  <svg {...base} className={p.className}>
+    <circle cx="5" cy="12" r="1.25" fill="currentColor" stroke="none" />
+    <circle cx="12" cy="12" r="1.25" fill="currentColor" stroke="none" />
+    <circle cx="19" cy="12" r="1.25" fill="currentColor" stroke="none" />
+  </svg>
+)
+
 export const IconLock = (p: Props) => (
   <svg {...base} className={p.className}>
     <rect x="4" y="10" width="16" height="11" rx="2" />

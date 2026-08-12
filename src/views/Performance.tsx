@@ -19,6 +19,7 @@ import {
   usd,
 } from '../lib/format'
 import { PnlCurve } from '../components/PnlCurve'
+import { TradingCalendar } from '../components/TradingCalendar'
 import { HourlyBars } from '../components/HourlyBars'
 import { AvgCompare, DivergingBars, WinLossBar } from '../components/PerfCharts'
 import {
@@ -28,7 +29,6 @@ import {
   EmptyState,
   ErrorNotice,
   Skeleton,
-  Stat,
   TableSkeleton,
 } from '../components/ui'
 
@@ -186,50 +186,67 @@ export function Performance() {
         {periodFilter}
       </div>
 
-      <div className="kpi-row">
-        <Stat
-          label="Operaciones ganadas"
-          hero
-          loading={p.isLoading}
-          value={share(p.winRate, 1)}
-          foot={
-            <span>
+      {/* Headline block, laid out like OKX's own analytics page: the total, what
+          today added, and a compact curve — then the three numbers that qualify it. */}
+      <Card dimmed={dimmed}>
+        <div className="perf-head">
+          <div className="perf-head-main">
+            <span className="metric-label">Resultado realizado</span>
+            <span className={`perf-total ${p.netPnl >= 0 ? 'delta--up' : 'delta--down'}`}>
+              {signedUsd(p.netPnl)}
+            </span>
+            <span className="sub">
+              Hoy{' '}
+              <strong className={p.todayPnl >= 0 ? 'delta--up' : 'delta--down'}>
+                {signedUsd(p.todayPnl)}
+              </strong>
+            </span>
+          </div>
+          <div className="perf-head-chart">
+            {p.isLoading ? (
+              <Skeleton height={110} />
+            ) : (
+              <PnlCurve points={p.equityCurve} trades={p.trades} height={110} />
+            )}
+          </div>
+        </div>
+
+        <ul className="perf-stats">
+          <li>
+            <span className="metric-label">Tasa de aciertos</span>
+            <span className="metric-value">{p.count > 0 ? share(p.winRate, 1) : '—'}</span>
+            <span className="metric-hint">
               {p.wins} ganadas · {p.losses} perdidas
             </span>
-          }
-        />
-        <Stat
-          label="PnL realizado"
-          loading={p.isLoading}
-          value={<DeltaValue value={p.netPnl}>{signedUsd(p.netPnl)}</DeltaValue>}
-          foot={<span>Neto, tras comisiones</span>}
-        />
-        <Stat
-          label="Factor de beneficio"
-          loading={p.isLoading}
-          value={ratio(p.profitFactor)}
-          foot={
-            <span>
-              {p.profitFactor >= 1
-                ? 'Ganas más de lo que pierdes'
-                : 'Pierdes más de lo que ganas'}
+          </li>
+          <li>
+            <span className="metric-label">Operaciones</span>
+            <span className="metric-value">{p.count}</span>
+            <span className="metric-hint">cerradas en el periodo</span>
+          </li>
+          <li>
+            <span className="metric-label">Riesgo / recompensa</span>
+            <span className="metric-value">
+              {p.riskReward > 0 ? `1:${ratio(p.riskReward)}` : '—'}
             </span>
-          }
-        />
-        <Stat
-          label="Resultado por operación"
-          loading={p.isLoading}
-          value={<DeltaValue value={p.expectancy}>{signedUsd(p.expectancy)}</DeltaValue>}
-          foot={<span>Media de {plural(p.count, "operación", "operaciones")}</span>}
-        />
-      </div>
+            <span className="metric-hint">pérdida media frente a ganancia media</span>
+          </li>
+          <li>
+            <span className="metric-label">Factor de beneficio</span>
+            <span className="metric-value">{ratio(p.profitFactor)}</span>
+            <span className="metric-hint">
+              {p.profitFactor >= 1 ? 'ganas más de lo que pierdes' : 'pierdes más de lo que ganas'}
+            </span>
+          </li>
+        </ul>
+      </Card>
 
       <Card
-        title="Evolución del resultado"
-        subtitle="PnL acumulado en US$, tras cada operación cerrada"
+        title="Calendario de trading"
+        subtitle="Resultado realizado por día"
         dimmed={dimmed}
       >
-        {p.isLoading ? <Skeleton height={220} /> : <PnlCurve points={p.equityCurve} trades={p.trades} />}
+        {p.isLoading ? <Skeleton height={280} /> : <TradingCalendar trades={p.trades} />}
       </Card>
 
       <div className="grid-2">

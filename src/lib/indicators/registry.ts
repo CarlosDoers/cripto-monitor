@@ -1,5 +1,10 @@
 import { analyseTraps, ORIGINAL_SETTINGS, TUNED_SETTINGS } from './reversalTrap'
-import { analyseDonchian, DONCHIAN_SETTINGS } from './donchianBreakout'
+import {
+  analyseDonchian,
+  DONCHIAN_ACCURATE,
+  DONCHIAN_SETTINGS,
+  DONCHIAN_SLOW,
+} from './donchianBreakout'
 import type { Candle, Overlay, StrategyResult, StrategySignal } from './types'
 import { summarise } from './types'
 
@@ -21,6 +26,14 @@ export interface StrategyBacktest {
   confidence: 'reasonable' | 'weak'
 }
 
+export interface StrategyPreset {
+  key: string
+  label: string
+  note: string
+  /** Overrides the strategy's profile — two presets can behave very differently. */
+  backtest?: StrategyBacktest
+}
+
 export interface StrategyDef {
   key: string
   label: string
@@ -29,9 +42,14 @@ export interface StrategyDef {
   description: string
   /** Which regime it needs — used to flag when conditions are unfavourable. */
   regime: 'trending' | 'ranging'
-  presets: { key: string; label: string; note: string }[]
+  presets: StrategyPreset[]
   run(candles: Candle[], presetKey: string): StrategyResult
   backtest: StrategyBacktest
+}
+
+/** The profile actually in force: the preset's, falling back to the strategy's. */
+export function profileOf(strategy: StrategyDef, presetKey: string): StrategyBacktest {
+  return strategy.presets.find((p) => p.key === presetKey)?.backtest ?? strategy.backtest
 }
 
 /** Adapts the reversal indicator's own shape to the common contract. */
@@ -102,14 +120,37 @@ export const STRATEGIES: StrategyDef[] = [
       'Entra cuando el precio cierra por encima del máximo (o por debajo del mínimo) de las últimas 20 velas, y acompaña la tendencia con un stop dinámico muy holgado. Pocos aciertos, pero los ganadores corren mucho. Necesita mercado con tendencia.',
     regime: 'trending',
     presets: [
-      { key: 'fast', label: 'Rápida (20)', note: 'Canal de 20 velas. Más señales, tendencias más cortas.' },
-      { key: 'slow', label: 'Lenta (55)', note: 'Canal de 55 velas. Menos señales y más largas.' },
+      {
+        key: 'fast',
+        label: 'Rendimiento',
+        note: 'Canal de 20 velas y stop dinámico holgado. Acierta poco (~39 %) pero los ganadores corren mucho: es la variante que más gana por operación.',
+      },
+      {
+        key: 'slow',
+        label: 'Lenta (55)',
+        note: 'Igual que la anterior con un canal de 55 velas: menos señales y más largas.',
+      },
+      {
+        key: 'accurate',
+        label: 'Acierto',
+        note: 'Canal de 55 filtrado por la EMA(200), stop ceñido y objetivo fijo de 1,5 R. Sube el acierto del 39 % al 52 % a cambio de ganar menos por operación (+0,29 R en vez de +0,50 R). Solo diario.',
+        backtest: {
+          byTimeframe: { '15m': -0.21, '1H': -0.19, '4H': -0.05, '1D': 0.29 },
+          outOfSample: 0.47,
+          sampleSize: 117,
+          confidence: 'weak',
+        },
+      },
     ],
     run: (candles, presetKey) =>
-      analyseDonchian(candles, {
-        ...DONCHIAN_SETTINGS,
-        channelLen: presetKey === 'slow' ? 55 : 20,
-      }),
+      analyseDonchian(
+        candles,
+        presetKey === 'accurate'
+          ? DONCHIAN_ACCURATE
+          : presetKey === 'slow'
+            ? DONCHIAN_SLOW
+            : DONCHIAN_SETTINGS,
+      ),
     backtest: {
       byTimeframe: { '15m': -0.23, '1H': -0.11, '4H': -0.08, '1D': 0.48 },
       outOfSample: 0.19,

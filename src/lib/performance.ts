@@ -95,6 +95,10 @@ export interface Performance {
   longestWinStreak: number
   longestLossStreak: number
   avgDuration?: number
+  /** Realised PnL closed today, in the viewer's timezone. */
+  todayPnl: number
+  /** Average win divided by average loss — OKX shows this as "1:x". */
+  riskReward: number
   byInstrument: GroupStats[]
   byDirection: GroupStats[]
   /** 24 buckets by local hour of entry. */
@@ -264,6 +268,13 @@ export function computePerformance(positions: ClosedPosition[], days: number): P
     avgWin: wins.length ? grossProfit / wins.length : 0,
     avgLoss: losses.length ? grossLoss / losses.length : 0,
     expectancy: trades.length ? netPnl / trades.length : 0,
+    todayPnl: trades
+      .filter((t) => new Date(t.closedAt).toDateString() === new Date().toDateString())
+      .reduce((sum, t) => sum + t.pnl, 0),
+    riskReward:
+      losses.length && wins.length
+        ? grossProfit / wins.length / (grossLoss / losses.length)
+        : 0,
     best: trades.length ? trades.reduce((a, b) => (b.pnl > a.pnl ? b : a)) : undefined,
     worst: trades.length ? trades.reduce((a, b) => (b.pnl < a.pnl ? b : a)) : undefined,
     currentStreak,

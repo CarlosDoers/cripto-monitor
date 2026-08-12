@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { TIMEFRAMES, useSignals, type Timeframe } from '../lib/signals'
-import { STRATEGIES, strategyByKey } from '../lib/indicators/registry'
+import { profileOf, STRATEGIES, strategyByKey } from '../lib/indicators/registry'
 import { useClosedPositions, useInstruments, usePositions } from '../lib/queries'
 import { dateTime, plural, price, ratio, share, timeAgo } from '../lib/format'
 import { PriceChart } from '../components/PriceChart'
@@ -91,6 +91,7 @@ export function Signals() {
 
   const strategy = strategyByKey(strategyKey)
   const preset = strategy.presets.find((p) => p.key === presetKey) ?? strategy.presets[0]
+  const profile = profileOf(strategy, preset.key)
 
   const positions = usePositions()
   const closed = useClosedPositions()
@@ -171,10 +172,10 @@ export function Signals() {
                 type="button"
                 aria-pressed={timeframe === t.key}
                 onClick={() => setTimeframe(t.key)}
-                title={`Esperanza histórica: ${ratio(strategy.backtest.byTimeframe[t.key] ?? 0)} R por señal`}
+                title={`Esperanza histórica: ${ratio(profile.byTimeframe[t.key] ?? 0)} R por señal`}
               >
                 {t.label}
-                {(strategy.backtest.byTimeframe[t.key] ?? 0) > 0.1 && (
+                {(profile.byTimeframe[t.key] ?? 0) > 0.1 && (
                   <span className="tf-mark" aria-hidden="true" />
                 )}
               </button>
@@ -211,7 +212,7 @@ export function Signals() {
         </div>
       )}
 
-      {!s.isLoading && s.usableBars >= MIN_BARS && (strategy.backtest.byTimeframe[timeframe] ?? 0) <= 0.1 && (
+      {!s.isLoading && s.usableBars >= MIN_BARS && (profile.byTimeframe[timeframe] ?? 0) <= 0.1 && (
         <div className="notice">
           <IconAlert />
           <div className="notice-body">
@@ -219,7 +220,7 @@ export function Signals() {
               En {currentTf?.label} esta estrategia no cubre las comisiones
             </p>
             <p className="notice-text">
-              El barrido dio {ratio(strategy.backtest.byTimeframe[timeframe] ?? 0)} R por señal
+              El barrido dio {ratio(profile.byTimeframe[timeframe] ?? 0)} R por señal
               después de costes. Con el stop tan cerca del precio, cada ida y vuelta cuesta{' '}
               <strong>{ratio(r.avgFeeR)} R</strong>. En diario sí compensa.
             </p>
@@ -323,7 +324,7 @@ export function Signals() {
             </p>
             <ul className="bt-list">
               {TIMEFRAMES.map((t) => {
-                const v = strategy.backtest.byTimeframe[t.key] ?? 0
+                const v = profile.byTimeframe[t.key] ?? 0
                 return (
                   <li key={t.key}>
                     <span>{t.label}</span>
@@ -336,9 +337,9 @@ export function Signals() {
               })}
             </ul>
             <p>
-              Fuera de muestra dio <strong>{ratio(strategy.backtest.outOfSample)} R</strong> sobre{' '}
-              {strategy.backtest.sampleSize} señales.{' '}
-              {strategy.backtest.confidence === 'weak'
+              Fuera de muestra dio <strong>{ratio(profile.outOfSample)} R</strong> sobre{' '}
+              {profile.sampleSize} señales.{' '}
+              {profile.confidence === 'weak'
                 ? 'La muestra es pequeña y el resultado cae bastante respecto al periodo de ajuste: trátalo como una ventaja posible, no demostrada.'
                 : 'Se mantuvo en la mitad del histórico que no se usó para ajustar.'}
             </p>
@@ -415,7 +416,7 @@ export function Signals() {
       <p className="footnote">
         Backtest simplificado sobre velas cerradas, sin deslizamiento y con una comisión estimada
         del 0,1 % por ida y vuelta. Las señales solo se evalúan sobre velas cerradas: la vela en
-        curso no genera ninguna. Con {plural(strategy.backtest.sampleSize, 'señal', 'señales')} en la
+        curso no genera ninguna. Con {plural(profile.sampleSize, 'señal', 'señales')} en la
         muestra, trátalo como una ventaja plausible, no como una certeza. Esto es un indicador, no
         una recomendación de inversión.
       </p>

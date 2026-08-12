@@ -2827,3 +2827,197 @@ table.data tbody tr:hover td:first-child {
     font-size: 25px;
   }
 }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   Trading calendar
+   One cell per day of realised PnL. Colour intensity scales with the day's
+   result relative to the month's biggest, and the amount is printed in every
+   traded cell so colour never carries the value on its own.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+.calendar {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.calendar-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.calendar-summary {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.calendar-total {
+  font-size: 24px;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+}
+
+.calendar-nav {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.calendar-nav .btn {
+  font-size: 16px;
+  line-height: 1;
+  padding: 4px 10px;
+}
+
+.calendar-nav .btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.calendar-month {
+  min-width: 126px;
+  text-align: center;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 6px;
+  /* Cells are square-ish only up to a point: on a wide screen an aspect-ratio
+     grid would blow them up to 200px boxes. */
+  max-width: 720px;
+}
+
+.calendar-weekday {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--ink-muted);
+  text-align: center;
+  padding-bottom: 2px;
+}
+
+.calendar-cell {
+  min-height: 62px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  border-radius: var(--radius-sm);
+  border: 1px solid transparent;
+  font-variant-numeric: tabular-nums;
+  transition: transform 0.15s ease, filter 0.15s ease;
+}
+
+.calendar-cell.is-outside {
+  visibility: hidden;
+}
+
+.calendar-cell.has-trades {
+  cursor: default;
+}
+
+.calendar-cell.has-trades:hover {
+  transform: scale(1.06);
+  filter: brightness(1.12);
+}
+
+.calendar-cell.is-today {
+  outline: 1.5px solid var(--accent);
+  outline-offset: -1.5px;
+}
+
+.calendar-day {
+  font-size: 13px;
+  color: var(--ink-secondary);
+}
+
+.calendar-cell.has-trades .calendar-day {
+  color: var(--ink-primary);
+  font-weight: 600;
+}
+
+.calendar-pnl {
+  font-size: 10.5px;
+  font-weight: 600;
+  line-height: 1;
+  color: var(--ink-primary);
+}
+
+@media (max-width: 640px) {
+  .calendar-grid {
+    gap: 4px;
+  }
+
+  .calendar-cell {
+    min-height: 46px;
+  }
+
+  .calendar-day {
+    font-size: 11px;
+  }
+
+  .calendar-pnl {
+    font-size: 9px;
+  }
+}
+
+/* ---------- Performance headline (OKX-style) ---------- */
+
+.perf-head {
+  display: grid;
+  grid-template-columns: minmax(200px, 320px) minmax(0, 1fr);
+  gap: 24px;
+  align-items: center;
+}
+
+.perf-head-main {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.perf-total {
+  font-size: 38px;
+  font-weight: 680;
+  letter-spacing: -0.03em;
+  line-height: 1.1;
+}
+
+.perf-head-chart {
+  min-width: 0;
+}
+
+.perf-stats {
+  list-style: none;
+  padding: 18px 0 0;
+  margin-top: 18px;
+  border-top: 1px solid var(--gridline);
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 18px;
+}
+
+.perf-stats li {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+@media (max-width: 720px) {
+  .perf-head {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .perf-total {
+    font-size: 30px;
+  }
+}

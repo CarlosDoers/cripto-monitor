@@ -10,7 +10,7 @@ función serverless que firma las peticiones a la API.
 | --- | --- |
 | **Resumen** | Patrimonio, PnL abierto y realizado, win rate, curva de resultado y distribución |
 | **Señales** | Indicador de reversión: envolvente sobre velas, señales long/short con objetivo y stop, y su fiabilidad histórica |
-| **Rendimiento** | Win rate, factor de beneficio, curva de PnL, resultado por activo, dirección, hora del día y día de la semana |
+| **Rendimiento** | Tasa de aciertos, factor de beneficio, curva de PnL, calendario diario, y resultado por activo, dirección, hora y día de la semana |
 | **Cartera** | Todos los activos con precio, variación 24 h y peso |
 | **Posiciones** | Posiciones abiertas con liquidación, margen y PnL |
 | **Órdenes** | Abiertas e historial por tipo de instrumento |

@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react'
+import { useMemo, useState, type ReactNode } from 'react'
 import {
   MIN_SAMPLE,
   PERIODS,
@@ -28,6 +28,7 @@ import {
   DeltaValue,
   EmptyState,
   ErrorNotice,
+  SearchInput,
   Skeleton,
   TableSkeleton,
 } from '../components/ui'
@@ -52,73 +53,133 @@ const PAGE = 15
 
 function TradesTable({ trades }: { trades: Trade[] }) {
   const [showAll, setShowAll] = useState(false)
-  // Most recent first — the opposite of the chronological order the curve needs.
-  const all = [...trades].reverse()
-  const rows = showAll ? all : all.slice(0, PAGE)
+  const [search, setSearch] = useState('')
+  const [filter, setFilter] = useState<'all' | 'win' | 'loss' | 'liq'>('all')
+
+  const filtered = useMemo(() => {
+    let list = [...trades].reverse()
+    if (search.trim()) {
+      const q = search.toLowerCase().trim()
+      list = list.filter((t) => t.symbol.toLowerCase().includes(q))
+    }
+    if (filter === 'win') list = list.filter((t) => t.pnl > 0)
+    if (filter === 'loss') list = list.filter((t) => t.pnl < 0)
+    if (filter === 'liq') list = list.filter((t) => t.liquidated)
+    return list
+  }, [trades, search, filter])
+
+  const rows = showAll ? filtered : filtered.slice(0, PAGE)
 
   return (
-    <div className="table-wrap">
-      <table className="data">
-        <thead>
-          <tr>
-            <th>Cerrada</th>
-            <th>Instrumento</th>
-            <th>Dirección</th>
-            <th className="num">Tamaño</th>
-            <th className="num">Entrada</th>
-            <th className="num">Salida</th>
-            <th className="num">Duración</th>
-            <th className="num">Comisiones</th>
-            <th className="num">PnL neto</th>
-            <th className="num">%</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((t) => (
-            <tr key={t.id}>
-              <td className="sub">{dateTime(t.closedAt)}</td>
-              <td>
-                <span className="ccy">{t.symbol}</span>
-                {t.liquidated && (
-                  <>
-                    {' '}
-                    <Badge variant="warn">Liquidada</Badge>
-                  </>
-                )}
-              </td>
-              <td>
-                <Badge variant={t.direction === 'short' ? 'sell' : 'buy'}>
-                  {t.direction === 'short' ? 'Corto' : 'Largo'}
-                  {t.lever > 0 && ` ${t.lever}×`}
-                </Badge>
-              </td>
-              <td className="num">{qty(t.size)}</td>
-              <td className="num">{price(t.openPx)}</td>
-              <td className="num">{price(t.closePx)}</td>
-              <td className="num sub">{t.duration ? duration(t.duration) : '—'}</td>
-              <td className="num sub">{usd(Math.abs(t.fee + t.fundingFee))}</td>
-              <td className="num">
-                <DeltaValue value={t.pnl}>{signedUsd(t.pnl)}</DeltaValue>
-              </td>
-              <td className="num">
-                <DeltaValue value={t.pnlRatio}>{pct(t.pnlRatio)}</DeltaValue>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-
-      {/* Never truncate silently — say what is hidden and offer the rest. */}
-      {all.length > PAGE && (
-        <div className="table-more">
-          <button type="button" className="btn" onClick={() => setShowAll(!showAll)}>
-            {showAll
-              ? `Mostrar solo las ${PAGE} últimas`
-              : `Mostrar las ${all.length - PAGE} restantes`}
+    <>
+      <div className="table-controls-bar">
+        <SearchInput
+          value={search}
+          onChange={setSearch}
+          placeholder="Buscar por activo (ej. BTC, ETH)..."
+          className="table-search"
+        />
+        <div className="seg-control">
+          <button
+            type="button"
+            aria-pressed={filter === 'all'}
+            onClick={() => setFilter('all')}
+          >
+            Todas ({trades.length})
+          </button>
+          <button
+            type="button"
+            aria-pressed={filter === 'win'}
+            onClick={() => setFilter('win')}
+          >
+            Ganadoras
+          </button>
+          <button
+            type="button"
+            aria-pressed={filter === 'loss'}
+            onClick={() => setFilter('loss')}
+          >
+            Perdedoras
+          </button>
+          <button
+            type="button"
+            aria-pressed={filter === 'liq'}
+            onClick={() => setFilter('liq')}
+          >
+            Liquidadas
           </button>
         </div>
-      )}
-    </div>
+      </div>
+
+      <div className="table-wrap">
+        <table className="data">
+          <thead>
+            <tr>
+              <th>Cierre</th>
+              <th>Instrumento</th>
+              <th>Dirección</th>
+              <th className="num">Tamaño</th>
+              <th className="num">Precio Entrada</th>
+              <th className="num">Precio Salida</th>
+              <th className="num">Duración</th>
+              <th className="num">Comisiones</th>
+              <th className="num">PnL Neto</th>
+              <th className="num">ROI</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((t) => (
+              <tr key={t.id}>
+                <td className="sub">{dateTime(t.closedAt)}</td>
+                <td>
+                  <span className="ccy">{t.symbol}</span>
+                  {t.liquidated && (
+                    <>
+                      {' '}
+                      <Badge variant="warn">Liquidada</Badge>
+                    </>
+                  )}
+                </td>
+                <td>
+                  <Badge variant={t.direction === 'short' ? 'sell' : 'buy'}>
+                    {t.direction === 'short' ? 'Corto' : 'Largo'}
+                    {t.lever > 0 && ` ${t.lever}×`}
+                  </Badge>
+                </td>
+                <td className="num">{qty(t.size)}</td>
+                <td className="num">{price(t.openPx)}</td>
+                <td className="num">{price(t.closePx)}</td>
+                <td className="num sub">{t.duration ? duration(t.duration) : '—'}</td>
+                <td className="num sub">{usd(Math.abs(t.fee + t.fundingFee))}</td>
+                <td className="num">
+                  <DeltaValue value={t.pnl}>{signedUsd(t.pnl)}</DeltaValue>
+                </td>
+                <td className="num">
+                  <DeltaValue value={t.pnlRatio}>{pct(t.pnlRatio)}</DeltaValue>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+
+        {filtered.length === 0 && (
+          <EmptyState
+            title="Sin operaciones con estos filtros"
+            hint="Prueba ajustando la búsqueda o el filtro de resultado."
+          />
+        )}
+
+        {filtered.length > PAGE && (
+          <div className="table-more">
+            <button type="button" className="btn btn--outline" onClick={() => setShowAll(!showAll)}>
+              {showAll
+                ? `Mostrar solo las ${PAGE} primeras`
+                : `Mostrar las ${filtered.length - PAGE} operaciones restantes`}
+            </button>
+          </div>
+        )}
+      </div>
+    </>
   )
 }
 

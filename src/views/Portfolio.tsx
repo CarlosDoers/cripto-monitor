@@ -20,46 +20,50 @@ export function Portfolio() {
     <>
       <div className="kpi-row">
         <Stat
-          label="Patrimonio total"
+          label="Patrimonio Total"
           hero
+          glow
           loading={portfolio.isLoading}
           value={usdCompact(portfolio.netWorth)}
           foot={
             portfolio.change24h !== undefined ? (
               <>
-                <Delta ratio={portfolio.change24h} />
+                <Delta ratio={portfolio.change24h} pill />
                 <span>24 h ponderado</span>
               </>
             ) : undefined
           }
         />
         <Stat
-          label="Cuenta de trading"
+          label="Cuenta de Trading"
           loading={valuation.isLoading}
           value={usdCompact(num(details?.trading))}
+          foot={<span>Para derivados y margen</span>}
         />
         <Stat
-          label="Cuenta de fondos"
+          label="Cuenta de Fondos"
           loading={valuation.isLoading}
           value={usdCompact(num(details?.funding))}
+          foot={<span>Depósitos y spot holding</span>}
         />
         <Stat
-          label="Earn"
+          label="Cuenta Earn (Ahorros)"
           loading={valuation.isLoading}
           value={usdCompact(num(details?.earn))}
+          foot={<span>Rendimientos pasivos</span>}
         />
       </div>
 
-      <Card title="Distribución" subtitle="Por valor en USD" dimmed={dimmed}>
-        {portfolio.isLoading ? <Skeleton height={28} /> : <AllocationBar holdings={portfolio.holdings} />}
+      <Card title="Distribución de la Cartera" subtitle="Ponderación por valor de mercado en USD" dimmed={dimmed}>
+        {portfolio.isLoading ? <Skeleton height={32} /> : <AllocationBar holdings={portfolio.holdings} />}
       </Card>
 
       <Card
-        title="Todos los activos"
+        title="Inventario de Activos y Criptomonedas"
         subtitle={
           portfolio.isLoading
             ? undefined
-            : `${portfolio.holdings.length} activos · ${usd(portfolio.totalUsd)} en trading y fondos`
+            : `${portfolio.holdings.length} activos detectados · ${usd(portfolio.totalUsd)} total valorado`
         }
         flush
         dimmed={dimmed}
@@ -67,9 +71,10 @@ export function Portfolio() {
         {portfolio.isLoading ? (
           <TableSkeleton rows={8} cols={6} />
         ) : (
-          <HoldingsTable holdings={portfolio.holdings} showSparkline />
+          <HoldingsTable holdings={portfolio.holdings} showSparkline showSearch />
         )}
       </Card>
     </>
   )
 }
+

@@ -1,7 +1,7 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useOpenOrders, useOrderHistory } from '../lib/queries'
 import { dateTime, num, price, qty, signedUsd } from '../lib/format'
-import { Badge, Card, DeltaValue, EmptyState, ErrorNotice, TableSkeleton } from '../components/ui'
+import { Badge, Card, DeltaValue, EmptyState, ErrorNotice, SearchInput, TableSkeleton } from '../components/ui'
 import type { Order } from '../lib/types'
 
 const INST_TYPES = [
@@ -30,7 +30,9 @@ const ORDER_TYPE: Record<string, string> = {
 
 function Side({ side }: { side: string }) {
   return (
-    <Badge variant={side === 'sell' ? 'sell' : 'buy'}>{side === 'sell' ? 'Venta' : 'Compra'}</Badge>
+    <Badge variant={side === 'sell' ? 'sell' : 'buy'}>
+      {side === 'sell' ? 'Venta ▼' : 'Compra ▲'}
+    </Badge>
   )
 }
 
@@ -41,6 +43,10 @@ function OrderRows({ orders, showPnl }: { orders: Order[]; showPnl?: boolean }) 
         const filled = num(o.accFillSz)
         const size = num(o.sz)
         const pnl = num(o.pnl)
+        const stateKey = o.state
+        const isFilled = stateKey === 'filled'
+        const isLive = stateKey === 'live' || stateKey === 'partially_filled'
+
         return (
           <tr key={o.ordId}>
             <td>
@@ -49,7 +55,9 @@ function OrderRows({ orders, showPnl }: { orders: Order[]; showPnl?: boolean }) 
             <td>
               <Side side={o.side} />
             </td>
-            <td>{ORDER_TYPE[o.ordType] ?? o.ordType}</td>
+            <td>
+              <span className="badge badge--neutral">{ORDER_TYPE[o.ordType] ?? o.ordType}</span>
+            </td>
             <td className="num">{num(o.px) > 0 ? price(num(o.px)) : 'Mercado'}</td>
             <td className="num">{qty(size)}</td>
             <td className="num">
@@ -69,7 +77,9 @@ function OrderRows({ orders, showPnl }: { orders: Order[]; showPnl?: boolean }) 
               </td>
             )}
             <td>
-              <Badge>{ORDER_STATE[o.state] ?? o.state}</Badge>
+              <Badge variant={isLive ? 'live' : isFilled ? 'buy' : 'neutral'}>
+                {ORDER_STATE[o.state] ?? o.state}
+              </Badge>
             </td>
             <td className="num sub">{dateTime(o.cTime)}</td>
           </tr>
@@ -81,16 +91,48 @@ function OrderRows({ orders, showPnl }: { orders: Order[]; showPnl?: boolean }) 
 
 export function Orders() {
   const [instType, setInstType] = useState<string>('SPOT')
+  const [searchOpen, setSearchOpen] = useState('')
+  const [searchHistory, setSearchHistory] = useState('')
+  const [stateFilter, setStateFilter] = useState<'all' | 'filled' | 'canceled'>('all')
+
   const open = useOpenOrders()
   const history = useOrderHistory(instType)
+
+  const openList = useMemo(() => {
+    const list = open.data ?? []
+    if (!searchOpen.trim()) return list
+    const q = searchOpen.toLowerCase().trim()
+    return list.filter((o) => o.instId.toLowerCase().includes(q))
+  }, [open.data, searchOpen])
+
+  const historyList = useMemo(() => {
+    let list = history.data ?? []
+    if (searchHistory.trim()) {
+      const q = searchHistory.toLowerCase().trim()
+      list = list.filter((o) => o.instId.toLowerCase().includes(q))
+    }
+    if (stateFilter === 'filled') list = list.filter((o) => o.state === 'filled')
+    if (stateFilter === 'canceled') list = list.filter((o) => o.state.includes('cancel'))
+    return list
+  }, [history.data, searchHistory, stateFilter])
 
   return (
     <>
       <Card
-        title="Órdenes abiertas"
-        subtitle={open.isLoading ? undefined : `${open.data?.length ?? 0} pendientes`}
+        title="Órdenes Abiertas Pendientes"
+        subtitle={open.isLoading ? undefined : `${openList.length} órdenes en el libro de órdenes`}
         flush
         dimmed={open.isFetching && !open.isLoading}
+        action={
+          (open.data?.length ?? 0) > 4 ? (
+            <SearchInput
+              value={searchOpen}
+              onChange={setSearchOpen}
+              placeholder="Buscar por símbolo..."
+              className="table-search"
+            />
+          ) : undefined
+        }
       >
         {open.error ? (
           <div style={{ padding: '0 18px 18px' }}>
@@ -98,8 +140,11 @@ export function Orders() {
           </div>
         ) : open.isLoading ? (
           <TableSkeleton rows={3} cols={6} />
-        ) : (open.data?.length ?? 0) === 0 ? (
-          <EmptyState title="Sin órdenes abiertas" />
+        ) : openList.length === 0 ? (
+          <EmptyState
+            title={searchOpen ? 'Sin órdenes con ese criterio' : 'Sin órdenes abiertas'}
+            hint="Todas tus órdenes límite están ejecutadas o canceladas."
+          />
         ) : (
           <div className="table-wrap">
             <table className="data">
@@ -108,23 +153,23 @@ export function Orders() {
                   <th>Instrumento</th>
                   <th>Lado</th>
                   <th>Tipo</th>
-                  <th className="num">Precio</th>
+                  <th className="num">Precio Límite</th>
                   <th className="num">Tamaño</th>
                   <th className="num">Ejecutado</th>
-                  <th className="num">Precio medio</th>
+                  <th className="num">Precio Medio</th>
                   <th>Estado</th>
                   <th className="num">Creada</th>
                 </tr>
               </thead>
-              <OrderRows orders={open.data ?? []} />
+              <OrderRows orders={openList} />
             </table>
           </div>
         )}
       </Card>
 
       <Card
-        title="Historial de órdenes"
-        subtitle="Últimos 3 meses"
+        title="Historial de Órdenes"
+        subtitle="Registro de los últimos 3 meses archivados por OKX"
         flush
         dimmed={history.isFetching && !history.isLoading}
         action={
@@ -142,14 +187,46 @@ export function Orders() {
           </div>
         }
       >
+        <div className="table-controls-bar">
+          <SearchInput
+            value={searchHistory}
+            onChange={setSearchHistory}
+            placeholder="Buscar por activo..."
+            className="table-search"
+          />
+          <div className="seg-control">
+            <button
+              type="button"
+              aria-pressed={stateFilter === 'all'}
+              onClick={() => setStateFilter('all')}
+            >
+              Todas
+            </button>
+            <button
+              type="button"
+              aria-pressed={stateFilter === 'filled'}
+              onClick={() => setStateFilter('filled')}
+            >
+              Ejecutadas
+            </button>
+            <button
+              type="button"
+              aria-pressed={stateFilter === 'canceled'}
+              onClick={() => setStateFilter('canceled')}
+            >
+              Canceladas
+            </button>
+          </div>
+        </div>
+
         {history.error ? (
           <div style={{ padding: '0 18px 18px' }}>
             <ErrorNotice title="No se pudo cargar el historial" message={history.error.message} />
           </div>
         ) : history.isLoading ? (
           <TableSkeleton rows={6} cols={7} />
-        ) : (history.data?.length ?? 0) === 0 ? (
-          <EmptyState title={`Sin órdenes de ${instType.toLowerCase()}`} />
+        ) : historyList.length === 0 ? (
+          <EmptyState title={`Sin órdenes de ${instType.toLowerCase()} con los filtros actuales`} />
         ) : (
           <div className="table-wrap">
             <table className="data">
@@ -161,13 +238,13 @@ export function Orders() {
                   <th className="num">Precio</th>
                   <th className="num">Tamaño</th>
                   <th className="num">Ejecutado</th>
-                  <th className="num">Precio medio</th>
+                  <th className="num">Precio Medio</th>
                   <th className="num">PnL</th>
                   <th>Estado</th>
                   <th className="num">Creada</th>
                 </tr>
               </thead>
-              <OrderRows orders={history.data ?? []} showPnl />
+              <OrderRows orders={historyList} showPnl />
             </table>
           </div>
         )}
@@ -175,3 +252,4 @@ export function Orders() {
     </>
   )
 }
+

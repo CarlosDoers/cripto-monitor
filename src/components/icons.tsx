@@ -128,3 +128,62 @@ export const IconLock = (p: Props) => (
     <path d="M8 10V7a4 4 0 1 1 8 0v3" />
   </svg>
 )
+
+export const IconSearch = (p: Props) => (
+  <svg {...base} className={p.className}>
+    <circle cx="11" cy="11" r="7" />
+    <path d="M21 21l-4.35-4.35" />
+  </svg>
+)
+
+export const IconFilter = (p: Props) => (
+  <svg {...base} className={p.className}>
+    <path d="M4 6h16M7 12h10M10 18h4" />
+  </svg>
+)
+
+export const IconShield = (p: Props) => (
+  <svg {...base} className={p.className}>
+    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+  </svg>
+)
+
+export const IconActivity = (p: Props) => (
+  <svg {...base} className={p.className}>
+    <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
+  </svg>
+)
+
+export const IconCheck = (p: Props) => (
+  <svg {...base} className={p.className}>
+    <polyline points="20 6 9 17 4 12" />
+  </svg>
+)
+
+export const IconCross = (p: Props) => (
+  <svg {...base} className={p.className}>
+    <line x1="18" y1="6" x2="6" y2="18" />
+    <line x1="6" y1="6" x2="18" y2="18" />
+  </svg>
+)
+
+export const IconTarget = (p: Props) => (
+  <svg {...base} className={p.className}>
+    <circle cx="12" cy="12" r="10" />
+    <circle cx="12" cy="12" r="6" />
+    <circle cx="12" cy="12" r="2" />
+  </svg>
+)
+
+export const IconChevronDown = (p: Props) => (
+  <svg {...base} className={p.className}>
+    <polyline points="6 9 12 15 18 9" />
+  </svg>
+)
+
+export const IconSparkles = (p: Props) => (
+  <svg {...base} className={p.className}>
+    <path d="M12 3v3m0 12v3M3 12h3m12 0h3M5.6 5.6l2.1 2.1m8.6 8.6l2.1 2.1M5.6 18.4l2.1-2.1m8.6-8.6l2.1-2.1" />
+  </svg>
+)
+

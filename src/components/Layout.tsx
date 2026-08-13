@@ -2,7 +2,10 @@ import { type ReactNode, useEffect, useState } from 'react'
 import { useIsFetching, useQueryClient } from '@tanstack/react-query'
 import { ROUTES, type Route } from '../lib/router'
 import { useTheme, isDark } from '../lib/theme'
-import { timeAgo } from '../lib/format'
+import { timeAgo, usdCompact } from '../lib/format'
+import { usePortfolio } from '../lib/portfolio'
+import { MarketTicker } from './MarketTicker'
+import { Delta } from './ui'
 import {
   IconHistory,
   IconMore,
@@ -15,6 +18,8 @@ import {
   IconRefresh,
   IconSun,
   IconWallet,
+  IconShield,
+  IconSparkles,
 } from './icons'
 
 const NAV: Record<Route, { label: string; description: string; Icon: typeof IconOverview }> = {
@@ -77,15 +82,30 @@ function LastUpdated() {
     return (
       <span className="update-status update-status--live">
         <span className="dot-live" />
-        Actualizando
+        <span>Actualizando</span>
       </span>
     )
   }
   return (
     <span className="update-status">
       <span className="update-status-dot" />
-      Actualizado {timeAgo(lastDone)}
+      <span>{timeAgo(lastDone)}</span>
     </span>
+  )
+}
+
+function QuickPortfolioBadge() {
+  const portfolio = usePortfolio()
+  if (portfolio.isLoading || !portfolio.netWorth) return null
+
+  return (
+    <div className="topbar-quick-kpi" title="Patrimonio total actual">
+      <span className="topbar-kpi-label">Patrimonio</span>
+      <span className="topbar-kpi-val">{usdCompact(portfolio.netWorth)}</span>
+      {portfolio.change24h !== undefined && (
+        <Delta ratio={portfolio.change24h} pill />
+      )}
+    </div>
   )
 }
 
@@ -114,62 +134,74 @@ export function Layout({
       <aside className="sidebar">
         <button type="button" className="brand" onClick={() => go('resumen')}>
           <span className="brand-mark" aria-hidden="true">
-            <span>C</span>
+            <IconSparkles />
           </span>
           <span className="brand-copy">
             <span className="brand-name">Cripto Monitor</span>
-            <span className="brand-caption">OKX · solo lectura</span>
+            <span className="brand-caption">
+              <span className="brand-status-dot" />
+              OKX Live Sync
+            </span>
           </span>
         </button>
 
-        <p className="nav-label">Espacio de trabajo</p>
+        <p className="nav-label">Terminal de Control</p>
         <nav className="nav" aria-label="Secciones">
           {ROUTES.map((key) => {
             const { label, Icon } = NAV[key]
+            const isCurrent = route === key
             return (
               <button
-              key={key}
-              type="button"
-              className="nav-item"
-              aria-current={route === key ? 'page' : undefined}
-              onClick={() => go(key)}
-            >
-              <Icon className="nav-icon" />
-              <span>{label}</span>
+                key={key}
+                type="button"
+                className={`nav-item${isCurrent ? ' nav-item--active' : ''}`}
+                aria-current={isCurrent ? 'page' : undefined}
+                onClick={() => go(key)}
+              >
+                <Icon className="nav-icon" />
+                <span className="nav-text">{label}</span>
+                {isCurrent && <span className="nav-active-glow" aria-hidden="true" />}
               </button>
             )
           })}
         </nav>
 
         <div className="sidebar-pulse">
-          <span className="sidebar-pulse-orb" aria-hidden="true" />
-          <div>
-            <p>Monitor privado</p>
-            <span>Datos sincronizados con OKX</span>
+          <span className="sidebar-pulse-orb" aria-hidden="true">
+            <IconShield />
+          </span>
+          <div className="sidebar-pulse-text">
+            <p>Conexión Segura</p>
+            <span>HMAC SHA-256 · Solo Lectura</span>
           </div>
         </div>
 
         <div className="sidebar-footer">
           <button
             type="button"
-            className="btn"
+            className="btn btn--theme"
             onClick={toggleTheme}
             aria-label={isDark(theme) ? 'Cambiar a tema claro' : 'Cambiar a tema oscuro'}
           >
             {isDark(theme) ? <IconSun /> : <IconMoon />}
-            <span>{isDark(theme) ? 'Claro' : 'Oscuro'}</span>
+            <span>{isDark(theme) ? 'Modo Claro' : 'Modo Oscuro'}</span>
           </button>
         </div>
       </aside>
 
       <div className="main">
+        <MarketTicker />
+
         <header className="topbar">
           <div className="page-heading">
-            <p className="page-overline">Panel personal · datos en vivo</p>
-            <h1>{routeMeta.label}</h1>
+            <div className="page-title-row">
+              <h1>{routeMeta.label}</h1>
+              <span className="page-badge">OKX Real-Time</span>
+            </div>
             <p className="page-description">{routeMeta.description}</p>
           </div>
           <div className="topbar-actions">
+            <QuickPortfolioBadge />
             <LastUpdated />
             <button
               type="button"
@@ -184,8 +216,8 @@ export function Layout({
               type="button"
               className={`btn btn--icon refresh-button${isFetching > 0 ? ' is-refreshing' : ''}`}
               onClick={() => queryClient.invalidateQueries()}
-              aria-label="Actualizar ahora"
-              title="Actualizar ahora"
+              aria-label="Actualizar datos"
+              title="Actualizar datos de OKX"
             >
               <IconRefresh />
             </button>
@@ -198,28 +230,33 @@ export function Layout({
       <nav className="mobile-nav" aria-label="Secciones principales">
         {MOBILE_PRIMARY.map((key) => {
           const { label, Icon } = NAV[key]
+          const isCurrent = route === key
           return (
             <button
               key={key}
               type="button"
-              className="mobile-nav-item"
-              aria-current={route === key ? 'page' : undefined}
+              className={`mobile-nav-item${isCurrent ? ' is-active' : ''}`}
+              aria-current={isCurrent ? 'page' : undefined}
               onClick={() => go(key)}
             >
-              <Icon />
+              <span className="mobile-nav-icon-wrap">
+                <Icon />
+              </span>
               <span>{label}</span>
             </button>
           )
         })}
         <button
           type="button"
-          className="mobile-nav-item"
+          className={`mobile-nav-item${MOBILE_MORE.includes(route) ? ' is-active' : ''}`}
           aria-current={MOBILE_MORE.includes(route) ? 'page' : undefined}
           aria-expanded={mobileMenuOpen}
           aria-controls="mobile-more-menu"
           onClick={() => setMobileMenuOpen((open) => !open)}
         >
-          <IconMore />
+          <span className="mobile-nav-icon-wrap">
+            <IconMore />
+          </span>
           <span>Más</span>
         </button>
       </nav>
@@ -233,10 +270,11 @@ export function Layout({
             aria-label="Cerrar menú"
           />
           <div className="mobile-menu-sheet">
+            <div className="mobile-menu-handle" aria-hidden="true" />
             <div className="mobile-menu-head">
               <div>
-                <p className="page-overline">Más secciones</p>
-                <h2>Profundiza en la cuenta</h2>
+                <p className="page-overline">Menú Adicional</p>
+                <h2>Otras Secciones</h2>
               </div>
               <button type="button" className="btn btn--icon" onClick={() => setMobileMenuOpen(false)} aria-label="Cerrar menú">
                 <IconMore />
@@ -254,7 +292,7 @@ export function Layout({
                     onClick={() => go(key)}
                   >
                     <span className="mobile-menu-icon"><Icon /></span>
-                    <span>
+                    <span className="mobile-menu-text">
                       <strong>{label}</strong>
                       <small>{description}</small>
                     </span>
@@ -268,3 +306,4 @@ export function Layout({
     </div>
   )
 }
+

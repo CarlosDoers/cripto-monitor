@@ -4,8 +4,16 @@ import { profileOf, STRATEGIES, strategyByKey } from '../lib/indicators/registry
 import { useClosedPositions, useInstruments, usePositions } from '../lib/queries'
 import { dateTime, plural, price, ratio, share, timeAgo } from '../lib/format'
 import { PriceChart } from '../components/PriceChart'
-import { IconAlert } from '../components/icons'
-import { Badge, Card, EmptyState, ErrorNotice, Skeleton, Stat, TableSkeleton } from '../components/ui'
+import { IconAlert, IconActivity } from '../components/icons'
+import {
+  Badge,
+  Card,
+  EmptyState,
+  ErrorNotice,
+  Skeleton,
+  Stat,
+  TableSkeleton,
+} from '../components/ui'
 import type { StrategySignal } from '../lib/indicators/types'
 
 /** Below this many bars past warm-up there is nothing meaningful to measure. */
@@ -29,33 +37,38 @@ function LiveSignal({ signal, last }: { signal: StrategySignal; last: number }) 
   return (
     <div className={`signal-live signal-live--${signal.side}`}>
       <div className="signal-live-head">
-        <Badge variant={long ? 'buy' : 'sell'}>{long ? 'LONG' : 'SHORT'}</Badge>
+        <div className="row" style={{ gap: 8, alignItems: 'center' }}>
+          <Badge variant={long ? 'buy' : 'sell'} pulse>
+            {long ? '▲ POSICIÓN LONG' : '▼ POSICIÓN SHORT'}
+          </Badge>
+          <span className="live-pill">En Curso</span>
+        </div>
         <span className="muted">detectada {timeAgo(signal.time)}</span>
       </div>
 
       <ul className="signal-levels">
         <li>
-          <span className="metric-label">Entrada</span>
+          <span className="metric-label">Precio Entrada</span>
           <span className="metric-value">{price(signal.entry)}</span>
         </li>
         {goal !== undefined ? (
           <li>
-            <span className="metric-label">Objetivo</span>
+            <span className="metric-label">Take Profit (Objetivo)</span>
             <span className="metric-value delta--up">{price(goal)}</span>
           </li>
         ) : (
           <li>
-            <span className="metric-label">Salida</span>
-            <span className="metric-value">Stop dinámico</span>
+            <span className="metric-label">Estrategia de Salida</span>
+            <span className="metric-value">Trailing Stop Dinámico</span>
           </li>
         )}
         <li>
-          <span className="metric-label">Stop</span>
+          <span className="metric-label">Stop Loss</span>
           <span className="metric-value delta--down">{price(signal.stop)}</span>
         </li>
         <li>
-          <span className="metric-label">{goal !== undefined ? 'Beneficio / riesgo' : 'Acumulado'}</span>
-          <span className={`metric-value ${goal === undefined && openR < 0 ? 'delta--down' : ''}`}>
+          <span className="metric-label">{goal !== undefined ? 'Ratio Beneficio/Riesgo' : 'R Acumulado'}</span>
+          <span className={`metric-value ${goal === undefined && openR < 0 ? 'delta--down' : 'delta--up'}`}>
             {goal !== undefined
               ? ratio(signal.riskReward ?? 0)
               : `${openR >= 0 ? '+' : '−'}${ratio(Math.abs(openR))} R`}
@@ -74,10 +87,10 @@ function LiveSignal({ signal, last }: { signal: StrategySignal; last: number }) 
               }}
             />
           </div>
-          <span className="sub">
-            Precio actual {price(last)} · {share(Math.min(Math.max(progress, 0), 1), 0)} del recorrido
-            al objetivo
-          </span>
+          <div className="signal-progress-labels">
+            <span>Precio actual: <strong>{price(last)}</strong></span>
+            <span>{share(Math.min(Math.max(progress, 0), 1), 0)} del recorrido al objetivo</span>
+          </div>
         </div>
       )}
     </div>
@@ -88,6 +101,7 @@ export function Signals() {
   const [strategyKey, setStrategyKey] = useState(STRATEGIES[0].key)
   const [timeframe, setTimeframe] = useState<Timeframe>('1D')
   const [presetKey, setPresetKey] = useState(STRATEGIES[0].presets[0].key)
+  const [filterOutcome, setFilterOutcome] = useState<'all' | 'win' | 'loss' | 'open'>('all')
 
   const strategy = strategyByKey(strategyKey)
   const preset = strategy.presets.find((p) => p.key === presetKey) ?? strategy.presets[0]
@@ -118,7 +132,14 @@ export function Signals() {
   const lastPrice = s.candles.at(-1)?.close ?? 0
   const dimmed = s.isFetching && !s.isLoading
 
-  const recent = useMemo(() => [...r.signals].reverse().slice(0, 20), [r.signals])
+  const recent = useMemo(() => {
+    let list = [...r.signals].reverse()
+    if (filterOutcome === 'win') list = list.filter((sig) => sig.outcome === 'win')
+    if (filterOutcome === 'loss') list = list.filter((sig) => sig.outcome === 'loss')
+    if (filterOutcome === 'open') list = list.filter((sig) => sig.outcome === 'open')
+    return list.slice(0, 20)
+  }, [r.signals, filterOutcome])
+
   const regimeFits =
     (strategy.regime === 'trending' && s.regime !== 'ranging') ||
     (strategy.regime === 'ranging' && s.regime !== 'trending')
@@ -134,8 +155,8 @@ export function Signals() {
 
   return (
     <>
-      {/* Tabs: one per strategy, extensible from the registry. */}
-      <div className="tabs" role="tablist" aria-label="Indicadores">
+      {/* Strategy selection tabs */}
+      <div className="tabs" role="tablist" aria-label="Estrategias e Indicadores">
         {STRATEGIES.map((item) => (
           <button
             key={item.key}
@@ -145,26 +166,33 @@ export function Signals() {
             aria-selected={strategyKey === item.key}
             onClick={() => pickStrategy(item.key)}
           >
-            <span className="tab-label">{item.label}</span>
-            <span className="tab-tagline">{item.tagline}</span>
+            <div className="tab-inner">
+              <span className="tab-label">{item.label}</span>
+              <span className="tab-tagline">{item.tagline}</span>
+            </div>
+            {strategyKey === item.key && <span className="tab-indicator" />}
           </button>
         ))}
       </div>
 
+      {/* Control / Filter Bar */}
       <div className="filter-row">
-        <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
-          <select
-            className="select"
-            value={selected}
-            onChange={(e) => setInstId(e.target.value)}
-            aria-label="Instrumento"
-          >
-            {options.map((o) => (
-              <option key={o} value={o}>
-                {o}
-              </option>
-            ))}
-          </select>
+        <div className="row" style={{ gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+          <div className="select-wrap">
+            <select
+              className="select"
+              value={selected}
+              onChange={(e) => setInstId(e.target.value)}
+              aria-label="Instrumento"
+            >
+              {options.map((o) => (
+                <option key={o} value={o}>
+                  {o}
+                </option>
+              ))}
+            </select>
+          </div>
+
           <div className="seg-control">
             {TIMEFRAMES.map((t) => (
               <button
@@ -181,6 +209,7 @@ export function Signals() {
               </button>
             ))}
           </div>
+
           <div className="seg-control">
             {strategy.presets.map((p) => (
               <button
@@ -194,10 +223,16 @@ export function Signals() {
             ))}
           </div>
         </div>
-        <p className="muted">{s.isLoading ? 'Cargando velas…' : `${s.usableBars} velas analizadas`}</p>
+
+        <div className="row" style={{ gap: 8, alignItems: 'center' }}>
+          <span className="badge badge--neutral">
+            <IconActivity />
+            {s.isLoading ? 'Analizando...' : `${s.usableBars} velas confirmadas`}
+          </span>
+        </div>
       </div>
 
-      {/* A contract listed recently simply has no daily history to work with. */}
+      {/* Context Notices */}
       {!s.isLoading && s.usableBars < MIN_BARS && (
         <div className="notice">
           <IconAlert />
@@ -213,39 +248,42 @@ export function Signals() {
       )}
 
       {!s.isLoading && s.usableBars >= MIN_BARS && (profile.byTimeframe[timeframe] ?? 0) <= 0.1 && (
-        <div className="notice">
+        <div className="notice notice--warning">
           <IconAlert />
           <div className="notice-body">
             <p className="notice-title">
-              En {currentTf?.label} esta estrategia no cubre las comisiones
+              En {currentTf?.label} esta estrategia no cubre las comisiones estimadas
             </p>
             <p className="notice-text">
-              El barrido dio {ratio(profile.byTimeframe[timeframe] ?? 0)} R por señal
+              El barrido histórico dio {ratio(profile.byTimeframe[timeframe] ?? 0)} R por señal
               después de costes. Con el stop tan cerca del precio, cada ida y vuelta cuesta{' '}
-              <strong>{ratio(r.avgFeeR)} R</strong>. En diario sí compensa.
+              <strong>{ratio(r.avgFeeR)} R</strong>. En temporalidad diaria (1D) el rendimiento es netamente positivo.
             </p>
           </div>
         </div>
       )}
 
+      {/* Active Signal Card */}
       {r.active && !s.isLoading && (
-        <Card title="Señal abierta" subtitle="Sin alcanzar salida ni stop todavía">
+        <Card title="Señal Abierta Activa" subtitle="Posición en curso según niveles calculados" glow>
           <LiveSignal signal={r.active!} last={lastPrice} />
         </Card>
       )}
 
+      {/* Main Chart Card */}
       <Card
         title={`${selected} · ${currentTf?.label}`}
-        subtitle={strategy.tagline}
+        subtitle={`${strategy.tagline} · Preset: ${preset.label}`}
         dimmed={dimmed}
         action={
           <span className={`regime regime--${s.regime}`}>
-            {s.regime === 'trending' ? 'Con tendencia' : s.regime === 'mixed' ? 'Mixto' : 'Lateral'}
-            <span className="sub"> · eficiencia {ratio(s.efficiency, 2)}</span>
+            <span className="regime-dot" />
+            {s.regime === 'trending' ? 'Mercado en Tendencia' : s.regime === 'mixed' ? 'Régimen Mixto' : 'Mercado Lateral'}
+            <span className="sub"> · Eficiencia {ratio(s.efficiency, 2)}</span>
           </span>
         }
       >
-        {s.isLoading ? <Skeleton height={340} /> : <PriceChart candles={s.candles} result={r} />}
+        {s.isLoading ? <Skeleton height={360} /> : <PriceChart candles={s.candles} result={r} height={360} />}
       </Card>
 
       {!s.isLoading && s.usableBars >= MIN_BARS && !regimeFits && (
@@ -253,27 +291,27 @@ export function Signals() {
           <IconAlert />
           <div className="notice-body">
             <p className="notice-title">
-              El mercado no acompaña a esta estrategia ahora mismo
+              El mercado actual no acompaña al régimen óptimo de esta estrategia
             </p>
             <p className="notice-text">
-              {strategy.label} necesita mercado{' '}
+              {strategy.label} está optimizada para mercado{' '}
               {strategy.regime === 'trending' ? 'con tendencia' : 'lateral'}, y la eficiencia actual
-              ({ratio(s.efficiency, 2)}) indica lo contrario. Las dos pestañas se complementan: rara
-              vez sufren a la vez.
+              ({ratio(s.efficiency, 2)}) indica lo contrario.
             </p>
           </div>
         </div>
       )}
 
+      {/* Strategy KPI Row */}
       <div className="kpi-row">
         <Stat
-          label="Señales detectadas"
+          label="Señales Detectadas"
           loading={s.isLoading}
           value={String(r.signals.length)}
           foot={<span>{r.open > 0 ? `${r.open} sin resolver` : 'todas resueltas'}</span>}
         />
         <Stat
-          label="Aciertos"
+          label="Tasa de Aciertos"
           loading={s.isLoading}
           value={r.wins + r.losses > 0 ? share(r.winRate, 1) : '—'}
           foot={
@@ -283,14 +321,15 @@ export function Signals() {
           }
         />
         <Stat
-          label="Ganancia media"
+          label="Ganancia Media (Win)"
           loading={s.isLoading}
           value={`${ratio(r.avgWinR)} R`}
           foot={<span>Por señal ganadora</span>}
         />
         <Stat
-          label="Resultado esperado neto"
+          label="Esperanza Matemática Neta"
           hero
+          glow
           loading={s.isLoading}
           value={
             <span className={r.expectancyNetR >= 0 ? 'delta--up' : 'delta--down'}>
@@ -306,29 +345,29 @@ export function Signals() {
         />
       </div>
 
+      {/* Strategy Details Grid */}
       <div className="grid-2">
-        <Card title="Cómo funciona">
+        <Card title="Mecánica de la Estrategia">
           <div className="prose">
             <p>{strategy.description}</p>
-            <p className="sub">
-              Preset «{preset.label}»: {preset.note}
-            </p>
+            <div className="tip-box">
+              <strong>Preset «{preset.label}»:</strong> {preset.note}
+            </div>
           </div>
         </Card>
 
-        <Card title="Qué dice el backtest">
+        <Card title="Validación y Backtest Estadístico">
           <div className="prose">
             <p>
-              Barrido sobre 10 instrumentos, puntuado por esperanza en R después de comisiones.
-              Esperanza por temporalidad:
+              Barrido sobre 10 instrumentos principales, puntuado por esperanza en R neta de comisiones (0.1%):
             </p>
             <ul className="bt-list">
               {TIMEFRAMES.map((t) => {
                 const v = profile.byTimeframe[t.key] ?? 0
                 return (
                   <li key={t.key}>
-                    <span>{t.label}</span>
-                    <span className={v > 0 ? 'delta--up' : 'delta--down'}>
+                    <span className="bt-tf">{t.label}</span>
+                    <span className={`bt-val ${v > 0 ? 'delta--up' : 'delta--down'}`}>
                       {v >= 0 ? '+' : '−'}
                       {ratio(Math.abs(v))} R
                     </span>
@@ -336,22 +375,56 @@ export function Signals() {
                 )
               })}
             </ul>
-            <p>
-              Fuera de muestra dio <strong>{ratio(profile.outOfSample)} R</strong> sobre{' '}
-              {profile.sampleSize} señales.{' '}
-              {profile.confidence === 'weak'
-                ? 'La muestra es pequeña y el resultado cae bastante respecto al periodo de ajuste: trátalo como una ventaja posible, no demostrada.'
-                : 'Se mantuvo en la mitad del histórico que no se usó para ajustar.'}
+            <p className="sub">
+              Fuera de muestra (Out of sample): <strong>{ratio(profile.outOfSample)} R</strong> ({profile.sampleSize} señales).
             </p>
           </div>
         </Card>
       </div>
 
-      <Card title="Historial de señales" subtitle="Las 20 más recientes" flush dimmed={dimmed}>
+      {/* Signal History Table */}
+      <Card
+        title="Historial Reciente de Señales"
+        subtitle="Registro de ejecuciones y resolución de niveles"
+        flush
+        dimmed={dimmed}
+        action={
+          <div className="seg-control">
+            <button
+              type="button"
+              aria-pressed={filterOutcome === 'all'}
+              onClick={() => setFilterOutcome('all')}
+            >
+              Todas
+            </button>
+            <button
+              type="button"
+              aria-pressed={filterOutcome === 'win'}
+              onClick={() => setFilterOutcome('win')}
+            >
+              Ganadas
+            </button>
+            <button
+              type="button"
+              aria-pressed={filterOutcome === 'loss'}
+              onClick={() => setFilterOutcome('loss')}
+            >
+              Perdidas
+            </button>
+            <button
+              type="button"
+              aria-pressed={filterOutcome === 'open'}
+              onClick={() => setFilterOutcome('open')}
+            >
+              Abiertas
+            </button>
+          </div>
+        }
+      >
         {s.isLoading ? (
           <TableSkeleton rows={6} cols={7} />
         ) : recent.length === 0 ? (
-          <EmptyState title="Sin señales en este periodo" hint="Prueba con otra temporalidad o instrumento." />
+          <EmptyState title="Sin señales con el filtro actual" hint="Prueba cambiando el filtro o la temporalidad." />
         ) : (
           <div className="table-wrap">
             <table className="data">
@@ -359,9 +432,9 @@ export function Signals() {
                 <tr>
                   <th>Fecha</th>
                   <th>Dirección</th>
-                  <th className="num">Entrada</th>
-                  <th className="num">{strategy.regime === 'ranging' ? 'Objetivo' : 'Salida'}</th>
-                  <th className="num">Stop</th>
+                  <th className="num">Precio Entrada</th>
+                  <th className="num">{strategy.regime === 'ranging' ? 'Objetivo (TP)' : 'Precio Salida'}</th>
+                  <th className="num">Stop Loss</th>
                   <th className="num">Resultado</th>
                   <th>Contexto</th>
                   <th>Estado</th>
@@ -373,7 +446,7 @@ export function Signals() {
                     <td className="sub">{dateTime(sig.time)}</td>
                     <td>
                       <Badge variant={sig.side === 'long' ? 'buy' : 'sell'}>
-                        {sig.side === 'long' ? 'Long' : 'Short'}
+                        {sig.side === 'long' ? 'Long ▲' : 'Short ▼'}
                       </Badge>
                     </td>
                     <td className="num">{price(sig.entry)}</td>
@@ -402,7 +475,7 @@ export function Signals() {
                       ) : sig.outcome === 'loss' ? (
                         <Badge variant="sell">Perdida</Badge>
                       ) : (
-                        <Badge variant="live">Abierta</Badge>
+                        <Badge variant="live" pulse>Abierta</Badge>
                       )}
                     </td>
                   </tr>
@@ -412,14 +485,7 @@ export function Signals() {
           </div>
         )}
       </Card>
-
-      <p className="footnote">
-        Backtest simplificado sobre velas cerradas, sin deslizamiento y con una comisión estimada
-        del 0,1 % por ida y vuelta. Las señales solo se evalúan sobre velas cerradas: la vela en
-        curso no genera ninguna. Con {plural(profile.sampleSize, 'señal', 'señales')} en la
-        muestra, trátalo como una ventaja plausible, no como una certeza. Esto es un indicador, no
-        una recomendación de inversión.
-      </p>
     </>
   )
 }
+

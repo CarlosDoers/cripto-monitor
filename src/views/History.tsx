@@ -1,8 +1,8 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useBills, useFills } from '../lib/queries'
 import { colorOf } from '../lib/colors'
 import { dateTime, num, price, qty, signedUsd, usd } from '../lib/format'
-import { Badge, Card, DeltaValue, EmptyState, ErrorNotice, TableSkeleton } from '../components/ui'
+import { Badge, Card, DeltaValue, EmptyState, ErrorNotice, SearchInput, TableSkeleton } from '../components/ui'
 
 const INST_TYPES = [
   { key: 'SPOT', label: 'Spot' },
@@ -32,6 +32,15 @@ const BILL_TYPE: Record<string, string> = {
 
 function Fills({ instType }: { instType: string }) {
   const { data, isLoading, isFetching, error } = useFills(instType)
+  const [search, setSearch] = useState('')
+
+  const filtered = useMemo(() => {
+    const fills = data ?? []
+    if (!search.trim()) return fills
+    const q = search.toLowerCase().trim()
+    return fills.filter((f) => f.instId.toLowerCase().includes(q))
+  }, [data, search])
+
   const fills = data ?? []
 
   if (error) {
@@ -47,67 +56,91 @@ function Fills({ instType }: { instType: string }) {
   }
 
   return (
-    <div className={`table-wrap${isFetching ? ' is-refetching' : ''}`}>
-      <table className="data">
-        <thead>
-          <tr>
-            <th>Fecha</th>
-            <th>Instrumento</th>
-            <th>Lado</th>
-            <th className="num">Precio</th>
-            <th className="num">Cantidad</th>
-            <th className="num">Total</th>
-            <th className="num">Comisión</th>
-            <th className="num">PnL</th>
-          </tr>
-        </thead>
-        <tbody>
-          {fills.map((f) => {
-            const fillPx = num(f.fillPx)
-            const fillSz = num(f.fillSz)
-            const fee = num(f.fee)
-            const pnl = num(f.fillPnl)
-            return (
-              <tr key={`${f.tradeId}-${f.ordId}`}>
-                <td className="sub">{dateTime(f.ts)}</td>
-                <td>
-                  <span className="ccy">{f.instId}</span>
-                </td>
-                <td>
-                  <Badge variant={f.side === 'sell' ? 'sell' : 'buy'}>
-                    {f.side === 'sell' ? 'Venta' : 'Compra'}
-                  </Badge>
-                </td>
-                <td className="num">{price(fillPx)}</td>
-                <td className="num">{qty(fillSz)}</td>
-                <td className="num">{usd(fillPx * fillSz)}</td>
-                <td className="num">
-                  {fee !== 0 ? (
-                    <>
-                      {qty(Math.abs(fee))} <span className="sub">{f.feeCcy}</span>
-                    </>
-                  ) : (
-                    '—'
-                  )}
-                </td>
-                <td className="num">
-                  {pnl !== 0 ? (
-                    <DeltaValue value={pnl}>{signedUsd(pnl)}</DeltaValue>
-                  ) : (
-                    <span className="muted">—</span>
-                  )}
-                </td>
-              </tr>
-            )
-          })}
-        </tbody>
-      </table>
-    </div>
+    <>
+      <div className="table-controls-bar">
+        <SearchInput
+          value={search}
+          onChange={setSearch}
+          placeholder="Buscar por activo (ej. BTC-USDT)..."
+          className="table-search"
+        />
+      </div>
+
+      <div className={`table-wrap${isFetching ? ' is-refetching' : ''}`}>
+        <table className="data">
+          <thead>
+            <tr>
+              <th>Fecha y Hora</th>
+              <th>Instrumento</th>
+              <th>Lado</th>
+              <th className="num">Precio Ejecución</th>
+              <th className="num">Cantidad</th>
+              <th className="num">Volumen Total</th>
+              <th className="num">Comisión</th>
+              <th className="num">PnL Realizado</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filtered.map((f) => {
+              const fillPx = num(f.fillPx)
+              const fillSz = num(f.fillSz)
+              const fee = num(f.fee)
+              const pnl = num(f.fillPnl)
+              return (
+                <tr key={`${f.tradeId}-${f.ordId}`}>
+                  <td className="sub">{dateTime(f.ts)}</td>
+                  <td>
+                    <span className="ccy">{f.instId}</span>
+                  </td>
+                  <td>
+                    <Badge variant={f.side === 'sell' ? 'sell' : 'buy'}>
+                      {f.side === 'sell' ? 'Venta ▼' : 'Compra ▲'}
+                    </Badge>
+                  </td>
+                  <td className="num">{price(fillPx)}</td>
+                  <td className="num">{qty(fillSz)}</td>
+                  <td className="num">{usd(fillPx * fillSz)}</td>
+                  <td className="num">
+                    {fee !== 0 ? (
+                      <>
+                        {qty(Math.abs(fee))} <span className="sub">{f.feeCcy}</span>
+                      </>
+                    ) : (
+                      '—'
+                    )}
+                  </td>
+                  <td className="num">
+                    {pnl !== 0 ? (
+                      <DeltaValue value={pnl}>{signedUsd(pnl)}</DeltaValue>
+                    ) : (
+                      <span className="muted">—</span>
+                    )}
+                  </td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+
+        {filtered.length === 0 && (
+          <EmptyState title="Sin ejecuciones con ese criterio de búsqueda" />
+        )}
+      </div>
+    </>
   )
 }
 
 function Movements() {
   const { data, isLoading, isFetching, error } = useBills()
+  const [search, setSearch] = useState('')
+
+  const filtered = useMemo(() => {
+    const bills = data ?? []
+    if (!search.trim()) return bills
+    const q = search.toLowerCase().trim()
+    return bills.filter((b) => b.ccy.toLowerCase().includes(q) || b.instId?.toLowerCase().includes(q))
+  }, [data, search])
+
   const bills = data ?? []
 
   if (error) {
@@ -121,56 +154,71 @@ function Movements() {
   if (bills.length === 0) return <EmptyState title="Sin movimientos recientes" />
 
   return (
-    <div className={`table-wrap${isFetching ? ' is-refetching' : ''}`}>
-      <table className="data">
-        <thead>
-          <tr>
-            <th>Fecha</th>
-            <th>Tipo</th>
-            <th>Activo</th>
-            <th>Instrumento</th>
-            <th className="num">Variación</th>
-            <th className="num">Saldo</th>
-            <th className="num">PnL</th>
-          </tr>
-        </thead>
-        <tbody>
-          {bills.map((b) => {
-            const change = num(b.balChg)
-            const pnl = num(b.pnl)
-            return (
-              <tr key={b.billId}>
-                <td className="sub">{dateTime(b.ts)}</td>
-                <td>
-                  <Badge>{BILL_TYPE[b.type] ?? `Tipo ${b.type}`}</Badge>
-                </td>
-                <td>
-                  <span className="ccy">
-                    <span className="ccy-dot" style={{ background: colorOf(b.ccy) }} />
-                    {b.ccy}
-                  </span>
-                </td>
-                <td className="sub">{b.instId || '—'}</td>
-                <td className="num">
-                  <DeltaValue value={change}>
-                    {change > 0 ? '+' : change < 0 ? '−' : ''}
-                    {qty(Math.abs(change))}
-                  </DeltaValue>
-                </td>
-                <td className="num">{qty(num(b.bal))}</td>
-                <td className="num">
-                  {pnl !== 0 ? (
-                    <DeltaValue value={pnl}>{signedUsd(pnl)}</DeltaValue>
-                  ) : (
-                    <span className="muted">—</span>
-                  )}
-                </td>
-              </tr>
-            )
-          })}
-        </tbody>
-      </table>
-    </div>
+    <>
+      <div className="table-controls-bar">
+        <SearchInput
+          value={search}
+          onChange={setSearch}
+          placeholder="Buscar por moneda o activo (ej. USDT, BTC)..."
+          className="table-search"
+        />
+      </div>
+
+      <div className={`table-wrap${isFetching ? ' is-refetching' : ''}`}>
+        <table className="data">
+          <thead>
+            <tr>
+              <th>Fecha y Hora</th>
+              <th>Tipo Movimiento</th>
+              <th>Activo</th>
+              <th>Instrumento</th>
+              <th className="num">Variación</th>
+              <th className="num">Saldo Resultante</th>
+              <th className="num">PnL</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filtered.map((b) => {
+              const change = num(b.balChg)
+              const pnl = num(b.pnl)
+              return (
+                <tr key={b.billId}>
+                  <td className="sub">{dateTime(b.ts)}</td>
+                  <td>
+                    <Badge variant="neutral">{BILL_TYPE[b.type] ?? `Tipo ${b.type}`}</Badge>
+                  </td>
+                  <td>
+                    <span className="ccy">
+                      <span className="ccy-dot" style={{ background: colorOf(b.ccy) }} />
+                      {b.ccy}
+                    </span>
+                  </td>
+                  <td className="sub">{b.instId || '—'}</td>
+                  <td className="num">
+                    <DeltaValue value={change}>
+                      {change > 0 ? '+' : change < 0 ? '−' : ''}
+                      {qty(Math.abs(change))}
+                    </DeltaValue>
+                  </td>
+                  <td className="num">{qty(num(b.bal))}</td>
+                  <td className="num">
+                    {pnl !== 0 ? (
+                      <DeltaValue value={pnl}>{signedUsd(pnl)}</DeltaValue>
+                    ) : (
+                      <span className="muted">—</span>
+                    )}
+                  </td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+
+        {filtered.length === 0 && (
+          <EmptyState title="Sin movimientos con ese criterio" />
+        )}
+      </div>
+    </>
   )
 }
 
@@ -180,7 +228,7 @@ export function History() {
   return (
     <>
       <Card
-        title="Ejecuciones"
+        title="Ejecuciones y Fills"
         subtitle="Operaciones completadas en los últimos 3 meses"
         flush
         action={
@@ -201,9 +249,10 @@ export function History() {
         <Fills instType={instType} />
       </Card>
 
-      <Card title="Movimientos de la cuenta" subtitle="Transferencias, comisiones e intereses" flush>
+      <Card title="Movimientos de la Cuenta" subtitle="Transferencias, comisiones, tasas de funding e intereses" flush>
         <Movements />
       </Card>
     </>
   )
 }
+

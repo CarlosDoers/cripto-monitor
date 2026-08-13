@@ -1,6 +1,6 @@
 import { usePositions } from '../lib/queries'
-import { dateTime, num, pct, price, qty, signedUsd, usd } from '../lib/format'
-import { Card, DeltaValue, EmptyState, ErrorNotice, Stat, TableSkeleton } from '../components/ui'
+import { dateTime, num, pct, price, qty, share, signedUsd, usd } from '../lib/format'
+import { Badge, Card, DeltaValue, EmptyState, ErrorNotice, Stat, TableSkeleton } from '../components/ui'
 
 export function Positions() {
   const { data, isLoading, isFetching, error } = usePositions()
@@ -19,27 +19,41 @@ export function Positions() {
     <>
       <div className="kpi-row">
         <Stat
-          label="PnL no realizado"
+          label="PnL No Realizado"
           hero
+          glow
           loading={isLoading}
           value={<DeltaValue value={unrealised}>{signedUsd(unrealised)}</DeltaValue>}
+          badge={
+            positions.length > 0 ? (
+              <Badge variant="live" pulse>
+                {positions.length} activas
+              </Badge>
+            ) : undefined
+          }
         />
         <Stat
-          label="PnL realizado"
+          label="PnL Realizado (Sesión)"
           loading={isLoading}
           value={<DeltaValue value={realised}>{signedUsd(realised)}</DeltaValue>}
         />
-        <Stat label="Exposición nocional" loading={isLoading} value={usd(notional)} />
         <Stat
-          label="Comisiones de financiación"
+          label="Exposición Nocional Total"
+          loading={isLoading}
+          value={usd(notional)}
+          foot={<span>Valor total de contratos en mercado</span>}
+        />
+        <Stat
+          label="Financiación Acumulada"
           loading={isLoading}
           value={<DeltaValue value={funding}>{signedUsd(funding)}</DeltaValue>}
+          foot={<span>Tasas de funding de posiciones abiertas</span>}
         />
       </div>
 
       <Card
-        title="Posiciones abiertas"
-        subtitle={isLoading ? undefined : `${positions.length} abiertas`}
+        title="Posiciones Abiertas en Vivo"
+        subtitle={isLoading ? undefined : `${positions.length} contratos abiertos en derivados / margen`}
         flush
         dimmed={isFetching && !isLoading}
       >
@@ -48,7 +62,7 @@ export function Positions() {
         ) : positions.length === 0 ? (
           <EmptyState
             title="Sin posiciones abiertas"
-            hint="Aquí aparecerán tus posiciones de futuros, margen y opciones."
+            hint="Aquí aparecerán tus posiciones activas de futuros, perpetuos y margen con su riesgo en tiempo real."
           />
         ) : (
           <div className="table-wrap">
@@ -58,40 +72,65 @@ export function Positions() {
                   <th>Instrumento</th>
                   <th>Lado</th>
                   <th className="num">Tamaño</th>
-                  <th className="num">Precio medio</th>
-                  <th className="num">Precio marca</th>
-                  <th className="num">Liquidación</th>
-                  <th className="num">Margen</th>
-                  <th className="num">PnL no realizado</th>
-                  <th className="num">Abierta</th>
+                  <th className="num">Precio Entrada</th>
+                  <th className="num">Precio Marca</th>
+                  <th className="num">Precio Liq.</th>
+                  <th className="num">Distancia Liq.</th>
+                  <th className="num">Margen Usado</th>
+                  <th className="num">PnL No Realizado</th>
+                  <th className="num">Apertura</th>
                 </tr>
               </thead>
               <tbody>
                 {positions.map((p) => {
                   const upl = num(p.upl)
+                  const uplRatio = num(p.uplRatio)
                   const liq = num(p.liqPx)
+                  const mark = num(p.markPx)
+                  const liqDist = liq > 0 && mark > 0 ? Math.abs(mark - liq) / mark : 0
+                  const isLiqRisk = liqDist > 0 && liqDist < 0.1
+
                   return (
                     <tr key={p.posId}>
                       <td>
                         <span className="ccy">{p.instId}</span>
-                        <span className="sub"> {p.mgnMode === 'cross' ? 'cruzado' : 'aislado'}</span>
+                        <span className="sub"> · {p.mgnMode === 'cross' ? 'Cruzado' : 'Aislado'}</span>
                       </td>
                       <td>
-                        <span className={`badge badge--${p.posSide === 'short' ? 'sell' : 'buy'}`}>
+                        <Badge variant={p.posSide === 'short' ? 'sell' : 'buy'}>
                           {p.posSide === 'short' ? 'Corto' : 'Largo'}
                           {p.lever && ` ${p.lever}×`}
-                        </span>
+                        </Badge>
                       </td>
                       <td className="num">{qty(num(p.pos))}</td>
                       <td className="num">{num(p.avgPx) > 0 ? price(num(p.avgPx)) : '—'}</td>
-                      <td className="num">{num(p.markPx) > 0 ? price(num(p.markPx)) : '—'}</td>
-                      <td className="num">{liq > 0 ? price(liq) : '—'}</td>
+                      <td className="num">{mark > 0 ? price(mark) : '—'}</td>
+                      <td className="num">
+                        {liq > 0 ? (
+                          <span className={isLiqRisk ? 'delta--down font-bold' : ''}>
+                            {price(liq)}
+                          </span>
+                        ) : (
+                          '—'
+                        )}
+                      </td>
+                      <td className="num">
+                        {liqDist > 0 ? (
+                          <span
+                            className={`badge badge--${isLiqRisk ? 'sell' : liqDist < 0.25 ? 'warn' : 'neutral'}`}
+                          >
+                            {share(liqDist, 1)}
+                          </span>
+                        ) : (
+                          '—'
+                        )}
+                      </td>
                       <td className="num">{num(p.margin) > 0 ? usd(num(p.margin)) : '—'}</td>
                       <td className="num">
                         <DeltaValue value={upl}>
-                          {signedUsd(upl)}
-                          {num(p.uplRatio) !== 0 && (
-                            <span className="sub"> ({pct(num(p.uplRatio))})</span>
+                          <strong>{signedUsd(upl)}</strong>
+                          {uplRatio !== 0 && (
+                            <span className="sub"> ({pct(uplRatio)})</span>
                           )}
                         </DeltaValue>
                       </td>
@@ -107,3 +146,4 @@ export function Positions() {
     </>
   )
 }
+

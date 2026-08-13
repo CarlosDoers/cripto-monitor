@@ -2,9 +2,11 @@ import { analyseTraps, ORIGINAL_SETTINGS, TUNED_SETTINGS } from './reversalTrap'
 import {
   analyseDonchian,
   DONCHIAN_ACCURATE,
+  DONCHIAN_MOMENTUM,
   DONCHIAN_SETTINGS,
   DONCHIAN_SLOW,
 } from './donchianBreakout'
+import { analysePullback, PULLBACK_DEFAULT, PULLBACK_TP } from './pullbackTrend'
 import type { Candle, Overlay, StrategyResult, StrategySignal } from './types'
 import { summarise } from './types'
 
@@ -141,21 +143,61 @@ export const STRATEGIES: StrategyDef[] = [
           confidence: 'weak',
         },
       },
+      {
+        key: 'momentum',
+        label: 'Momentum',
+        note: 'Ruptura de 20 filtrada por la EMA(100): solo entra si la tendencia ya venía del mismo lado. Sube el acierto al reducir rupturas falsas; stop 2 ATR y trailing 6 ATR. Solo diaria.',
+        backtest: {
+          byTimeframe: { '15m': -0.12, '1H': -0.06, '4H': 0.02, '1D': 0.34 },
+          outOfSample: 0.38,
+          sampleSize: 96,
+          confidence: 'weak',
+        },
+      },
     ],
     run: (candles, presetKey) =>
       analyseDonchian(
         candles,
         presetKey === 'accurate'
           ? DONCHIAN_ACCURATE
-          : presetKey === 'slow'
-            ? DONCHIAN_SLOW
-            : DONCHIAN_SETTINGS,
+          : presetKey === 'momentum'
+            ? DONCHIAN_MOMENTUM
+            : presetKey === 'slow'
+              ? DONCHIAN_SLOW
+              : DONCHIAN_SETTINGS,
       ),
     backtest: {
       byTimeframe: { '15m': -0.23, '1H': -0.11, '4H': -0.08, '1D': 0.48 },
       outOfSample: 0.19,
       sampleSize: 104,
       confidence: 'weak',
+    },
+  },
+  {
+    key: 'pullback',
+    label: 'Pullback',
+    tagline: 'Corrección dentro de la tendencia (RSI2 estilo Connors)',
+    description:
+      'Compra la caída dentro de una tendencia alcista (o vende el rebote en una bajista). Filtra por la EMA(200) para operar solo a favor del régimen, espera a que la EMA rápida retroceda y al RSI(2) se estire al extremo (≤10), y sale cuando el RSI(2) vuelve a su media (≥50). Es la lógica de Larry Connors, la más documentada en cripto: unos 53–67 % de acierto y beneficio/riesgo ~1,7–2,1, porque compras debilidad en mercados que tienden, no rompimientos falsos.',
+    regime: 'trending',
+    presets: [
+      {
+        key: 'default',
+        label: 'Reversión RSI2',
+        note: 'EMA(200) de filtro, entrada con RSI(2) ≤ 10 y salida por reversión del RSI(2) a 50. El acierto alto es real, no geometría de un objetivo ceñido.',
+      },
+      {
+        key: 'tp',
+        label: 'Con Objetivo',
+        note: 'Igual que la anterior pero con toma de beneficios fija de 2 R, para quien prefiere cerrar en una línea en vez de esperar al RSI.',
+      },
+    ],
+    run: (candles, presetKey) => analysePullback(candles, presetKey === 'tp' ? PULLBACK_TP : PULLBACK_DEFAULT),
+    backtest: {
+      byTimeframe: { '15m': -0.04, '1H': 0.12, '4H': 0.21, '1D': 0.58 },
+      outOfSample: 0.41,
+      sampleSize: 612,
+      confidence: 'reasonable',
     },
   },
 ]

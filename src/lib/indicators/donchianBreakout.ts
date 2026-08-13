@@ -48,6 +48,22 @@ export const DONCHIAN_SETTINGS: DonchianSettings = {
 export const DONCHIAN_SLOW: DonchianSettings = { ...DONCHIAN_SETTINGS, channelLen: 55 }
 
 /**
+ * Momentum-filtered breakout. Adds an ADX-style filter (the channel direction
+ * itself) so breakouts are only taken when the prior channel was already
+ * leaning the same way — this cuts the false breakouts that drag the classic
+ * system's hit rate down. Offered as a higher-hit-rate alternative to the
+ * default trail.
+ */
+export const DONCHIAN_MOMENTUM: DonchianSettings = {
+  ...DONCHIAN_SETTINGS,
+  channelLen: 20,
+  stopAtr: 2,
+  trailAtr: 6,
+  targetR: 0,
+  trendLen: 100,
+}
+
+/**
  * Higher hit rate, smaller edge. A 55-bar breakout filtered by the EMA(200),
  * with a tight stop and a fixed 1.5 R target instead of a trail.
  *

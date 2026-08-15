@@ -1,6 +1,13 @@
 import { useMemo, useState } from 'react'
 import { TIMEFRAMES, useSignals, type Timeframe } from '../lib/signals'
-import { profileOf, STRATEGIES, strategyByKey } from '../lib/indicators/registry'
+import {
+  MIN_TRADABLE_R,
+  profileOf,
+  STRATEGIES,
+  strategyByKey,
+  timeframeVerdict,
+  tradableTimeframes,
+} from '../lib/indicators/registry'
 import { useClosedPositions, useInstruments, usePositions } from '../lib/queries'
 import { dateTime, plural, price, ratio, share, timeAgo } from '../lib/format'
 import { PriceChart } from '../components/PriceChart'
@@ -144,9 +151,32 @@ export function Signals() {
     (strategy.regime === 'trending' && s.regime !== 'ranging') ||
     (strategy.regime === 'ranging' && s.regime !== 'trending')
 
+  const currentVerdict = timeframeVerdict(profile, timeframe)
+  const blocked = TIMEFRAMES.filter((t) => timeframeVerdict(profile, t.key) === 'blocked')
+
+  /**
+   * Switching strategy or preset can invalidate the timeframe — the breakout is
+   * only tradable on the daily, the reversal also on 4 h. Snapping to the best
+   * measured timeframe keeps the view from ever sitting on a losing pair.
+   */
+  function retarget(key: string, nextPreset: string) {
+    const next = strategyByKey(key)
+    const nextProfile = profileOf(next, nextPreset)
+    if (timeframeVerdict(nextProfile, timeframe) === 'blocked') {
+      setTimeframe((tradableTimeframes(nextProfile)[0] ?? '1D') as Timeframe)
+    }
+  }
+
   function pickStrategy(key: string) {
+    const first = strategyByKey(key).presets[0].key
     setStrategyKey(key)
-    setPresetKey(strategyByKey(key).presets[0].key)
+    setPresetKey(first)
+    retarget(key, first)
+  }
+
+  function pickPreset(key: string) {
+    setPresetKey(key)
+    retarget(strategyKey, key)
   }
 
   if (s.error) {
@@ -193,21 +223,30 @@ export function Signals() {
             </select>
           </div>
 
+          {/* A timeframe where the measured expectancy is negative is not a
+              choice worth offering: it is disabled and says why. */}
           <div className="seg-control">
-            {TIMEFRAMES.map((t) => (
-              <button
-                key={t.key}
-                type="button"
-                aria-pressed={timeframe === t.key}
-                onClick={() => setTimeframe(t.key)}
-                title={`Esperanza histórica: ${ratio(profile.byTimeframe[t.key] ?? 0)} R por señal`}
-              >
-                {t.label}
-                {(profile.byTimeframe[t.key] ?? 0) > 0.1 && (
-                  <span className="tf-mark" aria-hidden="true" />
-                )}
-              </button>
-            ))}
+            {TIMEFRAMES.map((t) => {
+              const r = profile.byTimeframe[t.key] ?? 0
+              const verdict = timeframeVerdict(profile, t.key)
+              return (
+                <button
+                  key={t.key}
+                  type="button"
+                  aria-pressed={timeframe === t.key}
+                  disabled={verdict === 'blocked'}
+                  onClick={() => setTimeframe(t.key)}
+                  title={
+                    verdict === 'blocked'
+                      ? `Bloqueada: ${ratio(r)} R por señal en el barrido. Las comisiones se comen la ventaja.`
+                      : `Esperanza medida: ${ratio(r)} R por señal`
+                  }
+                >
+                  {t.label}
+                  {verdict === 'good' && <span className="tf-mark" aria-hidden="true" />}
+                </button>
+              )
+            })}
           </div>
 
           <div className="seg-control">
@@ -216,7 +255,7 @@ export function Signals() {
                 key={p.key}
                 type="button"
                 aria-pressed={preset.key === p.key}
-                onClick={() => setPresetKey(p.key)}
+                onClick={() => pickPreset(p.key)}
               >
                 {p.label}
               </button>
@@ -241,41 +280,29 @@ export function Signals() {
             <p className="notice-text">
               {selected} solo tiene {plural(s.candles.length, 'vela cerrada', 'velas cerradas')} en{' '}
               {currentTf?.label}, y la estrategia necesita {r.warmup} solo para arrancar sus medias.
-              Prueba una temporalidad más corta o un instrumento con más recorrido.
+              Los contratos perpetuos listados hace poco no tienen recorrido suficiente: prueba con
+              BTC, ETH o SOL, que sí llegan a cuatro años de histórico diario. Bajar de temporalidad
+              no es alternativa, porque ahí las comisiones se comen la ventaja.
             </p>
           </div>
         </div>
       )}
 
-      {/* Measured as unprofitable. It stays selectable, but the app must not let
-          it look like an edge. */}
-      {!s.isLoading && profile.confidence === 'negative' && (
-        <div className="notice notice--error">
-          <IconAlert />
-          <div className="notice-body">
-            <p className="notice-title">Esta estrategia no fue rentable en el barrido</p>
-            <p className="notice-text">
-              Acierta mucho (más del 60 %), pero la esperanza medida es de{' '}
-              <strong>{ratio(profile.byTimeframe['1D'] ?? 0)} R por señal</strong> incluso en su
-              mejor temporalidad. El acierto viene de la geometría de la salida, no de una ventaja
-              real: se probaron 25 variantes de stop y objetivo y ninguna llegó a ser rentable.
-              Está disponible para inspeccionarla, no como recomendación.
-            </p>
-          </div>
-        </div>
-      )}
-
-      {!s.isLoading && s.usableBars >= MIN_BARS && profile.confidence !== 'negative' && (profile.byTimeframe[timeframe] ?? 0) <= 0.1 && (
+      {/* The 4 h reversal measured +0.15 R but was positive on only 6 of 10
+          instruments. Positive is not the same as established. */}
+      {!s.isLoading && s.usableBars >= MIN_BARS && currentVerdict === 'marginal' && (
         <div className="notice notice--warning">
           <IconAlert />
           <div className="notice-body">
             <p className="notice-title">
-              En {currentTf?.label} esta estrategia no cubre las comisiones estimadas
+              En {currentTf?.label} la ventaja es pequeña, no sólida
             </p>
             <p className="notice-text">
-              El barrido histórico dio {ratio(profile.byTimeframe[timeframe] ?? 0)} R por señal
-              después de costes. Con el stop tan cerca del precio, cada ida y vuelta cuesta{' '}
-              <strong>{ratio(r.avgFeeR)} R</strong>. En temporalidad diaria (1D) el rendimiento es netamente positivo.
+              El barrido dio {ratio(profile.byTimeframe[timeframe] ?? 0)} R por señal después de
+              costes, frente a {ratio(profile.byTimeframe['1D'] ?? 0)} R en diario. Cada ida y
+              vuelta cuesta aquí <strong>{ratio(r.avgFeeR)} R</strong>, así que un pequeño cambio en
+              tus comisiones se lleva por delante el margen. La temporalidad diaria es la que tiene
+              la evidencia detrás.
             </p>
           </div>
         </div>
@@ -377,14 +404,18 @@ export function Signals() {
         <Card title="Validación y Backtest Estadístico">
           <div className="prose">
             <p>
-              Barrido sobre 10 instrumentos principales, puntuado por esperanza en R neta de comisiones (0.1%):
+              Barrido sobre 10 instrumentos principales, puntuado por esperanza en R neta de comisiones (0,1 %):
             </p>
             <ul className="bt-list">
               {TIMEFRAMES.map((t) => {
                 const v = profile.byTimeframe[t.key] ?? 0
+                const isBlocked = timeframeVerdict(profile, t.key) === 'blocked'
                 return (
-                  <li key={t.key}>
-                    <span className="bt-tf">{t.label}</span>
+                  <li key={t.key} className={isBlocked ? 'is-blocked' : undefined}>
+                    <span className="bt-tf">
+                      {t.label}
+                      {isBlocked && <span className="bt-lock"> bloqueada</span>}
+                    </span>
                     <span className={`bt-val ${v > 0 ? 'delta--up' : 'delta--down'}`}>
                       {v >= 0 ? '+' : '−'}
                       {ratio(Math.abs(v))} R
@@ -394,12 +425,23 @@ export function Signals() {
               })}
             </ul>
             <p className="sub">
-              Fuera de muestra (Out of sample): <strong>{ratio(profile.outOfSample)} R</strong> ({profile.sampleSize} señales).
-              {profile.confidence === 'weak' &&
-                ' La muestra es corta y el resultado cae respecto al periodo de ajuste: trátalo como una ventaja posible, no demostrada.'}
-              {profile.confidence === 'reasonable' &&
-                ' Se mantiene en la mitad del histórico que no se usó para ajustar.'}
+              Acierto medido en diario <strong>{share(profile.winRate, 1)}</strong> sobre{' '}
+              {plural(profile.sampleSize, 'señal resuelta', 'señales resueltas')}. Fuera de muestra,
+              en la mitad del histórico que no se usó para ajustar:{' '}
+              <strong>{ratio(profile.outOfSample)} R</strong>.
+              {profile.confidence === 'weak'
+                ? ' Cae respecto al periodo de ajuste o la muestra es corta: trátalo como una ventaja posible, no demostrada.'
+                : ' Se mantiene fuera de muestra, que es la mejor evidencia disponible en la app.'}
             </p>
+            {blocked.length > 0 && (
+              <p className="sub">
+                {blocked.length === 1 ? 'La temporalidad' : 'Las temporalidades'}{' '}
+                {blocked.map((t) => t.label).join(', ')} {blocked.length === 1 ? 'está' : 'están'}{' '}
+                bloqueada{blocked.length === 1 ? '' : 's'} porque la esperanza medida no llega a{' '}
+                {ratio(MIN_TRADABLE_R)} R. No es que la estrategia falle más: el stop está tan cerca
+                del precio que la comisión se lleva la ventaja entera.
+              </p>
+            )}
           </div>
         </Card>
       </div>

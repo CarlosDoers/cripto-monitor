@@ -8,6 +8,7 @@ import type {
   Candle,
   ClosedPosition,
   Instrument,
+  OpenInterest,
   Fill,
   FundingBalance,
   Order,
@@ -179,6 +180,13 @@ export function useCandleHistory(instId: string, bar: string, pages = 4) {
     enabled: Boolean(instId),
     refetchInterval: LIVE,
     staleTime: LIVE,
+  })
+}
+
+/** Open interest across a product type — half of any liquidity picture. */
+export function useOpenInterest(instType: string) {
+  return useOkx<OpenInterest>(['open-interest', instType], '/api/v5/public/open-interest', {
+    instType,
   })
 }
 

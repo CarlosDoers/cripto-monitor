@@ -41,6 +41,9 @@ export const ALLOWED_PATHS = new Set([
   '/api/v5/trade/fills-history',
 
   // Public market data
+  '/api/v5/public/open-interest',
+  '/api/v5/public/funding-rate',
+  '/api/v5/public/price-limit',
   '/api/v5/market/ticker',
   '/api/v5/market/tickers',
   '/api/v5/market/candles',

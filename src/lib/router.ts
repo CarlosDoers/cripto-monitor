@@ -8,6 +8,7 @@ import { useSyncExternalStore, useCallback } from 'react'
 export const ROUTES = [
   'resumen',
   'senales',
+  'mercados',
   'rendimiento',
   'cartera',
   'posiciones',

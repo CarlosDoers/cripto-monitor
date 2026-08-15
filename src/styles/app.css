@@ -2244,3 +2244,56 @@ table.data td.num {
   padding-top: 12px;
   max-width: 68ch;
 }
+
+/* ---------- Market tradability grade ---------- */
+
+.grade {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 3px 9px 3px 3px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  background: var(--surface-inset);
+  color: var(--ink-secondary);
+  white-space: nowrap;
+}
+
+.grade-score {
+  display: grid;
+  place-items: center;
+  min-width: 26px;
+  height: 22px;
+  padding: 0 6px;
+  border-radius: 999px;
+  font-variant-numeric: tabular-nums;
+  background: var(--surface-1);
+  color: var(--ink-primary);
+}
+
+.grade--excelente {
+  background: color-mix(in srgb, var(--good) 16%, transparent);
+  color: var(--delta-up);
+}
+
+.grade--bueno {
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  color: var(--accent);
+}
+
+.grade--aceptable {
+  background: color-mix(in srgb, var(--warning) 18%, transparent);
+  color: var(--ink-primary);
+}
+
+.grade--evitar {
+  background: color-mix(in srgb, var(--critical) 14%, transparent);
+  color: var(--delta-down);
+}
+
+.grade-reason {
+  display: block;
+  margin-top: 3px;
+  font-size: 11px;
+}

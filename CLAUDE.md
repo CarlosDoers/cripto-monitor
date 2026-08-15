@@ -61,6 +61,8 @@ Two hooks compose the raw queries into what views actually need:
 
 `src/lib/indicators/` ports TradingView indicators to TypeScript.
 
+**Every number in a `backtest` profile must be measured, never written by hand.** The UI presents them as fact next to real money. `scripts/audit-strategies.mjs` re-measures all of them; run it after touching any strategy parameter. An audit caught three invented profiles at once, including one claiming +0.58 R for a setup that actually measures +0.01 R.
+
 Strategies are registered in `registry.ts` and the Señales view is driven entirely off that list — adding one means adding an entry there, not touching the view. Each implements the `StrategyResult` contract in `types.ts`, which prices everything in **R** so a fixed-target setup and a trailing one stay comparable.
 
 - `ta.ts` — EMA, RMA, ATR, RSI, highest/lowest, **matching Pine Script exactly**. The seeding rule is the part that is easy to get wrong: both `ta.ema` and `ta.rma` warm up with an SMA of the first `length` values and are `na` before that, and `ta.rma` uses `alpha = 1/length` (not `2/(length+1)`). Getting this wrong shifts every signal to a different candle. Verified against TradingView's documented pseudocode — do not "simplify" the seeding.
@@ -86,6 +88,7 @@ Kept here because re-deriving it costs an hour and the conclusions shape the UI:
 - **A high hit rate is geometry, not signal.** With RANDOM entries and a wide stop against a near target (6 ATR stop, 0.4 R target), the hit rate is **73 %** with an expectancy of −0.006 R. Any candidate claiming 78–88 % must be checked against a random-entry control with the *same* stop/target geometry before it means anything. Five separate strategy families were explored (Bollinger+RSI, VWAP bands, deep pullback, multi-timeframe, target sweep); every "80 %+ hit rate" they produced fell inside the random band. None survived.
 - **The measured frontier**, on the only genuinely long history (daily BTC/ETH/SOL, 4 years, 571 configurations that stayed positive in both epochs): 50–55 % hit rate buys +0.31 R; 60–65 % buys +0.117 R; 70–75 % buys +0.081 R. There is no corner with "70 % and +0.25 R". Hit rate is bought at market price and gets expensive above 60 %.
 - **Beware the history the cache actually holds.** 15 m covers ~15 days and 1 H ~60 days; only daily BTC/ETH/SOL reaches four years. Aggregates over "10 instruments × 4 timeframes" are far less independent than the n suggests, and ETH/SOL appear twice (spot and perp). Weight daily results accordingly.
+- **The pullback (Connors RSI2) hits 62–68 % and still makes nothing.** Measured expectancy is +0.01 R on the daily over n=176, and 25 combinations of stop, exit and target were swept without one reaching profitability. It ships with `confidence: 'negative'` and the view says so — a strategy that wins two thirds of the time and loses money is exactly the trap this project keeps re-discovering.
 - An RSI gate and a minimum reward-to-risk filter both *hurt*. A trend filter is structurally incompatible: the signal fires far from the moving average by construction, so "only trade with the trend" leaves almost no signals.
 
 Routing is hash-based in `src/lib/router.ts` (`useSyncExternalStore`, no router dependency). Adding a view means touching `ROUTES`, the `NAV` map in `Layout.tsx`, and the switch in `App.tsx`.

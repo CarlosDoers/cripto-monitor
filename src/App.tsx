@@ -9,6 +9,7 @@ import { Card, ErrorNotice, Skeleton } from './components/ui'
 import { Overview } from './views/Overview'
 import { Performance } from './views/Performance'
 import { Signals } from './views/Signals'
+import { Markets } from './views/Markets'
 import { Portfolio } from './views/Portfolio'
 import { Positions } from './views/Positions'
 import { Orders } from './views/Orders'
@@ -72,6 +73,7 @@ function Views() {
     <Layout route={route} navigate={navigate}>
       {route === 'resumen' && <Overview />}
       {route === 'senales' && <Signals />}
+      {route === 'mercados' && <Markets />}
       {route === 'rendimiento' && <Performance />}
       {route === 'cartera' && <Portfolio />}
       {route === 'posiciones' && <Positions />}

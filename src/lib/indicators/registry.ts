@@ -18,14 +18,25 @@ import { summarise } from './types'
  * well established each edge is instead of implying they are equivalent.
  */
 
+/**
+ * Measured backtest profile. Every number here comes from running the strategy
+ * over the cached candles of 10 instruments and 4 timeframes — never written by
+ * hand. The UI presents them as fact, so an invented figure is misinformation
+ * with money attached. Re-measure after changing any strategy parameter.
+ */
 export interface StrategyBacktest {
   /** Net expectancy in R per timeframe, across 10 instruments. */
   byTimeframe: Record<string, number>
-  /** Net expectancy on the half of history never used for tuning. */
+  /** Net expectancy on the daily half of history never used for tuning. */
   outOfSample: number
-  /** Resolved signals behind those numbers. */
+  /** Resolved daily signals behind those numbers. */
   sampleSize: number
-  confidence: 'reasonable' | 'weak'
+  /**
+   * `negative` means the measurement says it loses money. It stays selectable
+   * — hiding it would be worse than saying so — but the UI must not present it
+   * as an edge.
+   */
+  confidence: 'reasonable' | 'weak' | 'negative'
 }
 
 export interface StrategyPreset {
@@ -108,9 +119,9 @@ export const STRATEGIES: StrategyDef[] = [
     ],
     run: runReversal,
     backtest: {
-      byTimeframe: { '15m': -0.3, '1H': 0.0, '4H': -0.01, '1D': 0.53 },
-      outOfSample: 0.22,
-      sampleSize: 1222,
+      byTimeframe: { '15m': -0.34, '1H': 0.07, '4H': 0.15, '1D': 0.54 },
+      outOfSample: 0.57,
+      sampleSize: 115,
       confidence: 'reasonable',
     },
   },
@@ -137,20 +148,20 @@ export const STRATEGIES: StrategyDef[] = [
         label: 'Acierto',
         note: 'Canal de 55 filtrado por la EMA(200), stop ceñido y objetivo fijo de 1,5 R. Sube el acierto del 39 % al 52 % a cambio de ganar menos por operación (+0,29 R en vez de +0,50 R). Solo diario.',
         backtest: {
-          byTimeframe: { '15m': -0.21, '1H': -0.19, '4H': -0.05, '1D': 0.29 },
+          byTimeframe: { '15m': -0.42, '1H': -0.20, '4H': -0.07, '1D': 0.30 },
           outOfSample: 0.47,
-          sampleSize: 117,
+          sampleSize: 116,
           confidence: 'weak',
         },
       },
       {
         key: 'momentum',
         label: 'Momentum',
-        note: 'Ruptura de 20 filtrada por la EMA(100): solo entra si la tendencia ya venía del mismo lado. Sube el acierto al reducir rupturas falsas; stop 2 ATR y trailing 6 ATR. Solo diaria.',
+        note: 'Ruptura de 20 filtrada por la EMA(100), stop 2 ATR y trailing 6 ATR. En diario es la que más gana (+0,74 R) pero fuera de muestra cae a +0,06 R, así que ese número está lejos de estar establecido. Solo diaria: en 15 m pierde 0,51 R por señal.',
         backtest: {
-          byTimeframe: { '15m': -0.12, '1H': -0.06, '4H': 0.02, '1D': 0.34 },
-          outOfSample: 0.38,
-          sampleSize: 96,
+          byTimeframe: { '15m': -0.51, '1H': -0.33, '4H': 0.15, '1D': 0.74 },
+          outOfSample: 0.06,
+          sampleSize: 86,
           confidence: 'weak',
         },
       },
@@ -167,9 +178,9 @@ export const STRATEGIES: StrategyDef[] = [
               : DONCHIAN_SETTINGS,
       ),
     backtest: {
-      byTimeframe: { '15m': -0.23, '1H': -0.11, '4H': -0.08, '1D': 0.48 },
+      byTimeframe: { '15m': -0.34, '1H': -0.20, '4H': -0.09, '1D': 0.50 },
       outOfSample: 0.19,
-      sampleSize: 104,
+      sampleSize: 100,
       confidence: 'weak',
     },
   },
@@ -178,26 +189,26 @@ export const STRATEGIES: StrategyDef[] = [
     label: 'Pullback',
     tagline: 'Corrección dentro de la tendencia (RSI2 estilo Connors)',
     description:
-      'Compra la caída dentro de una tendencia alcista (o vende el rebote en una bajista). Filtra por la EMA(200) para operar solo a favor del régimen, espera a que la EMA rápida retroceda y al RSI(2) se estire al extremo (≤10), y sale cuando el RSI(2) vuelve a su media (≥50). Es la lógica de Larry Connors, la más documentada en cripto: unos 53–67 % de acierto y beneficio/riesgo ~1,7–2,1, porque compras debilidad en mercados que tienden, no rompimientos falsos.',
+      'Compra la caída dentro de una tendencia alcista (o vende el rebote en una bajista). Filtra por la EMA(200), espera a que el precio pierda su EMA rápida y al RSI(2) estirarse al extremo (≤10), y sale cuando el RSI(2) vuelve a su media. Es la lógica de Larry Connors. Acierta muchísimo —entre el 62 % y el 68 % según la temporalidad— pero en el barrido ese acierto NO se traduce en dinero: la esperanza queda en cero porque las pocas pérdidas, con un stop de 3 ATR, se comen las muchas ganancias pequeñas. Se deja seleccionable para poder verlo, no como recomendación.',
     regime: 'trending',
     presets: [
       {
         key: 'default',
         label: 'Reversión RSI2',
-        note: 'EMA(200) de filtro, entrada con RSI(2) ≤ 10 y salida por reversión del RSI(2) a 50. El acierto alto es real, no geometría de un objetivo ceñido.',
+        note: 'EMA(200) de filtro, entrada con RSI(2) ≤ 10 y salida al volver el RSI(2) a 50. Acierta el 67 % en diario, pero la esperanza medida es +0,01 R: el acierto sí es geometría de la salida, no una ventaja. Se probaron 25 combinaciones de stop y salida y ninguna llegó a ser rentable.',
       },
       {
         key: 'tp',
         label: 'Con Objetivo',
-        note: 'Igual que la anterior pero con toma de beneficios fija de 2 R, para quien prefiere cerrar en una línea en vez de esperar al RSI.',
+        note: 'Igual que la anterior con toma de beneficios fija de 2 R. Baja el acierto al 46 % y sube la esperanza a +0,09 R en diario: sigue sin ser una ventaja clara.',
       },
     ],
     run: (candles, presetKey) => analysePullback(candles, presetKey === 'tp' ? PULLBACK_TP : PULLBACK_DEFAULT),
     backtest: {
-      byTimeframe: { '15m': -0.04, '1H': 0.12, '4H': 0.21, '1D': 0.58 },
-      outOfSample: 0.41,
-      sampleSize: 612,
-      confidence: 'reasonable',
+      byTimeframe: { '15m': -0.11, '1H': -0.06, '4H': -0.01, '1D': 0.01 },
+      outOfSample: 0.02,
+      sampleSize: 176,
+      confidence: 'negative',
     },
   },
 ]

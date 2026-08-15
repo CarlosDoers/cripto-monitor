@@ -130,6 +130,11 @@ export interface Ticker {
   low24h: string
   vol24h: string
   volCcy24h: string
+  /** Best bid/ask — the spread is the real cost of entering a trade. */
+  bidPx: string
+  askPx: string
+  bidSz: string
+  askSz: string
   ts: string
 }
 
@@ -201,6 +206,18 @@ export interface Bill {
 /** `[ts, open, high, low, close, vol, volCcy, volCcyQuote, confirm]` */
 export type Candle = string[]
 
+export interface OpenInterest {
+  instId: string
+  instType: string
+  /** Contracts. */
+  oi: string
+  /** In the base currency. */
+  oiCcy: string
+  /** Already converted to USD by OKX. */
+  oiUsd: string
+  ts: string
+}
+
 export interface Instrument {
   instId: string
   instType: string
@@ -213,6 +230,10 @@ export interface Instrument {
   ctValCcy: string
   state: string
   expTime: string
+  /** Max leverage the contract allows. */
+  lever: string
+  /** Family, e.g. `BTC-USD_UM_XPERP`. */
+  instFamily: string
 }
 
 /** A single position in the portfolio, merged from trading + funding accounts. */

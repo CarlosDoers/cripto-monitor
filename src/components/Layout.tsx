@@ -15,6 +15,7 @@ import {
   IconOverview,
   IconPerformance,
   IconSignal,
+  IconMarkets,
   IconPositions,
   IconRefresh,
   IconSun,
@@ -33,6 +34,11 @@ const NAV: Record<Route, { label: string; description: string; Icon: typeof Icon
     label: 'Señales',
     description: 'Contexto de mercado, niveles operativos y fiabilidad de la estrategia.',
     Icon: IconSignal,
+  },
+  mercados: {
+    label: 'Mercados',
+    description: 'Qué contratos perpetuos tienen liquidez y condiciones para operar ahora.',
+    Icon: IconMarkets,
   },
   rendimiento: {
     label: 'Rendimiento',
@@ -62,7 +68,7 @@ const NAV: Record<Route, { label: string; description: string; Icon: typeof Icon
 }
 
 const MOBILE_PRIMARY: Route[] = ['resumen', 'senales', 'rendimiento', 'cartera']
-const MOBILE_MORE: Route[] = ['posiciones', 'ordenes', 'historial']
+const MOBILE_MORE: Route[] = ['mercados', 'posiciones', 'ordenes', 'historial']
 
 function LastUpdated() {
   const isFetching = useIsFetching()

@@ -18,7 +18,7 @@ import { feeInR, summarise, type Candle, type Overlay, type StrategyResult, type
  *   1. Trend filter: price above the EMA(trendLen) → only longs; below → only
  *      shorts. This is the single most important line: it keeps us on the side
  *      the market is actually moving, which is what makes the pullback pay.
- *   2. Pullback: the fast EMA(fastLen) has crossed back below price (longs) or
+ *   2. Pullback: price has fallen below its fast EMA(fastLen) (longs) or risen
  *      above it (shorts) — i.e. a short-term retracement inside the trend.
  *   3. Trigger: RSI(2) drops to/below `rsiEntry` (longs) or rises to/above
  *      `100 − rsiEntry` (shorts). That is the stretched, oversold/overbought
@@ -143,9 +143,13 @@ export function analysePullback(
     const upTrend = trend ? close[i] > trend[i] : true
     const downTrend = trend ? close[i] < trend[i] : true
 
-    // Pullback: fast EMA has dipped below price (long) / risen above (short).
-    const pulledBackLong = fast[i] < close[i]
-    const pulledBackShort = fast[i] > close[i]
+    // Pullback: price has dropped BELOW its own fast EMA (long) or popped above
+    // it (short). This has to agree with the RSI trigger — an RSI(2) at 10 means
+    // price just fell hard, which puts it under the fast EMA, not over it.
+    // Requiring the opposite made the two conditions mutually exclusive and the
+    // strategy produced zero signals.
+    const pulledBackLong = close[i] < fast[i]
+    const pulledBackShort = close[i] > fast[i]
 
     // Trigger: RSI(2) stretched to the extreme.
     const longTrigger = rsi2[i] <= rsiEntry

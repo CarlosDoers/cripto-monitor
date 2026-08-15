@@ -247,7 +247,25 @@ export function Signals() {
         </div>
       )}
 
-      {!s.isLoading && s.usableBars >= MIN_BARS && (profile.byTimeframe[timeframe] ?? 0) <= 0.1 && (
+      {/* Measured as unprofitable. It stays selectable, but the app must not let
+          it look like an edge. */}
+      {!s.isLoading && profile.confidence === 'negative' && (
+        <div className="notice notice--error">
+          <IconAlert />
+          <div className="notice-body">
+            <p className="notice-title">Esta estrategia no fue rentable en el barrido</p>
+            <p className="notice-text">
+              Acierta mucho (más del 60 %), pero la esperanza medida es de{' '}
+              <strong>{ratio(profile.byTimeframe['1D'] ?? 0)} R por señal</strong> incluso en su
+              mejor temporalidad. El acierto viene de la geometría de la salida, no de una ventaja
+              real: se probaron 25 variantes de stop y objetivo y ninguna llegó a ser rentable.
+              Está disponible para inspeccionarla, no como recomendación.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {!s.isLoading && s.usableBars >= MIN_BARS && profile.confidence !== 'negative' && (profile.byTimeframe[timeframe] ?? 0) <= 0.1 && (
         <div className="notice notice--warning">
           <IconAlert />
           <div className="notice-body">
@@ -377,6 +395,10 @@ export function Signals() {
             </ul>
             <p className="sub">
               Fuera de muestra (Out of sample): <strong>{ratio(profile.outOfSample)} R</strong> ({profile.sampleSize} señales).
+              {profile.confidence === 'weak' &&
+                ' La muestra es corta y el resultado cae respecto al periodo de ajuste: trátalo como una ventaja posible, no demostrada.'}
+              {profile.confidence === 'reasonable' &&
+                ' Se mantiene en la mitad del histórico que no se usó para ajustar.'}
             </p>
           </div>
         </Card>

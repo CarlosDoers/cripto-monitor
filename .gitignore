@@ -31,3 +31,6 @@ dist-ssr
 # Vercel
 .vercel
 .env*
+
+# Candle cache for scripts/audit-strategies.mjs
+.candles

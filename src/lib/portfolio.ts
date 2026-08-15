@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
 import { useBalance, useFunding, useTickers, useValuation } from './queries'
 import { num } from './format'
+import { setUsdToEur } from './currency'
 import type { Holding, Ticker } from './types'
 
 const STABLES = new Set(['USDT', 'USDC', 'DAI', 'TUSD', 'USD'])
@@ -35,6 +36,10 @@ export function usePortfolio() {
   const tickerMap = useMemo(() => {
     const map = new Map<string, Ticker>()
     for (const t of tickers.data ?? []) map.set(t.instId, t)
+    // OKX's own USDC-EUR price, so the euro figures here match the ones its app
+    // shows instead of drifting against a hardcoded rate.
+    const eur = num(map.get('USDC-EUR')?.last) || num(map.get('USDT-EUR')?.last)
+    if (eur > 0) setUsdToEur(eur)
     return map
   }, [tickers.data])
 

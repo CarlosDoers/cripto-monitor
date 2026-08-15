@@ -2,6 +2,7 @@ import { type ReactNode, useEffect, useState } from 'react'
 import { useIsFetching, useQueryClient } from '@tanstack/react-query'
 import { ROUTES, type Route } from '../lib/router'
 import { useTheme, isDark } from '../lib/theme'
+import { setCurrency, useCurrency } from '../lib/currency'
 import { timeAgo, usdCompact } from '../lib/format'
 import { usePortfolio } from '../lib/portfolio'
 import { MarketTicker } from './MarketTicker'
@@ -119,6 +120,7 @@ export function Layout({
   children: ReactNode
 }) {
   const [theme, toggleTheme] = useTheme()
+  const { currency } = useCurrency()
   const queryClient = useQueryClient()
   const isFetching = useIsFetching()
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
@@ -177,6 +179,21 @@ export function Layout({
         </div>
 
         <div className="sidebar-footer">
+          {/* OKX shows amounts in whatever currency the account is set to. The
+              API always returns USD, so this converts for display — pick euros
+              here and the figures line up with the OKX app. */}
+          <div className="seg-control currency-switch" role="group" aria-label="Moneda">
+            {(['USD', 'EUR'] as const).map((c) => (
+              <button
+                key={c}
+                type="button"
+                aria-pressed={currency === c}
+                onClick={() => setCurrency(c)}
+              >
+                {c === 'USD' ? 'US$' : '€'}
+              </button>
+            ))}
+          </div>
           <button
             type="button"
             className="btn btn--theme"

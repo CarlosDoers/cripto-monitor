@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { signedUsd, usd } from '../lib/format'
+import { moneyCompact, signedUsd, usd } from '../lib/format'
 import type { Trade } from '../lib/performance'
 
 const WEEKDAYS = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom']
@@ -13,19 +13,9 @@ interface DayCell {
   isToday: boolean
 }
 
-/** Compact money for a cell: "+55,4" fits, "+55,43 US$" does not. */
-function cellAmount(value: number): string {
-  const abs = Math.abs(value)
-  const digits = abs >= 100 ? 0 : 1
-  const n = new Intl.NumberFormat('es-ES', {
-    minimumFractionDigits: digits,
-    maximumFractionDigits: digits,
-  }).format(abs)
-  return `${value > 0 ? '+' : '−'}${n}`
-}
-
 /**
- * A month of realised PnL, one cell per day.
+ * A month of realised PnL, one cell per day, keyed on the day the trade was
+ * OPENED — the same rule OKX's analytics page uses.
  *
  * Colour encodes sign and magnitude: intensity scales with the day's result
  * relative to the biggest day of the month, so a flat month does not paint
@@ -38,7 +28,9 @@ export function TradingCalendar({ trades }: { trades: Trade[] }) {
   const byDay = useMemo(() => {
     const map = new Map<string, { pnl: number; trades: number }>()
     for (const t of trades) {
-      const d = new Date(t.closedAt)
+      // Keyed on the OPENING day, which is what OKX's own calendar does: a trade
+      // opened on the 13th and closed on the 14th is booked on the 13th.
+      const d = new Date(t.openedAt || t.closedAt)
       const key = `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`
       const entry = map.get(key) ?? { pnl: 0, trades: 0 }
       entry.pnl += t.pnl
@@ -157,11 +149,19 @@ export function TradingCalendar({ trades }: { trades: Trade[] }) {
               {/* Primary ink, not the delta colour: the tinted background and the
                   explicit sign already carry the polarity, and a green amount on a
                   green tile drops under the contrast floor on the strongest days. */}
-              {has && <span className="calendar-pnl">{cellAmount(cell.pnl)}</span>}
+              {has && <span className="calendar-pnl">{moneyCompact(cell.pnl)}</span>}
             </span>
           )
         })}
       </div>
+
+      {/* Say what this is built from. Anyone comparing against the OKX app will
+          otherwise assume a bug when the two disagree. */}
+      <p className="calendar-note">
+        Calculado desde las posiciones de futuros cerradas que devuelve OKX, imputadas al día en
+        que se <strong>abrieron</strong>. Puede diferir del calendario de la app de OKX en días
+        con cierres parciales repartidos entre varias jornadas.
+      </p>
     </div>
   )
 }

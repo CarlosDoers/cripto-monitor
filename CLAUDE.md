@@ -92,6 +92,14 @@ Routing is hash-based in `src/lib/router.ts` (`useSyncExternalStore`, no router 
 
 ## Conventions
 
+### Display currency
+
+The account settles in **USDC**, so every figure the API returns is in dollars. OKX's own app converts for display, so a euro-configured OKX will not match until the app is switched too — `src/lib/currency.ts` holds that choice and the rate, read from OKX's own `USDC-EUR` ticker rather than hardcoded.
+
+`usd()` converts on the way out, so switching currency changes every figure at once. The catch: the formatters read a module store, not props, so **nothing re-renders on their own** — `Views` in `App.tsx` subscribes via `useCurrency()` to re-render the tree. Remove that call and only the sidebar updates.
+
+**The calendar keys each trade on the day it was OPENED**, which is what OKX's analytics page does: a trade opened on the 13th and closed on the 14th is booked on the 13th. Verified against real screenshots — the 30-day aggregates then match OKX exactly (total, hit rate, position count and risk/reward all line up). Individual days can still differ when OKX splits a partial close across sessions.
+
 ### Formatting
 
 Everything user-facing goes through `src/lib/format.ts` — `usd`, `qty`, `price`, `pct`, `share`, `ratio`, `duration`, `plural`, `axisTick`. **Never `toFixed()` in a component**: it emits a `.` decimal separator, which is wrong in es-ES. `qty()` and `price()` scale precision to magnitude, because BTC needs 8 decimals and SHIB does not.

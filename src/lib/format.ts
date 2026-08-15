@@ -1,3 +1,5 @@
+import { activeCurrency, convert } from './currency'
+
 /** OKX sends numbers as strings, and "" for fields that don't apply. */
 export function num(value: string | number | undefined | null): number {
   if (value === undefined || value === null || value === '') return 0
@@ -5,27 +7,36 @@ export function num(value: string | number | undefined | null): number {
   return Number.isFinite(parsed) ? parsed : 0
 }
 
-const usdFormatter = new Intl.NumberFormat('es-ES', {
-  style: 'currency',
-  currency: 'USD',
-  minimumFractionDigits: 2,
-  maximumFractionDigits: 2,
-})
+const moneyFormatters = new Map<string, Intl.NumberFormat>()
 
+function formatter(currency: string, maximumFractionDigits: number) {
+  const key = `${currency}:${maximumFractionDigits}`
+  let f = moneyFormatters.get(key)
+  if (!f) {
+    f = new Intl.NumberFormat('es-ES', {
+      style: 'currency',
+      currency,
+      minimumFractionDigits: maximumFractionDigits === 0 ? 0 : 2,
+      maximumFractionDigits,
+    })
+    moneyFormatters.set(key, f)
+  }
+  return f
+}
+
+/**
+ * A money amount. The value always arrives in USD — that is what OKX settles
+ * in — and is converted here into whatever display currency is active, so one
+ * switch changes every figure in the app at once.
+ */
 export function usd(value: number): string {
-  return usdFormatter.format(value)
+  return formatter(activeCurrency(), 2).format(convert(value))
 }
 
 /** Drops the cents once the number is big enough that they are noise. */
 export function usdCompact(value: number): string {
-  const abs = Math.abs(value)
-  if (abs >= 100_000) {
-    return new Intl.NumberFormat('es-ES', {
-      style: 'currency',
-      currency: 'USD',
-      maximumFractionDigits: 0,
-    }).format(value)
-  }
+  const shown = convert(value)
+  if (Math.abs(shown) >= 100_000) return formatter(activeCurrency(), 0).format(shown)
   return usd(value)
 }
 
@@ -123,6 +134,18 @@ export function duration(ms: number): string {
 /** "1 operación" / "5 operaciones", so counts never read as "1 ops". */
 export function plural(count: number, one: string, many: string): string {
   return `${count} ${count === 1 ? one : many}`
+}
+
+/** Compact money for tight spots like calendar cells: "+55,4", no symbol. */
+export function moneyCompact(value: number): string {
+  const shown = convert(value)
+  const abs = Math.abs(shown)
+  const digits = abs >= 100 ? 0 : 1
+  const n = new Intl.NumberFormat('es-ES', {
+    minimumFractionDigits: digits,
+    maximumFractionDigits: digits,
+  }).format(abs)
+  return `${shown > 0 ? '+' : shown < 0 ? '−' : ''}${n}`
 }
 
 export function timeAgo(ms: number): string {

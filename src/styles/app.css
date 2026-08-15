@@ -2219,3 +2219,28 @@ table.data td.num {
   width: 100%;
 }
 
+
+/* Currency switch sits with the theme toggle in the sidebar footer. */
+.currency-switch {
+  width: 100%;
+}
+
+.currency-switch button {
+  flex: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 860px) {
+  .currency-switch {
+    width: auto;
+  }
+}
+
+.calendar-note {
+  font-size: 11.5px;
+  line-height: 1.6;
+  color: var(--ink-muted);
+  border-top: 1px solid var(--gridline);
+  padding-top: 12px;
+  max-width: 68ch;
+}

@@ -25,6 +25,10 @@ export const ALLOWED_PATHS = new Set([
   '/api/v5/account/max-withdrawal',
   '/api/v5/account/interest-accrued',
   '/api/v5/account/leverage-info',
+  // The real maker/taker rates for this account's fee tier. Every expectancy
+  // figure in Señales is quoted net of an assumed 0.1 % round trip, so the
+  // actual number decides whether those figures apply to this account at all.
+  '/api/v5/account/trade-fee',
 
   // Funding account
   '/api/v5/asset/balances',
@@ -39,6 +43,10 @@ export const ALLOWED_PATHS = new Set([
   '/api/v5/trade/orders-history-archive',
   '/api/v5/trade/fills',
   '/api/v5/trade/fills-history',
+  // Stop-loss and take-profit live here, not in orders-pending. Without these
+  // the app cannot tell an unprotected position from a protected one.
+  '/api/v5/trade/orders-algo-pending',
+  '/api/v5/trade/orders-algo-history',
 
   // Public market data
   '/api/v5/public/open-interest',

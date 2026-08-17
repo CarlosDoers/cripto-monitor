@@ -3,10 +3,12 @@ import { okx, ApiError } from './api'
 import type {
   AccountBalance,
   AccountConfig,
+  AlgoOrder,
   AssetValuation,
   Bill,
   Candle,
   ClosedPosition,
+  FundingRate,
   Instrument,
   OpenInterest,
   Fill,
@@ -14,6 +16,8 @@ import type {
   Order,
   Position,
   Ticker,
+  TradeFee,
+  Transfer,
 } from './types'
 
 /**
@@ -216,5 +220,85 @@ export function useCandles(instId: string | undefined, bar = '1H', limit = 48) {
     refetchInterval: SLOW,
     staleTime: SLOW,
     retry: false,
+  })
+}
+
+/**
+ * The account's real maker/taker rates.
+ *
+ * Every expectancy figure in Señales is quoted net of an assumed 0.1 % round
+ * trip. This is what decides whether that assumption holds for this account,
+ * so it is worth a request even though it almost never changes.
+ */
+export function useTradeFee(instType = 'SWAP') {
+  return useOkx<TradeFee>(
+    ['trade-fee', instType],
+    '/api/v5/account/trade-fee',
+    { instType },
+    { refetchInterval: DAY, staleTime: DAY, retry: false },
+  )
+}
+
+/**
+ * Live stop-loss and take-profit orders.
+ *
+ * OKX splits conditional orders across order types and requires `ordType` on
+ * the request, so a single call cannot see them all — `conditional` covers a
+ * lone stop or target and `oco` covers the pair. Without both, a position that
+ * *is* protected can still look bare.
+ */
+export function useAlgoOrders() {
+  return useQuery<AlgoOrder[], ApiError>({
+    queryKey: ['algo-orders'],
+    queryFn: async () => {
+      const [conditional, oco] = await Promise.all([
+        okx<AlgoOrder>('/api/v5/trade/orders-algo-pending', { ordType: 'conditional', limit: 100 }),
+        okx<AlgoOrder>('/api/v5/trade/orders-algo-pending', { ordType: 'oco', limit: 100 }),
+      ])
+      return [...conditional, ...oco]
+    },
+    refetchInterval: LIVE,
+  })
+}
+
+/**
+ * Funding rate for one perpetual. Enabled only for perps: asking about a spot
+ * pair is an error, not an empty result.
+ */
+export function useFundingRate(instId: string | undefined) {
+  const isPerp = Boolean(instId && (instId.includes('SWAP') || instId.includes('XPERP')))
+  return useQuery<FundingRate[], ApiError>({
+    queryKey: ['funding-rate', instId],
+    queryFn: () => okx<FundingRate>('/api/v5/public/funding-rate', { instId: instId! }),
+    enabled: isPerp,
+    refetchInterval: SLOW,
+    staleTime: SLOW,
+    retry: false,
+  })
+}
+
+export interface TransferHistory {
+  deposits: Transfer[]
+  withdrawals: Transfer[]
+}
+
+/**
+ * Money moved in and out of the account.
+ *
+ * Needed to read the portfolio honestly: a balance that grew because of a
+ * deposit is not the same as one that grew from trading, and nothing else in
+ * the app can tell them apart.
+ */
+export function useTransfers() {
+  return useQuery<TransferHistory, ApiError>({
+    queryKey: ['transfers'],
+    queryFn: async () => {
+      const [deposits, withdrawals] = await Promise.all([
+        okx<Transfer>('/api/v5/asset/deposit-history', { limit: 100 }),
+        okx<Transfer>('/api/v5/asset/withdrawal-history', { limit: 100 }),
+      ])
+      return { deposits, withdrawals }
+    },
+    refetchInterval: SLOW,
   })
 }

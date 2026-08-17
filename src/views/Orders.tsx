@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { useOpenOrders, useOrderHistory } from '../lib/queries'
 import { dateTime, num, price, qty, signedUsd } from '../lib/format'
-import { Badge, Card, DeltaValue, EmptyState, ErrorNotice, SearchInput, TableSkeleton } from '../components/ui'
+import { Badge, Card, DeltaValue, EmptyState, ErrorNotice, SearchInput, TableSkeleton, TableWrap } from '../components/ui'
 import type { Order } from '../lib/types'
 
 const INST_TYPES = [
@@ -146,7 +146,7 @@ export function Orders() {
             hint="Todas tus órdenes límite están ejecutadas o canceladas."
           />
         ) : (
-          <div className="table-wrap">
+          <TableWrap>
             <table className="data">
               <thead>
                 <tr>
@@ -163,7 +163,7 @@ export function Orders() {
               </thead>
               <OrderRows orders={openList} />
             </table>
-          </div>
+          </TableWrap>
         )}
       </Card>
 
@@ -228,7 +228,7 @@ export function Orders() {
         ) : historyList.length === 0 ? (
           <EmptyState title={`Sin órdenes de ${instType.toLowerCase()} con los filtros actuales`} />
         ) : (
-          <div className="table-wrap">
+          <TableWrap>
             <table className="data">
               <thead>
                 <tr>
@@ -246,7 +246,7 @@ export function Orders() {
               </thead>
               <OrderRows orders={historyList} showPnl />
             </table>
-          </div>
+          </TableWrap>
         )}
       </Card>
     </>

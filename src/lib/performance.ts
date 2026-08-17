@@ -126,7 +126,10 @@ function toTrade(p: ClosedPosition): Trade {
   const valid = openedAt > 0 && closedAt > openedAt
 
   return {
-    id: p.posId,
+    // OKX reuses posId across the partial closes of one position, so it is not
+    // unique in positions-history — two rows sharing it made React drop trades
+    // from the table. The close time separates them.
+    id: `${p.posId}-${p.uTime}`,
     instId: p.instId,
     symbol: symbolOf(p.instId),
     direction: p.direction,

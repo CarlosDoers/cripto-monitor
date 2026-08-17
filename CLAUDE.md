@@ -38,6 +38,16 @@ browser ──▶ /api/okx?path=/api/v5/…  ──▶  api/_okx.ts  ──▶  
 
 **The allowlist is a security control, not a convenience.** Only GET, only read endpoints. A deployment URL is public, so even a leaked one cannot place an order or withdraw — regardless of what the API key was granted. To use a new OKX endpoint, add it to `ALLOWED_PATHS` and give it a hook in `src/lib/queries.ts`.
 
+### Endpoints that answer a question nothing else can
+
+Three of them exist because the obvious endpoint is silent on the thing that matters:
+
+- **`/account/trade-fee`** — the account's real maker/taker rates. Every expectancy figure in Señales is quoted net of an assumed 0.1 % round trip, so this is what decides whether those figures apply at all. Measured on this account: taker 0.05 % a side (0.1 % round trip, exactly the assumption) and maker 0.02 % (0.04 % round trip). OKX signs these from the account's point of view — **negative means charged**, positive is a rebate — so the cost is `-rate`.
+- **`/trade/orders-algo-pending`** — stop-loss and take-profit. These are **not** in `orders-pending`; OKX keeps conditional orders in a separate book, and `ordType` is required on the request, so `conditional` and `oco` both have to be fetched or a protected position still looks bare. This is the only way the app can tell "position with a stop" from "position with nothing behind it".
+- **`/asset/deposit-history`, `/asset/withdrawal-history`** — a balance that grew from a deposit reads exactly like one that grew from trading. Nothing else separates them.
+
+`useFundingRate()` is gated on the instrument being a perp: asking about a spot pair is an error, not an empty result. The rate is per settlement period (8 h, so ×3 for a daily cost) and signed from the long side — a short earns what a long pays.
+
 ### OKX quirks that shape the code
 
 - **Regional entities.** A key only exists on the entity where the account lives. `API key doesn't exist` (`50119`) means the wrong domain, not a typo — `regionHint()` in `api/_okx.ts` says so in the error. Configured via `OKX_BASE_URL`.
@@ -46,6 +56,7 @@ browser ──▶ /api/okx?path=/api/v5/…  ──▶  api/_okx.ts  ──▶  
 - **Spot has no per-trade PnL.** `fillPnl` is `0` on every spot fill and `pnl` is `0` on spot orders. This is why the Rendimiento view covers derivatives only — a spot win rate would have to be invented from a cost-basis model over a truncated history. Do not add one without saying loudly that it is an estimate.
 - **`/account/positions-history` is the only source of per-trade PnL.** `realizedPnl` is net of fees and funding; `pnl` is gross. Prefer `realizedPnl` — it is what hit the balance.
 - **Pages cap at 100.** `useClosedPositions` paginates with `after=<oldest uTime>` up to 5 pages and reports `truncated`, so statistics never silently mean "the last 100 trades".
+- **`posId` is not unique in `positions-history`.** One position closed in several parts produces several rows sharing it, so it cannot be a React key on its own — React silently drops the duplicates from the table. `Trade.id` is `${posId}-${uTime}`.
 
 ### Data layer
 
@@ -108,6 +119,16 @@ Kept here because re-deriving it costs an hour and the conclusions shape the UI:
 
 Routing is hash-based in `src/lib/router.ts` (`useSyncExternalStore`, no router dependency). Adding a view means touching `ROUTES`, the `NAV` map in `Layout.tsx`, and the switch in `App.tsx`.
 
+### Mobile
+
+**Every data table must be wrapped in `TableWrap`, never a bare `div.table-wrap`.** Below 720 px the CSS redraws each row as a card: the first cell becomes the card title and every other cell is labelled by its column. Those labels come from a `useEffect` in `TableWrap` that copies the `<thead>` text onto each `<td>` as `data-label` after every render — derived rather than hand-written, so a label cannot disagree with its column when one is inserted. A bare `div` gets the card layout with no labels at all.
+
+This exists because horizontal scroll inside a card is where mobile data goes to die: at 390 px the tables were hiding 220–650 px of themselves, and the hidden part is always the right-hand columns — PnL, weight, result.
+
+Two things that only show up at that width: a `.card-head` with an action control squeezes its title into a one-word-per-line column unless it stacks, and a flex `<td>` will not shrink below its content, so an unbreakable instrument id like `ZEC-USD_UM_XPERP-310530` overflows the card until it gets `min-width: 0` plus `overflow-wrap`.
+
+Chrome's window will not go below ~500 px on macOS, so `resize_page` cannot reach phone widths — use device emulation (`390x844x2,mobile,touch`) or the media query never fires.
+
 ## Conventions
 
 ### Display currency
@@ -128,6 +149,7 @@ Everything user-facing goes through `src/lib/format.ts` — `usd`, `qty`, `price
 
 - **Colour follows the entity, never its rank.** `src/lib/colors.ts` assigns a stable hue per currency and persists it. Only the top 7 get a hue; everything else is grey, matching the "Otros" segment — so the chart and the tables always agree.
 - Statistics under `MIN_SAMPLE` (5) trades render faded and hide their win rate. Two trades at 100 % is noise and the UI must not invite reading it as signal.
+- **A `<span>` used as a bar must be given `display: block`.** An inline box ignores `width` and `height` outright, so the bar silently never draws while the DOM and the computed style both look correct — `getComputedStyle().width` happily reports `100%`. This has now bitten `.rail-fill`, `.rail-track`, `.avg-track` and `.avg-bar`. To sweep for it: find elements with an inline `width` style whose computed `display` is `inline`.
 - Charts draw at measured pixel size (`useSize`) rather than a scaled viewBox, which would stretch strokes along one axis.
 - Green/red is reserved for PnL polarity and always ships with a sign, an arrow, or a printed value — never colour alone.
 - Bar segments are separated by a 2px surface gap, never a border.

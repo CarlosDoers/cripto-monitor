@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { useMarkets, type Market } from '../lib/markets'
 import { useClosedPositions, usePositions } from '../lib/queries'
 import { pct, plural, price, ratio, usdCompact } from '../lib/format'
-import { Badge, Card, EmptyState, ErrorNotice, SearchInput, Stat, TableSkeleton } from '../components/ui'
+import { Badge, Card, EmptyState, ErrorNotice, SearchInput, Stat, TableSkeleton, TableWrap } from '../components/ui'
 
 type SortBy = 'score' | 'volume' | 'oi' | 'spread' | 'range' | 'change'
 
@@ -182,7 +182,7 @@ export function Markets() {
             hint={onlyTraded ? 'Aún no has operado ningún X-Perp.' : 'Prueba otro término de búsqueda.'}
           />
         ) : (
-          <div className="table-wrap">
+          <TableWrap>
             <table className="data">
               <thead>
                 <tr>
@@ -237,7 +237,7 @@ export function Markets() {
                 ))}
               </tbody>
             </table>
-          </div>
+          </TableWrap>
         )}
       </Card>
 

@@ -255,3 +255,64 @@ export interface Holding {
   /** Unrealised PnL on the spot holding, when OKX reports it. */
   upl?: number
 }
+
+/**
+ * The account's real fee tier. OKX reports these as negative strings — `-0.0005`
+ * means 0.05 % is charged — because the same field carries a positive number for
+ * accounts that earn a maker rebate.
+ */
+export interface TradeFee {
+  instType: string
+  /** Rate for orders that add liquidity (limit orders that rest). */
+  maker: string
+  /** Rate for orders that remove liquidity (market orders). */
+  taker: string
+  /** USDT-margined contracts use these instead when present. */
+  makerU?: string
+  takerU?: string
+  level: string
+}
+
+/**
+ * A stop-loss or take-profit order. These do NOT appear in `orders-pending`:
+ * OKX keeps conditional orders in a separate book, which is why a position can
+ * look unprotected in an app that only reads the regular one.
+ */
+export interface AlgoOrder {
+  instId: string
+  instType: string
+  algoId: string
+  ordType: string
+  side: string
+  posSide: string
+  sz: string
+  state: string
+  /** Trigger price for the stop-loss leg, when set. */
+  slTriggerPx: string
+  slOrdPx: string
+  /** Trigger price for the take-profit leg, when set. */
+  tpTriggerPx: string
+  tpOrdPx: string
+  cTime: string
+}
+
+/** The periodic payment between longs and shorts on a perpetual. */
+export interface FundingRate {
+  instId: string
+  /** Rate applied at `fundingTime`, as a ratio (0.0001 = 0.01 %). */
+  fundingRate: string
+  fundingTime: string
+  /** OKX's estimate for the following period; often empty. */
+  nextFundingRate: string
+  nextFundingTime: string
+}
+
+/** A deposit into or withdrawal out of the account. */
+export interface Transfer {
+  ccy: string
+  amt: string
+  ts: string
+  state: string
+  chain?: string
+  fee?: string
+}

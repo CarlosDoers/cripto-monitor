@@ -1,10 +1,21 @@
-import { usePositions } from '../lib/queries'
-import { dateTime, num, pct, price, qty, share, signedUsd, usd } from '../lib/format'
-import { Badge, Card, DeltaValue, EmptyState, ErrorNotice, Stat, TableSkeleton } from '../components/ui'
+import { useAlgoOrders, usePositions } from '../lib/queries'
+import { dateTime, num, pct, plural, price, qty, share, signedUsd, usd } from '../lib/format'
+import { Badge, Card, DeltaValue, EmptyState, ErrorNotice, Stat, TableSkeleton, TableWrap } from '../components/ui'
+import { FundingCost, ProtectionBadge } from '../components/PositionGuard'
+import { guardsFor, hasStop } from '../lib/guards'
+import { IconAlert } from '../components/icons'
 
 export function Positions() {
   const { data, isLoading, isFetching, error } = usePositions()
+  const algos = useAlgoOrders()
   const positions = data ?? []
+
+  // The one thing worth interrupting the page for: money at risk with nothing
+  // behind it. Only claimed once the algo orders have actually loaded, so a
+  // slow request can never invent an alarm.
+  const unprotected = algos.data
+    ? positions.filter((p) => !hasStop(guardsFor(p, algos.data)))
+    : []
 
   const unrealised = positions.reduce((sum, p) => sum + num(p.upl), 0)
   const realised = positions.reduce((sum, p) => sum + num(p.realizedPnl), 0)
@@ -17,6 +28,23 @@ export function Positions() {
 
   return (
     <>
+      {unprotected.length > 0 && (
+        <div className="notice notice--error">
+          <IconAlert />
+          <div className="notice-body">
+            <p className="notice-title">
+              {plural(unprotected.length, 'posición abierta sin stop', 'posiciones abiertas sin stop')}
+            </p>
+            <p className="notice-text">
+              {unprotected.map((p) => p.instId).join(', ')} — sin orden de stop-loss registrada en
+              OKX, así que {unprotected.length === 1 ? 'su pérdida' : 'sus pérdidas'} solo{' '}
+              {unprotected.length === 1 ? 'tiene' : 'tienen'} como límite la liquidación. Se
+              comprueban las órdenes condicionales y OCO; un stop mental no cuenta aquí.
+            </p>
+          </div>
+        </div>
+      )}
+
       <div className="kpi-row">
         <Stat
           label="PnL No Realizado"
@@ -65,7 +93,7 @@ export function Positions() {
             hint="Aquí aparecerán tus posiciones activas de futuros, perpetuos y margen con su riesgo en tiempo real."
           />
         ) : (
-          <div className="table-wrap">
+          <TableWrap>
             <table className="data">
               <thead>
                 <tr>
@@ -76,6 +104,8 @@ export function Positions() {
                   <th className="num">Precio Marca</th>
                   <th className="num">Precio Liq.</th>
                   <th className="num">Distancia Liq.</th>
+                  <th>Protección</th>
+                  <th className="num">Financiación</th>
                   <th className="num">Margen Usado</th>
                   <th className="num">PnL No Realizado</th>
                   <th className="num">Apertura</th>
@@ -125,6 +155,12 @@ export function Positions() {
                           '—'
                         )}
                       </td>
+                      <td>
+                        <ProtectionBadge position={p} />
+                      </td>
+                      <td className="num">
+                        <FundingCost position={p} />
+                      </td>
                       <td className="num">{num(p.margin) > 0 ? usd(num(p.margin)) : '—'}</td>
                       <td className="num">
                         <DeltaValue value={upl}>
@@ -140,7 +176,7 @@ export function Positions() {
                 })}
               </tbody>
             </table>
-          </div>
+          </TableWrap>
         )}
       </Card>
     </>

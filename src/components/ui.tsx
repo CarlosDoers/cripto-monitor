@@ -1,6 +1,47 @@
-import type { ReactNode } from 'react'
+import { useEffect, useRef, type ReactNode } from 'react'
 import { IconAlert, IconDown, IconInbox, IconSearch, IconUp } from './icons'
 import { pct } from '../lib/format'
+
+/**
+ * Wraps a data table so it can restyle itself as a list of cards on a phone.
+ *
+ * A nine-column table on a 390 px screen hides ~650 px of itself behind a
+ * horizontal scroll, and the hidden part is where the numbers live. The card
+ * layout needs every cell to carry its column name; rather than repeat the
+ * headers as `data-label` attributes on sixty `<td>`s — silently wrong the
+ * moment a column is inserted — this copies them off the `<thead>` after each
+ * render, so a label can never disagree with the column it came from.
+ */
+export function TableWrap({
+  className = '',
+  children,
+}: {
+  className?: string
+  children: ReactNode
+}) {
+  const ref = useRef<HTMLDivElement>(null)
+
+  // No dependency array: the rows change whenever the data does.
+  useEffect(() => {
+    const table = ref.current?.querySelector('table')
+    if (!table) return
+    const headers = [...table.querySelectorAll('thead th')].map((th) => th.textContent?.trim() ?? '')
+    for (const row of table.querySelectorAll('tbody tr')) {
+      const cells = row.querySelectorAll('td')
+      // A single spanning cell is an empty state, not a record.
+      if (cells.length < 2) continue
+      cells.forEach((cell, i) => {
+        if (headers[i]) cell.setAttribute('data-label', headers[i])
+      })
+    }
+  })
+
+  return (
+    <div ref={ref} className={`table-wrap ${className}`.trim()}>
+      {children}
+    </div>
+  )
+}
 
 export function Card({
   title,

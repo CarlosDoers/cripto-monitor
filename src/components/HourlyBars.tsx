@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { MIN_SAMPLE, type TimeBucket } from '../lib/performance'
 import { plural, share, signedUsd } from '../lib/format'
+import { TableWrap } from './ui'
 
 /**
  * Net PnL by hour of entry, as columns above and below a zero baseline.
@@ -77,7 +78,7 @@ export function HourlyBars({ buckets }: { buckets: TimeBucket[] }) {
       {/* Table twin: the chart is never the only way to read these numbers. */}
       <details className="hourly-table">
         <summary>Ver los datos por hora</summary>
-        <div className="table-wrap">
+        <TableWrap>
           <table className="data">
             <thead>
               <tr>
@@ -102,7 +103,7 @@ export function HourlyBars({ buckets }: { buckets: TimeBucket[] }) {
               ))}
             </tbody>
           </table>
-        </div>
+        </TableWrap>
       </details>
 
       {hover && hover.trades > 0 && (

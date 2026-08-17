@@ -4,7 +4,7 @@ import { useCandles } from '../lib/queries'
 import { num, pct, price, qty, share, usd } from '../lib/format'
 import type { Holding } from '../lib/types'
 import { Sparkline } from './Sparkline'
-import { Delta, EmptyState, SearchInput } from './ui'
+import { Delta, EmptyState, SearchInput, TableWrap } from './ui'
 
 const STABLES = new Set(['USDT', 'USDC', 'DAI', 'TUSD', 'USD'])
 
@@ -98,7 +98,7 @@ export function HoldingsTable({
         </div>
       )}
 
-      <div className="table-wrap">
+      <TableWrap>
         <table className="data">
           <thead>
             <tr>
@@ -171,7 +171,7 @@ export function HoldingsTable({
             hint="Prueba con otro término de búsqueda."
           />
         )}
-      </div>
+      </TableWrap>
     </>
   )
 }

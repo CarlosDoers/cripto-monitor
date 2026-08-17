@@ -1,8 +1,8 @@
 import { useMemo, useState } from 'react'
-import { useBills, useFills } from '../lib/queries'
+import { useBills, useFills, useTransfers } from '../lib/queries'
 import { colorOf } from '../lib/colors'
 import { dateTime, num, price, qty, signedUsd, usd } from '../lib/format'
-import { Badge, Card, DeltaValue, EmptyState, ErrorNotice, SearchInput, TableSkeleton } from '../components/ui'
+import { Badge, Card, DeltaValue, EmptyState, ErrorNotice, SearchInput, TableSkeleton, TableWrap } from '../components/ui'
 
 const INST_TYPES = [
   { key: 'SPOT', label: 'Spot' },
@@ -66,7 +66,7 @@ function Fills({ instType }: { instType: string }) {
         />
       </div>
 
-      <div className={`table-wrap${isFetching ? ' is-refetching' : ''}`}>
+      <TableWrap className={isFetching ? 'is-refetching' : ''}>
         <table className="data">
           <thead>
             <tr>
@@ -125,7 +125,7 @@ function Fills({ instType }: { instType: string }) {
         {filtered.length === 0 && (
           <EmptyState title="Sin ejecuciones con ese criterio de búsqueda" />
         )}
-      </div>
+      </TableWrap>
     </>
   )
 }
@@ -164,7 +164,7 @@ function Movements() {
         />
       </div>
 
-      <div className={`table-wrap${isFetching ? ' is-refetching' : ''}`}>
+      <TableWrap className={isFetching ? 'is-refetching' : ''}>
         <table className="data">
           <thead>
             <tr>
@@ -217,8 +217,74 @@ function Movements() {
         {filtered.length === 0 && (
           <EmptyState title="Sin movimientos con ese criterio" />
         )}
-      </div>
+      </TableWrap>
     </>
+  )
+}
+
+/**
+ * Money in and out of the account.
+ *
+ * Without this the portfolio total answers the wrong question: a balance that
+ * grew because of a deposit reads exactly like one that grew from trading, and
+ * nothing else in the app separates them.
+ */
+function Transfers() {
+  const { data, isLoading, isFetching, error } = useTransfers()
+
+  const rows = useMemo(() => {
+    const deposits = (data?.deposits ?? []).map((t) => ({ ...t, kind: 'in' as const }))
+    const withdrawals = (data?.withdrawals ?? []).map((t) => ({ ...t, kind: 'out' as const }))
+    return [...deposits, ...withdrawals].sort((a, b) => Number(b.ts) - Number(a.ts))
+  }, [data])
+
+  if (error) {
+    return <ErrorNotice title="No se pudieron cargar los movimientos externos" message={error.message} />
+  }
+  if (isLoading) return <TableSkeleton rows={5} cols={4} />
+  if (rows.length === 0) {
+    return (
+      <EmptyState
+        title="Sin depósitos ni retiradas"
+        hint="Todo el saldo de la cuenta procede de lo que has operado en ella."
+      />
+    )
+  }
+
+  return (
+    <TableWrap className={isFetching ? 'is-refetching' : ''}>
+      <table className="data">
+        <thead>
+          <tr>
+            <th>Fecha</th>
+            <th>Movimiento</th>
+            <th className="num">Cantidad</th>
+            <th>Red</th>
+            <th>Estado</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((t, i) => (
+            <tr key={`${t.ts}-${t.ccy}-${i}`}>
+              <td className="sub">{dateTime(t.ts)}</td>
+              <td>
+                <Badge variant={t.kind === 'in' ? 'buy' : 'sell'}>
+                  {t.kind === 'in' ? 'Depósito' : 'Retirada'}
+                </Badge>
+              </td>
+              <td className="num">
+                <span className={t.kind === 'in' ? 'delta--up' : 'delta--down'}>
+                  {t.kind === 'in' ? '+' : '−'}
+                  {qty(num(t.amt))} <span className="ccy">{t.ccy}</span>
+                </span>
+              </td>
+              <td className="sub">{t.chain || '—'}</td>
+              <td className="sub">{t.state === '2' || t.state === '3' ? 'Completado' : 'En curso'}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </TableWrap>
   )
 }
 
@@ -247,6 +313,14 @@ export function History() {
         }
       >
         <Fills instType={instType} />
+      </Card>
+
+      <Card
+        title="Depósitos y Retiradas"
+        subtitle="Dinero que entra y sale de OKX — no es rendimiento, aunque mueva el patrimonio"
+        flush
+      >
+        <Transfers />
       </Card>
 
       <Card title="Movimientos de la Cuenta" subtitle="Transferencias, comisiones, tasas de funding e intereses" flush>

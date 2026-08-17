@@ -1105,18 +1105,45 @@ table.data td.num {
   justify-content: flex-end;
 }
 
+/* Both are <span>. `.rail-track` gets blockified for free by the inline-flex
+   parent, but `.rail-fill` sits inside a plain block and stayed inline, so its
+   width was ignored and the weight bar never drew. */
 .rail-track {
+  display: block;
   width: 48px;
   height: 6px;
   border-radius: 999px;
   background: var(--surface-inset);
   overflow: hidden;
+  flex: 0 0 auto;
 }
 
 .rail-fill {
+  display: block;
   height: 100%;
   border-radius: 999px;
   background: var(--accent);
+}
+
+/* Stop / target levels on an open position. */
+.guard-set {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  font-family: var(--mono);
+  font-size: 11.5px;
+}
+
+.guard-line--stop {
+  color: var(--critical);
+}
+
+.guard-line--target {
+  color: var(--good);
+}
+
+.guard-line--missing {
+  color: var(--ink-muted);
 }
 
 .table-more {
@@ -1800,6 +1827,17 @@ table.data td.num {
     display: none;
   }
 
+  /* "OKX Real-Time" broke across two lines next to a title that already says
+     the page name, so it costs a row of height to repeat what the ticker above
+     it shows live. */
+  .page-badge {
+    display: none;
+  }
+
+  .update-status {
+    white-space: nowrap;
+  }
+
   .content {
     padding: 16px 14px calc(90px + env(safe-area-inset-bottom));
     gap: 16px;
@@ -1973,6 +2011,137 @@ table.data td.num {
     font-size: 11px;
     color: var(--ink-muted);
     margin-top: 1px;
+  }
+}
+
+/* ---------- Tables become cards on a phone ----------
+   A 10-column table on a 390 px screen keeps ~650 px of itself off-screen, and
+   the columns that get hidden are the ones on the right: PnL, weight, result.
+   Below this width each row is redrawn as a card, with the first column as its
+   title and every other cell labelled by its own header (set by TableWrap). */
+@media (max-width: 720px) {
+  .table-wrap {
+    overflow-x: visible;
+    padding: 0 14px 14px;
+  }
+
+  .card-body--flush .table-wrap {
+    padding: 14px;
+  }
+
+  table.data,
+  table.data tbody {
+    display: block;
+    min-width: 0;
+  }
+
+  table.data thead {
+    display: none;
+  }
+
+  table.data tbody tr {
+    display: grid;
+    gap: 2px;
+    padding: 12px 14px;
+    margin-bottom: 8px;
+    border-radius: var(--radius);
+    background: var(--surface-inset);
+    border: 1px solid var(--border);
+  }
+
+  table.data tbody tr:last-child {
+    margin-bottom: 0;
+  }
+
+  table.data tbody td {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 3px 0;
+    border: none;
+    text-align: right;
+    /* Flex items refuse to shrink below their content by default, and an
+       instrument id like ZEC-USD_UM_XPERP-310530 has nowhere to break. */
+    min-width: 0;
+  }
+
+  table.data tbody td > * {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+
+  table.data tbody td::before {
+    content: attr(data-label);
+    flex: 0 0 auto;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--ink-muted);
+    text-align: left;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+  }
+
+  /* The first cell names the record, so it reads as a heading instead of a
+     label/value pair. */
+  table.data tbody td:first-child {
+    justify-content: flex-start;
+    flex-wrap: wrap;
+    gap: 6px;
+    padding: 0 0 8px;
+    margin-bottom: 4px;
+    border-bottom: 1px solid var(--border);
+    font-size: 14px;
+    font-weight: 600;
+    text-align: left;
+    overflow-wrap: anywhere;
+  }
+
+  table.data tbody td:first-child::before {
+    display: none;
+  }
+
+  /* An empty state or a spanning row is not a record: leave it alone. */
+  table.data tbody tr:has(td[colspan]) {
+    display: block;
+    background: none;
+    border: none;
+    padding: 0;
+  }
+
+  .table-more {
+    padding-top: 10px;
+  }
+
+  /* Side by side, a filter control squeezed the title into a one-word-per-line
+     column. They each get a full row instead. */
+  .card-head {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+    padding: 16px 16px 14px;
+  }
+
+  .card-head-action {
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .card-head-action .seg-control {
+    width: max-content;
+    min-width: 100%;
+  }
+
+  /* Label beside value only works while the label is short. */
+  .bt-list li {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+  }
+
+  .filter-row {
+    flex-direction: column;
+    align-items: stretch;
   }
 }
 
@@ -2232,7 +2401,10 @@ table.data td.num {
   color: var(--ink-muted);
 }
 
+/* Both are <span>, so they need an explicit box: an inline element ignores
+   width and height outright, which left these bars invisible. */
 .avg-track {
+  display: block;
   height: 8px;
   border-radius: var(--radius-pill);
   background: var(--surface-inset);
@@ -2240,6 +2412,7 @@ table.data td.num {
 }
 
 .avg-bar {
+  display: block;
   height: 100%;
   border-radius: var(--radius-pill);
 }

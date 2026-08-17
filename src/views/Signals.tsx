@@ -8,8 +8,8 @@ import {
   timeframeVerdict,
   tradableTimeframes,
 } from '../lib/indicators/registry'
-import { useClosedPositions, useInstruments, usePositions } from '../lib/queries'
-import { dateTime, plural, price, ratio, share, timeAgo } from '../lib/format'
+import { useClosedPositions, useInstruments, usePositions, useTradeFee } from '../lib/queries'
+import { dateTime, num, plural, price, ratio, share, timeAgo } from '../lib/format'
 import { PriceChart } from '../components/PriceChart'
 import { IconAlert, IconActivity } from '../components/icons'
 import {
@@ -20,6 +20,7 @@ import {
   Skeleton,
   Stat,
   TableSkeleton,
+  TableWrap,
 } from '../components/ui'
 import type { StrategySignal } from '../lib/indicators/types'
 
@@ -101,6 +102,92 @@ function LiveSignal({ signal, last }: { signal: StrategySignal; last: number }) 
         </div>
       )}
     </div>
+  )
+}
+
+/** The round trip the backtests price every signal against. */
+const ASSUMED_ROUND_TRIP = 0.001
+
+/**
+ * What the account actually pays, against what the backtest assumed.
+ *
+ * Every expectancy figure in this view is quoted net of a 0.1 % round trip. If
+ * the real fee tier is worse, those figures are optimistic and the whole view
+ * is misleading; if it is better, there is money being left on the table by
+ * entering at market. Either way it is only knowable from the account itself.
+ */
+function FeeReality({ avgFeeR, loading }: { avgFeeR: number; loading: boolean }) {
+  const { data } = useTradeFee('SWAP')
+  const fee = data?.[0]
+  if (!fee) return null
+
+  // OKX signs these from the account's point of view: negative is charged,
+  // positive is a rebate. Flipping the sign gives the cost.
+  const takerSide = -num(fee.takerU || fee.taker)
+  const makerSide = -num(fee.maker)
+  const taker = takerSide * 2
+  const maker = makerSide * 2
+  if (!Number.isFinite(taker) || taker <= 0) return null
+
+  const optimistic = taker > ASSUMED_ROUND_TRIP * 1.02
+  // avgFeeR is measured at ASSUMED_ROUND_TRIP, so it scales with the real rate.
+  const takerR = avgFeeR * (taker / ASSUMED_ROUND_TRIP)
+  const makerR = avgFeeR * (maker / ASSUMED_ROUND_TRIP)
+
+  return (
+    <Card
+      title="Tu comisión real frente a la del barrido"
+      subtitle={`Nivel ${fee.level || '—'} en tu cuenta de OKX`}
+    >
+      <div className="prose">
+        <ul className="bt-list">
+          <li>
+            <span className="bt-tf">Maker (límite)</span>
+            <span className="bt-val">{share(makerSide, 3)}</span>
+          </li>
+          <li>
+            <span className="bt-tf">Taker (mercado)</span>
+            <span className="bt-val">{share(takerSide, 3)}</span>
+          </li>
+          <li>
+            <span className="bt-tf">Ida y vuelta a mercado</span>
+            <span className={`bt-val ${optimistic ? 'delta--down' : 'delta--up'}`}>
+              {share(taker, 3)}
+            </span>
+          </li>
+        </ul>
+        <p>
+          {optimistic ? (
+            <>
+              El barrido descuenta {share(ASSUMED_ROUND_TRIP, 2)} por señal y tú pagas{' '}
+              <strong>{share(taker, 3)}</strong> entrando y saliendo a mercado, así que las cifras de
+              arriba son <strong>optimistas para tu cuenta</strong>: réstales la diferencia.
+            </>
+          ) : (
+            <>
+              El barrido descuenta {share(ASSUMED_ROUND_TRIP, 2)} por señal y entrando y saliendo a
+              mercado pagas <strong>{share(taker, 3)}</strong>, así que las cifras de arriba te
+              aplican tal cual{taker < ASSUMED_ROUND_TRIP * 0.98 ? ' o se quedan cortas a tu favor' : ''}.
+            </>
+          )}
+        </p>
+        {!loading && avgFeeR > 0 && maker < taker && (
+          <div className="tip-box">
+            <strong>Entrar con orden límite en vez de a mercado</strong> baja el coste de esta
+            selección de {ratio(takerR)} R a {ratio(makerR)} R por señal, es decir{' '}
+            <strong>{ratio(takerR - makerR)} R más</strong> en cada una.{' '}
+            {takerR - makerR >= MIN_TRADABLE_R
+              ? 'A esta distancia de stop eso es más que el umbral con el que la app decide si una temporalidad es operable, así que aquí sí cambia la respuesta.'
+              : 'Con el stop tan lejos del precio la diferencia es pequeña frente a la esperanza de la estrategia: se agradece, pero no cambia ninguna decisión.'}
+          </div>
+        )}
+        <p className="sub">
+          La orden límite solo cobra tarifa maker si descansa en el libro; si cruza el spread al
+          entrar, paga taker igual. En temporalidades cortas esperar a que entre tu límite puede
+          costarte la señal, que es un coste que no aparece en esta tabla.
+        </p>
+      </div>
+    </Card>
   )
 }
 
@@ -446,6 +533,8 @@ export function Signals() {
         </Card>
       </div>
 
+      <FeeReality avgFeeR={r.avgFeeR} loading={s.isLoading} />
+
       {/* Signal History Table */}
       <Card
         title="Historial Reciente de Señales"
@@ -490,7 +579,7 @@ export function Signals() {
         ) : recent.length === 0 ? (
           <EmptyState title="Sin señales con el filtro actual" hint="Prueba cambiando el filtro o la temporalidad." />
         ) : (
-          <div className="table-wrap">
+          <TableWrap>
             <table className="data">
               <thead>
                 <tr>
@@ -546,7 +635,7 @@ export function Signals() {
                 ))}
               </tbody>
             </table>
-          </div>
+          </TableWrap>
         )}
       </Card>
     </>

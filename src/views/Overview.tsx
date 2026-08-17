@@ -15,6 +15,7 @@ import {
   Skeleton,
   Stat,
   TableSkeleton,
+  TableWrap,
 } from '../components/ui'
 
 /**
@@ -246,7 +247,7 @@ export function Overview() {
             </a>
           }
         >
-          <div className="table-wrap">
+          <TableWrap>
             <table className="data">
               <thead>
                 <tr>
@@ -291,7 +292,7 @@ export function Overview() {
                 })}
               </tbody>
             </table>
-          </div>
+          </TableWrap>
         </Card>
       )}
     </>

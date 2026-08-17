@@ -31,6 +31,7 @@ import {
   SearchInput,
   Skeleton,
   TableSkeleton,
+  TableWrap,
 } from '../components/ui'
 
 function Metric({ label, value, hint }: { label: string; value: ReactNode; hint?: string }) {
@@ -111,7 +112,7 @@ function TradesTable({ trades }: { trades: Trade[] }) {
         </div>
       </div>
 
-      <div className="table-wrap">
+      <TableWrap>
         <table className="data">
           <thead>
             <tr>
@@ -178,7 +179,7 @@ function TradesTable({ trades }: { trades: Trade[] }) {
             </button>
           </div>
         )}
-      </div>
+      </TableWrap>
     </>
   )
 }

@@ -50,6 +50,8 @@ export interface Position {
   posCcy: string
   ccy: string
   avgPx: string
+  /** Break-even price: entry adjusted for the fees already paid. */
+  bePx?: string
   markPx: string
   last: string
   lever: string

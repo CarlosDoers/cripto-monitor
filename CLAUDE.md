@@ -46,6 +46,8 @@ Three of them exist because the obvious endpoint is silent on the thing that mat
 - **`/trade/orders-algo-pending`** — stop-loss and take-profit. These are **not** in `orders-pending`; OKX keeps conditional orders in a separate book, and `ordType` is required on the request, so `conditional` and `oco` both have to be fetched or a protected position still looks bare. This is the only way the app can tell "position with a stop" from "position with nothing behind it".
 - **`/asset/deposit-history`, `/asset/withdrawal-history`** — a balance that grew from a deposit reads exactly like one that grew from trading. Nothing else separates them.
 
+- **`/trade/fills-history`** — the fee *tier* gives a maker and a taker rate, but what decides whether a backtest applies is the **mix**. Each fill carries `execType` (`M`/`T`), so `feeMix()` in `src/lib/fees.ts` measures it: this account came out at 52 % maker and an effective 0.033 % a side (0.066 % round trip), against the 0.1 % the sweeps assume. The weighting deliberately avoids the contract multiplier — a fill's notional is `fee / rate`, not `size × price`, so the figure is exact without any per-instrument `ctVal`.
+
 `useFundingRate()` is gated on the instrument being a perp: asking about a spot pair is an error, not an empty result. The rate is per settlement period (8 h, so ×3 for a daily cost) and signed from the long side — a short earns what a long pays.
 
 ### OKX quirks that shape the code
@@ -56,6 +58,8 @@ Three of them exist because the obvious endpoint is silent on the thing that mat
 - **Spot has no per-trade PnL.** `fillPnl` is `0` on every spot fill and `pnl` is `0` on spot orders. This is why the Rendimiento view covers derivatives only — a spot win rate would have to be invented from a cost-basis model over a truncated history. Do not add one without saying loudly that it is an estimate.
 - **`/account/positions-history` is the only source of per-trade PnL.** `realizedPnl` is net of fees and funding; `pnl` is gross. Prefer `realizedPnl` — it is what hit the balance.
 - **Pages cap at 100.** `useClosedPositions` paginates with `after=<oldest uTime>` up to 5 pages and reports `truncated`, so statistics never silently mean "the last 100 trades".
+- **`posSide` only says `long`/`short` in hedge mode.** This account is one-way, so OKX reports `net` on every position and the direction lives in **the sign of `pos`**. Reading `posSide === 'short'` labelled a short as "Largo" *and* flipped the funding sign, so the app told the account it was paying funding on a short that was collecting it. Always go through `isShort()` in `src/lib/guards.ts`; never compare `posSide` directly.
+- **`mgnRatio` is empty at the account level when all margin is isolated.** Parsing it through `num()` yields 0, which the Resumen then printed as a reassuring "100 %" next to a position sitting at 7.4× maintenance. Fall back to the worst open position's ratio and say which one it is.
 - **`posId` is not unique in `positions-history`.** One position closed in several parts produces several rows sharing it, so it cannot be a React key on its own — React silently drops the duplicates from the table. `Trade.id` is `${posId}-${uTime}`.
 
 ### Data layer
@@ -138,6 +142,17 @@ The account settles in **USDC**, so every figure the API returns is in dollars. 
 `usd()` converts on the way out, so switching currency changes every figure at once. The catch: the formatters read a module store, not props, so **nothing re-renders on their own** — `Views` in `App.tsx` subscribes via `useCurrency()` to re-render the tree. Remove that call and only the sidebar updates.
 
 **The calendar keys each trade on the day it was OPENED**, which is what OKX's analytics page does: a trade opened on the 13th and closed on the 14th is booked on the 13th. Verified against real screenshots — the 30-day aggregates then match OKX exactly (total, hit rate, position count and risk/reward all line up). Individual days can still differ when OKX splits a partial close across sessions.
+
+### Visual direction — "terminal denso"
+
+Flat surfaces, one-pixel rules, monospaced figures. `src/styles/tokens.css` sets `--radius-*` to `0` and every `--shadow-*` except `--shadow-pop` to `none`; `--card-gradient` and `--accent-gradient` survive as tokens but hold flat colours. **Do not reintroduce gradients, glass or card shadows** — hierarchy comes from type weight and space, and a rule between two blocks weighs less than a border around each.
+
+- `.content` has no padding and no gap: every block reaches both edges and separates from the next with `border-bottom`. A new top-level block therefore needs its own bottom rule, and a two-column row needs `border-right` on its children (see `.grid-2` / `.overview-grid`).
+- Type is **IBM Plex Sans** with **JetBrains Mono** for every figure. The mono is not decoration: `font-variant-numeric: tabular-nums` is what lets a column of numbers be compared down the page. Plus Jakarta Sans was dropped because its geometry fought the density.
+- Labels are 9.5 px uppercase with `0.1em` tracking and `white-space: nowrap`. They share a flex row with a badge, so without the nowrap "PATRIMONIO TOTAL" wraps and knocks that stat out of line with its neighbours.
+- The accent appears in exactly three places — the active nav item, the selected control and links — and never fills a large surface. Green and red stay reserved for PnL polarity.
+- Only status dots keep a radius (`50%`). A pill-shaped chip reads as decoration here; a bordered rectangle reads as a tag.
+- Measure the hero figure before enlarging it: thirteen monospaced characters at 26 px do not fit a six-column KPI strip at 1440 px, which is why `.stat-value--hero` is 22 px.
 
 ### Formatting
 

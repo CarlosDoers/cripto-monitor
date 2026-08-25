@@ -1,5 +1,5 @@
 import { useAlgoOrders, useFundingRate } from '../lib/queries'
-import { guardsFor, stopOf, targetOf } from '../lib/guards'
+import { guardsFor, isShort, stopOf, targetOf } from '../lib/guards'
 import { num, price, share } from '../lib/format'
 import type { Position } from '../lib/types'
 import { Badge } from './ui'
@@ -59,8 +59,8 @@ export function FundingCost({ position }: { position: Position }) {
   if (!rate) return <span className="sub">—</span>
 
   const perPeriod = num(rate.fundingRate)
-  const isLong = position.posSide !== 'short'
-  const costRate = isLong ? perPeriod : -perPeriod
+  // Signed from the long side: a positive rate means longs pay shorts.
+  const costRate = isShort(position) ? -perPeriod : perPeriod
   const perDayRate = costRate * 3
   const perDayUsd = num(position.notionalUsd) * perDayRate
 

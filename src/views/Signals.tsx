@@ -8,7 +8,14 @@ import {
   timeframeVerdict,
   tradableTimeframes,
 } from '../lib/indicators/registry'
-import { useClosedPositions, useInstruments, usePositions, useTradeFee } from '../lib/queries'
+import {
+  useClosedPositions,
+  useFills,
+  useInstruments,
+  usePositions,
+  useTradeFee,
+} from '../lib/queries'
+import { feeMix } from '../lib/fees'
 import { dateTime, num, plural, price, ratio, share, timeAgo } from '../lib/format'
 import { PriceChart } from '../components/PriceChart'
 import { IconAlert, IconActivity } from '../components/icons'
@@ -118,6 +125,8 @@ const ASSUMED_ROUND_TRIP = 0.001
  */
 function FeeReality({ avgFeeR, loading }: { avgFeeR: number; loading: boolean }) {
   const { data } = useTradeFee('SWAP')
+  // The account trades X-Perp futures, which is where the fills that matter are.
+  const { data: fills } = useFills('FUTURES')
   const fee = data?.[0]
   if (!fee) return null
 
@@ -133,6 +142,12 @@ function FeeReality({ avgFeeR, loading }: { avgFeeR: number; loading: boolean })
   // avgFeeR is measured at ASSUMED_ROUND_TRIP, so it scales with the real rate.
   const takerR = avgFeeR * (taker / ASSUMED_ROUND_TRIP)
   const makerR = avgFeeR * (maker / ASSUMED_ROUND_TRIP)
+
+  // What the last fills were actually charged. The tier says what each rate is;
+  // only the fills say which one the account keeps paying.
+  const mix = feeMix(fills ?? [], makerSide, takerSide)
+  const mixRoundTrip = mix ? mix.effectiveRate * 2 : 0
+  const mixR = mix ? avgFeeR * (mixRoundTrip / ASSUMED_ROUND_TRIP) : 0
 
   return (
     <Card
@@ -155,23 +170,70 @@ function FeeReality({ avgFeeR, loading }: { avgFeeR: number; loading: boolean })
               {share(taker, 3)}
             </span>
           </li>
-        </ul>
-        <p>
-          {optimistic ? (
-            <>
-              El barrido descuenta {share(ASSUMED_ROUND_TRIP, 2)} por señal y tú pagas{' '}
-              <strong>{share(taker, 3)}</strong> entrando y saliendo a mercado, así que las cifras de
-              arriba son <strong>optimistas para tu cuenta</strong>: réstales la diferencia.
-            </>
-          ) : (
-            <>
-              El barrido descuenta {share(ASSUMED_ROUND_TRIP, 2)} por señal y entrando y saliendo a
-              mercado pagas <strong>{share(taker, 3)}</strong>, así que las cifras de arriba te
-              aplican tal cual{taker < ASSUMED_ROUND_TRIP * 0.98 ? ' o se quedan cortas a tu favor' : ''}.
-            </>
+          {mix && (
+            <li>
+              <span className="bt-tf">Ida y vuelta que pagas</span>
+              <span
+                className={`bt-val ${mixRoundTrip > ASSUMED_ROUND_TRIP * 1.02 ? 'delta--down' : 'delta--up'}`}
+              >
+                {share(mixRoundTrip, 3)}
+              </span>
+            </li>
           )}
-        </p>
-        {!loading && avgFeeR > 0 && maker < taker && (
+        </ul>
+        {mix && (
+          <div className="tip-box">
+            <strong>
+              {mix.maker} de tus {mix.fills} últimas ejecuciones fueron a límite
+            </strong>{' '}
+            y pagaron tarifa maker; {mix.taker}{' '}
+            {mix.taker === 1 ? 'cruzó el libro' : 'cruzaron el libro'} a taker. Ponderando por
+            volumen sale un coste real de <strong>{share(mix.effectiveRate, 3)}</strong> por lado,{' '}
+            {mixRoundTrip < ASSUMED_ROUND_TRIP * 0.98
+              ? `por debajo del ${share(ASSUMED_ROUND_TRIP, 2)} que asume el barrido.`
+              : mixRoundTrip > ASSUMED_ROUND_TRIP * 1.02
+                ? `por encima del ${share(ASSUMED_ROUND_TRIP, 2)} que asume el barrido.`
+                : `justo el ${share(ASSUMED_ROUND_TRIP, 2)} que asume el barrido.`}{' '}
+            {/* La diferencia en R solo significa algo cuando hay señales que
+                medir: sin ellas `avgFeeR` es 0 y la frase diría "0,00 R". */}
+            {avgFeeR > 0 && (
+              <>
+                En esta selección eso{' '}
+                {mixR < takerR ? (
+                  <>
+                    deja la esperanza publicada corta en torno a{' '}
+                    <strong>{ratio(takerR - mixR)} R</strong> por señal.
+                  </>
+                ) : (
+                  <>
+                    le resta unos <strong>{ratio(mixR - takerR)} R</strong> por señal.
+                  </>
+                )}
+              </>
+            )}
+          </div>
+        )}
+        {/* Sin la mezcla medida esta es la mejor estimación disponible; con
+            ella sobra, porque diría lo mismo con menos precisión. */}
+        {!mix && (
+          <p>
+            {optimistic ? (
+              <>
+                El barrido descuenta {share(ASSUMED_ROUND_TRIP, 2)} por señal y tú pagas{' '}
+                <strong>{share(taker, 3)}</strong> entrando y saliendo a mercado, así que las cifras de
+                arriba son <strong>optimistas para tu cuenta</strong>: réstales la diferencia.
+              </>
+            ) : (
+              <>
+                El barrido descuenta {share(ASSUMED_ROUND_TRIP, 2)} por señal y entrando y saliendo a
+                mercado pagas <strong>{share(taker, 3)}</strong>, así que las cifras de arriba te
+                aplican tal cual{taker < ASSUMED_ROUND_TRIP * 0.98 ? ' o se quedan cortas a tu favor' : ''}.
+              </>
+            )}
+          </p>
+        )}
+
+        {!loading && avgFeeR > 0 && maker < taker && !mix && (
           <div className="tip-box">
             <strong>Entrar con orden límite en vez de a mercado</strong> baja el coste de esta
             selección de {ratio(takerR)} R a {ratio(makerR)} R por señal, es decir{' '}
@@ -287,7 +349,6 @@ export function Signals() {
               <span className="tab-label">{item.label}</span>
               <span className="tab-tagline">{item.tagline}</span>
             </div>
-            {strategyKey === item.key && <span className="tab-indicator" />}
           </button>
         ))}
       </div>

@@ -1,10 +1,11 @@
 import { usePortfolio } from '../lib/portfolio'
 import { usePerformance } from '../lib/performance'
 import { useBalance, usePositions, useValuation } from '../lib/queries'
-import { num, pct, qty, share, signedUsd, usd, usdCompact } from '../lib/format'
+import { num, pct, qty, ratio, share, signedUsd, usd, usdCompact } from '../lib/format'
 import { AllocationBar } from '../components/AllocationBar'
 import { HoldingsTable } from '../components/HoldingsTable'
 import { PnlCurve } from '../components/PnlCurve'
+import { isShort } from '../lib/guards'
 import { IconAlert, IconShield } from '../components/icons'
 import {
   Badge,
@@ -36,7 +37,14 @@ export function Overview() {
   const valDetails = valuation.data?.[0]?.details
   const openPositions = positions.data ?? []
   const unrealised = openPositions.reduce((sum, p) => sum + num(p.upl), 0)
-  const marginRatio = num(account?.mgnRatio)
+  const notional = openPositions.reduce((sum, p) => sum + num(p.notionalUsd), 0)
+  // Con margen aislado OKX deja vacío el ratio de la cuenta, y leerlo sin más
+  // pintaba "100 %" con una posición al 8,1 de mantenimiento. El número honesto
+  // entonces es el peor de las posiciones abiertas.
+  const accountRatio = num(account?.mgnRatio)
+  const positionRatios = openPositions.map((p) => num(p.mgnRatio)).filter((r) => r > 0)
+  const marginRatio =
+    accountRatio > 0 ? accountRatio : positionRatios.length ? Math.min(...positionRatios) : 0
   const atRisk = openPositions.length > 0 && marginRatio > 0 && marginRatio < MARGIN_WARN
 
   const tradingBal = num(valDetails?.trading)
@@ -69,98 +77,24 @@ export function Overview() {
         </div>
       )}
 
-      {/* Main Hero Card: Net Worth + Account Health & Account Breakdown */}
-      <section className="overview-hero">
-        <div className="overview-hero__intro">
-          <div className="overview-hero__eyebrow">
-            <span className="live-pulse-dot" />
-            <span className="page-overline">Patrimonio Global</span>
-          </div>
-          <div className="overview-hero__value-row">
-            <h2 className="overview-hero__value">
-              {portfolio.isLoading ? <Skeleton height={42} width={180} /> : usd(portfolio.netWorth)}
-            </h2>
-            {portfolio.change24h !== undefined && (
-              <Delta ratio={portfolio.change24h} pill>
-                {pct(portfolio.change24h)} 24h
-              </Delta>
-            )}
-          </div>
-          <div className="overview-hero__sub-balances">
-            <div className="sub-bal-pill">
-              <span className="sub-bal-dot" style={{ background: 'var(--series-1)' }} />
-              <span className="sub-bal-label">Trading:</span>
-              <strong className="sub-bal-val">{usdCompact(tradingBal)}</strong>
-            </div>
-            <div className="sub-bal-pill">
-              <span className="sub-bal-dot" style={{ background: 'var(--series-3)' }} />
-              <span className="sub-bal-label">Fondos:</span>
-              <strong className="sub-bal-val">{usdCompact(fundingBal)}</strong>
-            </div>
-            {earnBal > 0 && (
-              <div className="sub-bal-pill">
-                <span className="sub-bal-dot" style={{ background: 'var(--series-4)' }} />
-                <span className="sub-bal-label">Earn:</span>
-                <strong className="sub-bal-val">{usdCompact(earnBal)}</strong>
-              </div>
-            )}
-          </div>
-        </div>
-
-        <div className="overview-hero__chart">
-          <div className="hero-chart-head">
-            <span className="metric-label">Curva 30 Días</span>
-            <strong className={perf.netPnl >= 0 ? 'delta--up' : 'delta--down'}>
-              {signedUsd(perf.netPnl)}
-            </strong>
-          </div>
-          {perf.isLoading ? (
-            <Skeleton height={100} />
-          ) : (
-            <PnlCurve points={perf.equityCurve} trades={perf.trades} height={100} />
-          )}
-        </div>
-
-        <div className="overview-hero__health">
-          <div className="overview-health-head">
-            <span className="metric-label">Salud de la Cuenta</span>
-            <Badge variant={atRisk ? 'warn' : marginRatio > 0 ? 'buy' : 'neutral'}>
-              <IconShield />
-              {atRisk ? 'Riesgo Alto' : marginRatio > 0 ? 'Saludable' : 'Sin Riesgo'}
-            </Badge>
-          </div>
-          <ul className="health-list">
-            <li>
-              <span>Ratio de margen</span>
-              <strong>{marginRatio > 0 ? share(marginRatio, 0) : '100%'}</strong>
-            </li>
-            <li>
-              <span>Posiciones</span>
-              <strong>{openPositions.length} activas</strong>
-            </li>
-            <li>
-              <span>Tasa de acierto</span>
-              <strong>{perf.count > 0 ? share(perf.winRate, 1) : '—'}</strong>
-            </li>
-          </ul>
-        </div>
-      </section>
-
-      {/* KPI Stats Row */}
+      {/* One dense strip instead of a hero card plus a KPI row: the old layout
+          printed the net worth twice, once in each. */}
       <div className="kpi-row">
         <Stat
           label="Patrimonio Total"
           hero
-          glow
           loading={portfolio.isLoading}
-          value={usdCompact(portfolio.netWorth)}
-          foot={
+          value={usd(portfolio.netWorth)}
+          badge={
             portfolio.change24h !== undefined ? (
-              <>
-                <Delta ratio={portfolio.change24h} />
-                <span>en las últimas 24 horas</span>
-              </>
+              <Delta ratio={portfolio.change24h}>{pct(portfolio.change24h)}</Delta>
             ) : undefined
+          }
+          foot={
+            <span>
+              Trading {usdCompact(tradingBal)} · Fondos {usdCompact(fundingBal)}
+              {earnBal > 0 ? ` · Earn ${usdCompact(earnBal)}` : ''}
+            </span>
           }
         />
         <Stat
@@ -182,6 +116,12 @@ export function Overview() {
           }
         />
         <Stat
+          label="PnL Realizado (30d)"
+          loading={perf.isLoading}
+          value={<DeltaValue value={perf.netPnl}>{signedUsd(perf.netPnl)}</DeltaValue>}
+          foot={<span>{perf.count} operaciones cerradas</span>}
+        />
+        <Stat
           label="Tasa de Aciertos"
           loading={perf.isLoading}
           value={perf.count > 0 ? share(perf.winRate, 1) : '—'}
@@ -192,16 +132,85 @@ export function Overview() {
           }
         />
         <Stat
-          label="PnL Realizado (30d)"
+          label="Factor de Beneficio"
           loading={perf.isLoading}
-          value={<DeltaValue value={perf.netPnl}>{signedUsd(perf.netPnl)}</DeltaValue>}
-          foot={<span>{perf.count} operaciones cerradas</span>}
+          value={
+            perf.count > 0 && Number.isFinite(perf.profitFactor) ? ratio(perf.profitFactor) : '—'
+          }
+          foot={
+            <span>
+              {perf.count > 0
+                ? `media ${signedUsd(perf.avgWin)} / ${signedUsd(-perf.avgLoss)}`
+                : '30 días'}
+            </span>
+          }
+        />
+        <Stat
+          label="Costes (30d)"
+          loading={perf.isLoading}
+          value={<DeltaValue value={perf.totalCosts}>{signedUsd(perf.totalCosts)}</DeltaValue>}
+          foot={
+            <span>
+              {perf.grossPnl > 0
+                ? `${share(Math.abs(perf.totalCosts) / perf.grossPnl, 1)} del resultado bruto`
+                : 'comisiones y financiación'}
+            </span>
+          }
         />
       </div>
 
-      {/* Allocation and Assets Grid */}
-      <div className="overview-grid">
+      <div className="grid-2">
         <Card
+          title="Curva de Resultado"
+          subtitle={`Últimos 30 días · ${signedUsd(perf.netPnl)}`}
+          dimmed={perf.isFetching && !perf.isLoading}
+        >
+          {perf.isLoading ? (
+            <Skeleton height={140} />
+          ) : (
+            <PnlCurve points={perf.equityCurve} trades={perf.trades} height={140} />
+          )}
+        </Card>
+
+        <Card
+          title="Salud de la Cuenta"
+          action={
+            <Badge variant={atRisk ? 'warn' : marginRatio > 0 ? 'buy' : 'neutral'}>
+              <IconShield />
+              {atRisk ? 'Riesgo Alto' : marginRatio > 0 ? 'Saludable' : 'Sin Riesgo'}
+            </Badge>
+          }
+        >
+          <ul className="health-list">
+            <li>
+              <span>Ratio de margen</span>
+              <strong>
+                {marginRatio > 0 ? share(marginRatio, 0) : openPositions.length ? '—' : 'sin riesgo'}
+                {accountRatio === 0 && positionRatios.length > 0 && (
+                  <>
+                    {' '}
+                    <span className="sub">peor posición</span>
+                  </>
+                )}
+              </strong>
+            </li>
+            <li>
+              <span>Posiciones abiertas</span>
+              <strong>{openPositions.length}</strong>
+            </li>
+            <li>
+              <span>Exposición nocional</span>
+              <strong>{notional > 0 ? usdCompact(notional) : '—'}</strong>
+            </li>
+            <li>
+              <span>Esperanza por operación</span>
+              <strong>{perf.count > 0 ? signedUsd(perf.expectancy) : '—'}</strong>
+            </li>
+          </ul>
+        </Card>
+      </div>
+
+      <Card
           title="Distribución de la Cartera"
           subtitle="Desglose porcentual por activo en USD"
           dimmed={portfolio.isFetching && !portfolio.isLoading}
@@ -213,24 +222,23 @@ export function Overview() {
           )}
         </Card>
 
-        <Card
-          title="Activos Principales"
-          subtitle="Top 8 por capitalización en la cuenta"
-          flush
-          dimmed={portfolio.isFetching && !portfolio.isLoading}
-          action={
-            <a className="card-link" href="#/cartera">
-              Ver cartera completa →
-            </a>
-          }
-        >
-          {portfolio.isLoading ? (
-            <TableSkeleton rows={5} cols={6} />
-          ) : (
-            <HoldingsTable holdings={portfolio.holdings} limit={8} showSparkline />
-          )}
-        </Card>
-      </div>
+      <Card
+        title="Activos Principales"
+        subtitle="Top 8 por capitalización en la cuenta"
+        flush
+        dimmed={portfolio.isFetching && !portfolio.isLoading}
+        action={
+          <a className="card-link" href="#/cartera">
+            Ver cartera completa →
+          </a>
+        }
+      >
+        {portfolio.isLoading ? (
+          <TableSkeleton rows={5} cols={6} />
+        ) : (
+          <HoldingsTable holdings={portfolio.holdings} limit={8} showSparkline />
+        )}
+      </Card>
 
       {/* Open Positions Card */}
       {openPositions.length > 0 && (
@@ -271,8 +279,8 @@ export function Overview() {
                         {p.lever && <span className="sub"> {p.lever}×</span>}
                       </td>
                       <td>
-                        <Badge variant={p.posSide === 'short' ? 'sell' : 'buy'}>
-                          {p.posSide === 'short' ? 'Corto' : 'Largo'}
+                        <Badge variant={isShort(p) ? 'sell' : 'buy'}>
+                          {isShort(p) ? 'Corto' : 'Largo'}
                         </Badge>
                       </td>
                       <td className="num">{qty(num(p.pos))}</td>

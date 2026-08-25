@@ -3,10 +3,8 @@ import { useIsFetching, useQueryClient } from '@tanstack/react-query'
 import { ROUTES, type Route } from '../lib/router'
 import { useTheme, isDark } from '../lib/theme'
 import { setCurrency, useCurrency } from '../lib/currency'
-import { timeAgo, usdCompact } from '../lib/format'
-import { usePortfolio } from '../lib/portfolio'
+import { timeAgo } from '../lib/format'
 import { MarketTicker } from './MarketTicker'
-import { Delta } from './ui'
 import {
   IconHistory,
   IconMore,
@@ -101,21 +99,6 @@ function LastUpdated() {
   )
 }
 
-function QuickPortfolioBadge() {
-  const portfolio = usePortfolio()
-  if (portfolio.isLoading || !portfolio.netWorth) return null
-
-  return (
-    <div className="topbar-quick-kpi" title="Patrimonio total actual">
-      <span className="topbar-kpi-label">Patrimonio</span>
-      <span className="topbar-kpi-val">{usdCompact(portfolio.netWorth)}</span>
-      {portfolio.change24h !== undefined && (
-        <Delta ratio={portfolio.change24h} pill />
-      )}
-    </div>
-  )
-}
-
 export function Layout({
   route,
   navigate,
@@ -168,7 +151,6 @@ export function Layout({
               >
                 <Icon className="nav-icon" />
                 <span className="nav-text">{label}</span>
-                {isCurrent && <span className="nav-active-glow" aria-hidden="true" />}
               </button>
             )
           })}
@@ -184,32 +166,6 @@ export function Layout({
           </div>
         </div>
 
-        <div className="sidebar-footer">
-          {/* OKX shows amounts in whatever currency the account is set to. The
-              API always returns USD, so this converts for display — pick euros
-              here and the figures line up with the OKX app. */}
-          <div className="seg-control currency-switch" role="group" aria-label="Moneda">
-            {(['USD', 'EUR'] as const).map((c) => (
-              <button
-                key={c}
-                type="button"
-                aria-pressed={currency === c}
-                onClick={() => setCurrency(c)}
-              >
-                {c === 'USD' ? 'US$' : '€'}
-              </button>
-            ))}
-          </div>
-          <button
-            type="button"
-            className="btn btn--theme"
-            onClick={toggleTheme}
-            aria-label={isDark(theme) ? 'Cambiar a tema claro' : 'Cambiar a tema oscuro'}
-          >
-            {isDark(theme) ? <IconSun /> : <IconMoon />}
-            <span>{isDark(theme) ? 'Modo Claro' : 'Modo Oscuro'}</span>
-          </button>
-        </div>
       </aside>
 
       <div className="main">
@@ -224,8 +180,24 @@ export function Layout({
             <p className="page-description">{routeMeta.description}</p>
           </div>
           <div className="topbar-actions">
-            <QuickPortfolioBadge />
             <LastUpdated />
+            {/* Currency and theme are both display preferences, so they live
+                together in the top bar instead of at the foot of the sidebar.
+                OKX shows amounts in whatever currency the account is set to;
+                the API always returns USD, so this converts for display and the
+                figures line up with the OKX app. */}
+            <div className="seg-control currency-switch" role="group" aria-label="Moneda">
+              {(['USD', 'EUR'] as const).map((c) => (
+                <button
+                  key={c}
+                  type="button"
+                  aria-pressed={currency === c}
+                  onClick={() => setCurrency(c)}
+                >
+                  {c === 'USD' ? 'US$' : '€'}
+                </button>
+              ))}
+            </div>
             <button
               type="button"
               className="btn btn--icon theme-toggle"

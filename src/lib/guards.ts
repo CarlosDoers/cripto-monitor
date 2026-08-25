@@ -29,3 +29,19 @@ export function targetOf(guards: AlgoOrder[]): AlgoOrder | undefined {
 export function hasStop(guards: AlgoOrder[]): boolean {
   return stopOf(guards) !== undefined
 }
+
+/**
+ * Whether a position is short.
+ *
+ * `posSide` only says `long`/`short` on a hedge-mode account. In one-way mode
+ * — which is what this account uses — OKX reports `net` on every position and
+ * the direction lives in the *sign of the size*. Reading `posSide === 'short'`
+ * alone labels every one-way short as a long, which then flips the funding
+ * sign as well: this account was shown paying funding on a short that is
+ * actually collecting it.
+ */
+export function isShort(position: Position): boolean {
+  if (position.posSide === 'short') return true
+  if (position.posSide === 'long') return false
+  return num(position.pos) < 0
+}

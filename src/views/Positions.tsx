@@ -2,7 +2,8 @@ import { useAlgoOrders, usePositions } from '../lib/queries'
 import { dateTime, num, pct, plural, price, qty, share, signedUsd, usd } from '../lib/format'
 import { Badge, Card, DeltaValue, EmptyState, ErrorNotice, Stat, TableSkeleton, TableWrap } from '../components/ui'
 import { FundingCost, ProtectionBadge } from '../components/PositionGuard'
-import { guardsFor, hasStop } from '../lib/guards'
+import { guardsFor, hasStop, isShort } from '../lib/guards'
+import { PositionRisk } from '../components/PositionRisk'
 import { IconAlert } from '../components/icons'
 
 export function Positions() {
@@ -127,8 +128,8 @@ export function Positions() {
                         <span className="sub"> · {p.mgnMode === 'cross' ? 'Cruzado' : 'Aislado'}</span>
                       </td>
                       <td>
-                        <Badge variant={p.posSide === 'short' ? 'sell' : 'buy'}>
-                          {p.posSide === 'short' ? 'Corto' : 'Largo'}
+                        <Badge variant={isShort(p) ? 'sell' : 'buy'}>
+                          {isShort(p) ? 'Corto' : 'Largo'}
                           {p.lever && ` ${p.lever}×`}
                         </Badge>
                       </td>
@@ -179,6 +180,18 @@ export function Positions() {
           </TableWrap>
         )}
       </Card>
+
+      {positions.map((p) => (
+        <Card
+          key={`riesgo-${p.posId}`}
+          title={p.instId}
+          subtitle={`${isShort(p) ? 'Corto' : 'Largo'}${p.lever ? ` ${p.lever}×` : ''} · margen ${p.mgnMode === 'cross' ? 'cruzado' : 'aislado'}`}
+          flush
+          dimmed={isFetching && !isLoading}
+        >
+          <PositionRisk position={p} />
+        </Card>
+      ))}
     </>
   )
 }

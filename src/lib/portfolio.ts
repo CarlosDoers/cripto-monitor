@@ -6,10 +6,22 @@ import type { Holding, Ticker } from './types'
 
 const STABLES = new Set(['USDT', 'USDC', 'DAI', 'TUSD', 'USD'])
 
-function priceOf(ccy: string, tickers: Map<string, Ticker>): number | undefined {
+export function priceOf(ccy: string, tickers: Map<string, Ticker>): number | undefined {
   if (STABLES.has(ccy)) return 1
   const t = tickers.get(`${ccy}-USDT`) ?? tickers.get(`${ccy}-USDC`)
   return t ? num(t.last) : undefined
+}
+
+/**
+ * Spot tickers keyed by instrument, for anything that needs to put a dollar
+ * value on a currency — a deposit in XLM says nothing until it is priced.
+ */
+export function useSpotPrices() {
+  const tickers = useTickers('SPOT')
+  return useMemo(
+    () => new Map((tickers.data ?? []).map((t) => [t.instId, t])),
+    [tickers.data],
+  )
 }
 
 function change24hOf(ccy: string, tickers: Map<string, Ticker>): number | undefined {

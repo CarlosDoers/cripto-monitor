@@ -1,36 +1,44 @@
 /*
- * Design tokens.
+ * Design tokens — "terminal denso".
+ *
+ * Flat surfaces, one-pixel rules, monospaced figures. Depth is reserved for
+ * things that genuinely float (the mobile sheet), so shadows, glass and
+ * gradients are gone: hierarchy comes from type weight and space instead.
+ * Radii are zero except for status dots, which stay circular because a round
+ * mark reads as a state and a square one reads as a swatch.
  *
  * The categorical series slots are a validated palette: every adjacent pair
  * clears the colour-vision-deficiency and normal-vision separation floors in
  * both light and dark. The order of the slots is the safety mechanism, so hues
  * are assigned by index and never cycled or generated — a 9th series folds into
- * "Otros" instead.
+ * "Otros" instead. Those nine hexes are the one part of this file that must not
+ * be edited without re-validating.
  */
 
 :root {
   color-scheme: light;
 
   /* Surfaces */
-  --plane: #f0f3fa;
-  --surface-1: #ffffff;
-  --surface-2: #f6f8fd;
-  --surface-inset: #e8eef8;
+  --plane: #ffffff;
+  --surface-1: #fbfcfe;
+  --surface-2: #f2f5fa;
+  --surface-inset: #f5f8fc;
   --surface-raised: #ffffff;
-  --glass-surface: rgba(255, 255, 255, 0.85);
-  --glass-border: rgba(99, 102, 241, 0.12);
+  /* Opaque by design: the old translucent bar blurred the numbers behind it. */
+  --glass-surface: #fbfcfe;
+  --glass-border: rgba(15, 23, 42, 0.11);
 
   /* Ink */
-  --ink-primary: #0f172a;
-  --ink-secondary: #475569;
+  --ink-primary: #0b1220;
+  --ink-secondary: #4d5b73;
   --ink-muted: #64748b;
-  --ink-faint: #94a3b8;
+  --ink-faint: #8b98ad;
 
   /* Chrome */
-  --border: rgba(51, 65, 85, 0.12);
-  --border-subtle: rgba(51, 65, 85, 0.06);
-  --gridline: #e2e8f0;
-  --baseline: #cbd5e1;
+  --border: rgba(15, 23, 42, 0.11);
+  --border-subtle: rgba(15, 23, 42, 0.05);
+  --gridline: rgba(15, 23, 42, 0.08);
+  --baseline: rgba(15, 23, 42, 0.22);
 
   /* Categorical series — fixed order, never cycled */
   --series-1: #2a78d6;
@@ -44,42 +52,45 @@
   --series-other: #94a3b8;
 
   /* Status */
-  --good: #10b981;
-  --good-soft: rgba(16, 185, 129, 0.12);
-  --warning: #f59e0b;
-  --warning-soft: rgba(245, 158, 11, 0.12);
-  --critical: #f43f5e;
-  --critical-soft: rgba(244, 63, 94, 0.12);
+  --good: #047857;
+  --good-soft: rgba(4, 120, 87, 0.1);
+  --warning: #a16207;
+  --warning-soft: rgba(161, 98, 7, 0.1);
+  --critical: #be123c;
+  --critical-soft: rgba(190, 18, 60, 0.09);
 
   /* Delta */
-  --delta-up: #059669;
-  --delta-up-bg: rgba(16, 185, 129, 0.1);
-  --delta-down: #e11d48;
-  --delta-down-bg: rgba(244, 63, 94, 0.1);
+  --delta-up: #047857;
+  --delta-up-bg: rgba(4, 120, 87, 0.1);
+  --delta-down: #be123c;
+  --delta-down-bg: rgba(190, 18, 60, 0.09);
 
-  /* Accents & Brand */
-  --accent: #6366f1;
-  --accent-hover: #4f46e5;
-  --accent-2: #06b6d4;
-  --accent-3: #8b5cf6;
-  --accent-soft: rgba(99, 102, 241, 0.1);
-  --accent-glow: rgba(99, 102, 241, 0.22);
-  --accent-gradient: linear-gradient(135deg, #6366f1 0%, #8b5cf6 50%, #06b6d4 100%);
-  --card-gradient: linear-gradient(145deg, rgba(255, 255, 255, 0.95), rgba(245, 248, 255, 0.9));
+  /* Accent — one signal colour, used for the active section, the selected
+     control and links. Never to fill a large surface. */
+  --accent: #4338ca;
+  --accent-hover: #312e81;
+  --accent-2: #0369a1;
+  --accent-3: #6d28d9;
+  --accent-soft: rgba(67, 56, 202, 0.09);
+  --accent-glow: rgba(67, 56, 202, 0.16);
+  /* Kept as tokens so nothing breaks, but flat: this direction has no gradients. */
+  --accent-gradient: #4338ca;
+  --card-gradient: #fbfcfe;
 
   /* Geometry */
-  --radius-xl: 22px;
-  --radius-lg: 16px;
-  --radius: 12px;
-  --radius-sm: 8px;
-  --radius-pill: 9999px;
+  --radius-xl: 0px;
+  --radius-lg: 0px;
+  --radius: 0px;
+  --radius-sm: 0px;
+  --radius-pill: 0px;
 
-  --shadow-sm: 0 1px 3px rgba(15, 23, 42, 0.04), 0 1px 2px rgba(15, 23, 42, 0.03);
-  --shadow-card: 0 4px 20px -2px rgba(15, 23, 42, 0.06), 0 2px 6px -1px rgba(15, 23, 42, 0.03);
-  --shadow-hover: 0 12px 30px -4px rgba(99, 102, 241, 0.12), 0 4px 12px -2px rgba(15, 23, 42, 0.06);
-  --shadow-pop: 0 20px 45px -8px rgba(15, 23, 42, 0.16), 0 8px 16px -4px rgba(15, 23, 42, 0.08);
+  --shadow-sm: none;
+  --shadow-card: none;
+  --shadow-hover: none;
+  /* The only surface that really floats: the mobile sheet. */
+  --shadow-pop: 0 -8px 32px rgba(15, 23, 42, 0.18);
 
-  --font: 'Plus Jakarta Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font: 'IBM Plex Sans', 'Helvetica Neue', Helvetica, Arial, sans-serif;
   --mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, monospace;
 }
 
@@ -87,23 +98,23 @@
   :root:where(:not([data-theme='light'])) {
     color-scheme: dark;
 
-    --plane: #07090e;
-    --surface-1: #0d121f;
-    --surface-2: #131b2e;
-    --surface-inset: #090e18;
-    --surface-raised: #18233c;
-    --glass-surface: rgba(13, 18, 31, 0.82);
-    --glass-border: rgba(255, 255, 255, 0.08);
+    --plane: #06080d;
+    --surface-1: #0a0e16;
+    --surface-2: #101725;
+    --surface-inset: #05070c;
+    --surface-raised: #101725;
+    --glass-surface: #0a0e16;
+    --glass-border: rgba(148, 163, 184, 0.15);
 
-    --ink-primary: #f8fafc;
-    --ink-secondary: #cbd5e1;
-    --ink-muted: #94a3b8;
-    --ink-faint: #64748b;
+    --ink-primary: #e9eef8;
+    --ink-secondary: #9dabc2;
+    --ink-muted: #7787a0;
+    --ink-faint: #5d6b83;
 
-    --border: rgba(255, 255, 255, 0.09);
-    --border-subtle: rgba(255, 255, 255, 0.04);
-    --gridline: #172238;
-    --baseline: #243556;
+    --border: rgba(148, 163, 184, 0.15);
+    --border-subtle: rgba(148, 163, 184, 0.08);
+    --gridline: rgba(148, 163, 184, 0.12);
+    --baseline: rgba(148, 163, 184, 0.3);
 
     --series-1: #38bdf8;
     --series-2: #fb923c;
@@ -115,54 +126,54 @@
     --series-8: #f87171;
     --series-other: #64748b;
 
-    --good: #10b981;
-    --good-soft: rgba(16, 185, 129, 0.16);
-    --warning: #f59e0b;
-    --warning-soft: rgba(245, 158, 11, 0.16);
-    --critical: #f43f5e;
-    --critical-soft: rgba(244, 63, 94, 0.16);
+    --good: #34d399;
+    --good-soft: rgba(52, 211, 153, 0.13);
+    --warning: #fbbf24;
+    --warning-soft: rgba(251, 191, 36, 0.13);
+    --critical: #fb7185;
+    --critical-soft: rgba(251, 113, 133, 0.13);
 
     --delta-up: #34d399;
-    --delta-up-bg: rgba(16, 185, 129, 0.14);
+    --delta-up-bg: rgba(52, 211, 153, 0.13);
     --delta-down: #fb7185;
-    --delta-down-bg: rgba(244, 63, 94, 0.14);
+    --delta-down-bg: rgba(251, 113, 133, 0.13);
 
-    --accent: #818cf8;
-    --accent-hover: #93c5fd;
+    --accent: #7b8cff;
+    --accent-hover: #9aa7ff;
     --accent-2: #22d3ee;
     --accent-3: #c084fc;
-    --accent-soft: rgba(129, 140, 248, 0.16);
-    --accent-glow: rgba(129, 140, 248, 0.28);
-    --accent-gradient: linear-gradient(135deg, #818cf8 0%, #a78bfa 50%, #22d3ee 100%);
-    --card-gradient: linear-gradient(145deg, rgba(17, 24, 39, 0.85), rgba(13, 18, 31, 0.95));
+    --accent-soft: rgba(123, 140, 255, 0.14);
+    --accent-glow: rgba(123, 140, 255, 0.2);
+    --accent-gradient: #7b8cff;
+    --card-gradient: #0a0e16;
 
-    --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.4);
-    --shadow-card: 0 8px 28px -4px rgba(0, 0, 0, 0.45), 0 2px 8px -2px rgba(0, 0, 0, 0.3);
-    --shadow-hover: 0 16px 36px -4px rgba(0, 0, 0, 0.6), 0 0 25px -4px rgba(129, 140, 248, 0.2);
-    --shadow-pop: 0 25px 60px -10px rgba(0, 0, 0, 0.75), 0 0 35px -5px rgba(129, 140, 248, 0.25);
+    --shadow-sm: none;
+    --shadow-card: none;
+    --shadow-hover: none;
+    --shadow-pop: 0 -8px 32px rgba(0, 0, 0, 0.6);
   }
 }
 
 :root[data-theme='dark'] {
   color-scheme: dark;
 
-  --plane: #07090e;
-  --surface-1: #0d121f;
-  --surface-2: #131b2e;
-  --surface-inset: #090e18;
-  --surface-raised: #18233c;
-  --glass-surface: rgba(13, 18, 31, 0.82);
-  --glass-border: rgba(255, 255, 255, 0.08);
+  --plane: #06080d;
+  --surface-1: #0a0e16;
+  --surface-2: #101725;
+  --surface-inset: #05070c;
+  --surface-raised: #101725;
+  --glass-surface: #0a0e16;
+  --glass-border: rgba(148, 163, 184, 0.15);
 
-  --ink-primary: #f8fafc;
-  --ink-secondary: #cbd5e1;
-  --ink-muted: #94a3b8;
-  --ink-faint: #64748b;
+  --ink-primary: #e9eef8;
+  --ink-secondary: #9dabc2;
+  --ink-muted: #7787a0;
+  --ink-faint: #5d6b83;
 
-  --border: rgba(255, 255, 255, 0.09);
-  --border-subtle: rgba(255, 255, 255, 0.04);
-  --gridline: #172238;
-  --baseline: #243556;
+  --border: rgba(148, 163, 184, 0.15);
+  --border-subtle: rgba(148, 163, 184, 0.08);
+  --gridline: rgba(148, 163, 184, 0.12);
+  --baseline: rgba(148, 163, 184, 0.3);
 
   --series-1: #38bdf8;
   --series-2: #fb923c;
@@ -174,30 +185,29 @@
   --series-8: #f87171;
   --series-other: #64748b;
 
-  --good: #10b981;
-  --good-soft: rgba(16, 185, 129, 0.16);
-  --warning: #f59e0b;
-  --warning-soft: rgba(245, 158, 11, 0.16);
-  --critical: #f43f5e;
-  --critical-soft: rgba(244, 63, 94, 0.16);
+  --good: #34d399;
+  --good-soft: rgba(52, 211, 153, 0.13);
+  --warning: #fbbf24;
+  --warning-soft: rgba(251, 191, 36, 0.13);
+  --critical: #fb7185;
+  --critical-soft: rgba(251, 113, 133, 0.13);
 
   --delta-up: #34d399;
-  --delta-up-bg: rgba(16, 185, 129, 0.14);
+  --delta-up-bg: rgba(52, 211, 153, 0.13);
   --delta-down: #fb7185;
-  --delta-down-bg: rgba(244, 63, 94, 0.14);
+  --delta-down-bg: rgba(251, 113, 133, 0.13);
 
-  --accent: #818cf8;
-  --accent-hover: #93c5fd;
+  --accent: #7b8cff;
+  --accent-hover: #9aa7ff;
   --accent-2: #22d3ee;
   --accent-3: #c084fc;
-  --accent-soft: rgba(129, 140, 248, 0.16);
-  --accent-glow: rgba(129, 140, 248, 0.28);
-  --accent-gradient: linear-gradient(135deg, #818cf8 0%, #a78bfa 50%, #22d3ee 100%);
-  --card-gradient: linear-gradient(145deg, rgba(17, 24, 39, 0.85), rgba(13, 18, 31, 0.95));
+  --accent-soft: rgba(123, 140, 255, 0.14);
+  --accent-glow: rgba(123, 140, 255, 0.2);
+  --accent-gradient: #7b8cff;
+  --card-gradient: #0a0e16;
 
-  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.4);
-  --shadow-card: 0 8px 28px -4px rgba(0, 0, 0, 0.45), 0 2px 8px -2px rgba(0, 0, 0, 0.3);
-  --shadow-hover: 0 16px 36px -4px rgba(0, 0, 0, 0.6), 0 0 25px -4px rgba(129, 140, 248, 0.2);
-  --shadow-pop: 0 25px 60px -10px rgba(0, 0, 0, 0.75), 0 0 35px -5px rgba(129, 140, 248, 0.25);
+  --shadow-sm: none;
+  --shadow-card: none;
+  --shadow-hover: none;
+  --shadow-pop: 0 -8px 32px rgba(0, 0, 0, 0.6);
 }
-

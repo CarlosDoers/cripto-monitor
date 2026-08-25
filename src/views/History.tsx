@@ -1,8 +1,20 @@
 import { useMemo, useState } from 'react'
 import { useBills, useFills, useTransfers } from '../lib/queries'
 import { colorOf } from '../lib/colors'
-import { dateTime, num, price, qty, signedUsd, usd } from '../lib/format'
-import { Badge, Card, DeltaValue, EmptyState, ErrorNotice, SearchInput, TableSkeleton, TableWrap } from '../components/ui'
+import { priceOf, usePortfolio, useSpotPrices } from '../lib/portfolio'
+import { usePerformance } from '../lib/performance'
+import { dateTime, num, plural, price, qty, share, signedUsd, usd } from '../lib/format'
+import {
+  Badge,
+  Card,
+  DeltaValue,
+  EmptyState,
+  ErrorNotice,
+  SearchInput,
+  Stat,
+  TableSkeleton,
+  TableWrap,
+} from '../components/ui'
 
 const INST_TYPES = [
   { key: 'SPOT', label: 'Spot' },
@@ -288,11 +300,109 @@ function Transfers() {
   )
 }
 
+/**
+ * Where the balance came from.
+ *
+ * A balance that grew from a deposit reads exactly like one that grew from
+ * trading, and nothing else in the app can tell them apart: `positions-history`
+ * only knows about trades, and `asset-valuation` only knows the total. Putting
+ * the two side by side is the whole point of this view.
+ *
+ * Deposits arrive in whatever currency was sent, so they are priced at today's
+ * spot rate — that answers "how much did I put in, in today's money", not what
+ * it was worth on the day, which OKX does not report.
+ */
+function Provenance() {
+  const transfers = useTransfers()
+  const prices = useSpotPrices()
+  const perf = usePerformance('all')
+  const portfolio = usePortfolio()
+
+  const { deposited, withdrawn, priced } = useMemo(() => {
+    let deposited = 0
+    let withdrawn = 0
+    let priced = 0
+    let total = 0
+    for (const [list, sign] of [
+      [transfers.data?.deposits ?? [], 1],
+      [transfers.data?.withdrawals ?? [], -1],
+    ] as const) {
+      for (const t of list) {
+        total++
+        const px = priceOf(t.ccy, prices)
+        if (px === undefined) continue
+        priced++
+        const value = num(t.amt) * px
+        if (sign > 0) deposited += value
+        else withdrawn += value
+      }
+    }
+    return { deposited, withdrawn, priced, total }
+  }, [transfers.data, prices])
+
+  const net = deposited - withdrawn
+  const loading = transfers.isLoading || perf.isLoading || portfolio.isLoading
+
+  // Nothing to separate when no money has moved in or out.
+  if (!loading && priced === 0) return null
+
+  return (
+    <div className="kpi-row">
+      <Stat
+        label="Depósitos"
+        hero
+        loading={loading}
+        value={usd(deposited)}
+        foot={
+          <span>
+            {plural(transfers.data?.deposits.length ?? 0, 'movimiento', 'movimientos')} · a precio de
+            hoy
+          </span>
+        }
+      />
+      <Stat
+        label="Retiradas"
+        loading={loading}
+        value={usd(withdrawn)}
+        foot={
+          <span>{plural(transfers.data?.withdrawals.length ?? 0, 'movimiento', 'movimientos')}</span>
+        }
+      />
+      <Stat
+        label="Aportación Neta"
+        loading={loading}
+        value={<DeltaValue value={net}>{signedUsd(net)}</DeltaValue>}
+        foot={
+          <span>
+            {portfolio.netWorth > 0
+              ? `${share(Math.abs(net) / portfolio.netWorth, 1)} del patrimonio actual`
+              : 'dinero que metiste tú'}
+          </span>
+        }
+      />
+      <Stat
+        label="Generado Operando"
+        loading={loading}
+        value={<DeltaValue value={perf.netPnl}>{signedUsd(perf.netPnl)}</DeltaValue>}
+        foot={<span>{perf.count} posiciones cerradas · neto de costes</span>}
+      />
+      <Stat
+        label="Costes de Operar"
+        loading={loading}
+        value={<DeltaValue value={perf.totalCosts}>{signedUsd(perf.totalCosts)}</DeltaValue>}
+        foot={<span>comisiones y financiación</span>}
+      />
+    </div>
+  )
+}
+
 export function History() {
   const [instType, setInstType] = useState<string>('SPOT')
 
   return (
     <>
+      <Provenance />
+
       <Card
         title="Ejecuciones y Fills"
         subtitle="Operaciones completadas en los últimos 3 meses"

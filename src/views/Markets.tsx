@@ -73,18 +73,20 @@ export function Markets() {
   return (
     <>
       <div className="kpi-row">
-        <Stat
-          label="Contratos X-Perp activos"
-          loading={isLoading}
-          value={String(markets.length)}
-          foot={<span>perpetuos listados en OKX</span>}
-        />
+        {/* El titular de esta vista es cuántos se pueden operar ahora, no
+            cuántos existen. */}
         <Stat
           label="Recomendables ahora"
           hero
           loading={isLoading}
           value={String(totals.good)}
           foot={<span>con puntuación de 55 o más</span>}
+        />
+        <Stat
+          label="Contratos X-Perp activos"
+          loading={isLoading}
+          value={String(markets.length)}
+          foot={<span>perpetuos listados en OKX</span>}
         />
         <Stat
           label="Volumen 24 h total"

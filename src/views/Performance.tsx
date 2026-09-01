@@ -308,7 +308,7 @@ export function Performance() {
         subtitle="Resultado realizado por día"
         dimmed={dimmed}
       >
-        {p.isLoading ? <Skeleton height={280} /> : <TradingCalendar trades={p.trades} />}
+        {p.isLoading ? <Skeleton height={280} /> : <TradingCalendar trades={p.allTrades} />}
       </Card>
 
       <div className="grid-2">

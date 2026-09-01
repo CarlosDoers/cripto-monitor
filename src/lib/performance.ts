@@ -312,9 +312,14 @@ export function usePerformance(period: PeriodKey) {
     () => computePerformance(query.data?.positions ?? [], days),
     [query.data, days],
   )
+  const allTrades = useMemo(
+    () => computePerformance(query.data?.positions ?? [], 0).trades,
+    [query.data],
+  )
 
   return {
     ...performance,
+    allTrades,
     /** Total closed positions fetched, before the period filter. */
     totalAvailable: query.data?.positions.length ?? 0,
     /** More history exists than was fetched — say so rather than imply totals. */

@@ -15,7 +15,7 @@ interface DayCell {
 
 /**
  * A month of realised PnL, one cell per day, keyed on the day the trade was
- * OPENED — the same rule OKX's analytics page uses.
+ * CLOSED — when the profit or loss was actually realised.
  *
  * Colour encodes sign and magnitude: intensity scales with the day's result
  * relative to the biggest day of the month, so a flat month does not paint
@@ -28,9 +28,8 @@ export function TradingCalendar({ trades }: { trades: Trade[] }) {
   const byDay = useMemo(() => {
     const map = new Map<string, { pnl: number; trades: number }>()
     for (const t of trades) {
-      // Keyed on the OPENING day, which is what OKX's own calendar does: a trade
-      // opened on the 13th and closed on the 14th is booked on the 13th.
-      const d = new Date(t.openedAt || t.closedAt)
+      // Keyed on the CLOSING day when the PnL was realised.
+      const d = new Date(t.closedAt || t.openedAt)
       const key = `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`
       const entry = map.get(key) ?? { pnl: 0, trades: 0 }
       entry.pnl += t.pnl
@@ -155,12 +154,9 @@ export function TradingCalendar({ trades }: { trades: Trade[] }) {
         })}
       </div>
 
-      {/* Say what this is built from. Anyone comparing against the OKX app will
-          otherwise assume a bug when the two disagree. */}
       <p className="calendar-note">
         Calculado desde las posiciones de futuros cerradas que devuelve OKX, imputadas al día en
-        que se <strong>abrieron</strong>. Puede diferir del calendario de la app de OKX en días
-        con cierres parciales repartidos entre varias jornadas.
+        que se <strong>cerraron</strong> (cuando se materializó el resultado).
       </p>
     </div>
   )

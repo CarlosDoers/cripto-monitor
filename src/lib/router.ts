@@ -12,6 +12,7 @@ export const ROUTES = [
   'rendimiento',
   'cartera',
   'posiciones',
+  'bots',
   'ordenes',
   'historial',
 ] as const

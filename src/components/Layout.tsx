@@ -15,6 +15,7 @@ import {
   IconSignal,
   IconMarkets,
   IconPositions,
+  IconBots,
   IconRefresh,
   IconSun,
   IconWallet,
@@ -52,6 +53,11 @@ const NAV: Record<Route, { label: string; description: string; Icon: typeof Icon
     label: 'Posiciones',
     description: 'Exposición abierta, margen, liquidación y PnL en tiempo real.',
     Icon: IconPositions,
+  },
+  bots: {
+    label: 'Bots',
+    description: 'Qué está haciendo cada bot automático y cuánta munición le queda.',
+    Icon: IconBots,
   },
   ordenes: {
     label: 'Órdenes',

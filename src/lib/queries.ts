@@ -8,7 +8,10 @@ import type {
   Bill,
   Candle,
   ClosedPosition,
+  DcaBot,
+  DcaPosition,
   FundingRate,
+  GridBot,
   Instrument,
   OpenInterest,
   Fill,
@@ -263,6 +266,97 @@ export function useCandleArchive(instId: string, bar: string, bars: number) {
     // A rate limit is transient and blanks the whole view if it reaches it.
     retry: 3,
     retryDelay: (attempt) => 1_000 * 2 ** attempt,
+  })
+}
+
+/**
+ * Every running bot, both DCA families merged.
+ *
+ * `algoOrdType` is required and takes one family at a time, the same trap as
+ * `ordType` on /trade/orders-algo-pending: ask for `contract_dca` alone and a
+ * spot DCA bot is silently missing from the list. Both have to be fetched.
+ *
+ * The endpoint is `dca/ongoing-list`, not the `orders-algo-pending` every other
+ * bot family uses, and it is absent from the published v5 docs — the path comes
+ * from OKX's own agent-trade-kit.
+ */
+export function useDcaBots() {
+  return useQuery<DcaBot[], ApiError>({
+    queryKey: ['dca-bots'],
+    queryFn: async () => {
+      const families = await Promise.all(
+        ['contract_dca', 'spot_dca'].map((algoOrdType) =>
+          okx<DcaBot>('/api/v5/tradingBot/dca/ongoing-list', { algoOrdType }),
+        ),
+      )
+      return families.flat()
+    },
+    refetchInterval: LIVE,
+  })
+}
+
+/**
+ * The position behind each bot: average price, take profit, liquidation, and
+ * how many safety orders have fired.
+ *
+ * On the SLOW cadence deliberately. It costs one invocation per bot, and none
+ * of what it adds moves between ticks — those numbers only change when a safety
+ * order fills. Live PnL comes from the list above, which is one request for all
+ * of them.
+ */
+export function useDcaPositions(bots: DcaBot[]) {
+  const key = bots.map((b) => `${b.algoId}:${b.algoOrdType}`).sort()
+  return useQuery<Record<string, DcaPosition>, ApiError>({
+    queryKey: ['dca-positions', key],
+    queryFn: async () => {
+      const rows = await Promise.all(
+        bots.map((b) =>
+          okx<DcaPosition>('/api/v5/tradingBot/dca/position-details', {
+            algoId: b.algoId,
+            algoOrdType: b.algoOrdType,
+          }),
+        ),
+      )
+      return Object.fromEntries(
+        rows.flat().filter((p) => p?.algoId).map((p) => [p.algoId, p]),
+      )
+    },
+    enabled: bots.length > 0,
+    refetchInterval: SLOW,
+    staleTime: SLOW,
+  })
+}
+
+/** Running grid bots, both flavours. Empty on this account, but they show up. */
+export function useGridBots() {
+  return useQuery<GridBot[], ApiError>({
+    queryKey: ['grid-bots'],
+    queryFn: async () => {
+      const families = await Promise.all(
+        ['grid', 'contract_grid'].map((algoOrdType) =>
+          okx<GridBot>('/api/v5/tradingBot/grid/orders-algo-pending', { algoOrdType }),
+        ),
+      )
+      return families.flat()
+    },
+    refetchInterval: LIVE,
+  })
+}
+
+/** Bots that have stopped, so a finished run leaves a trace. */
+export function useBotHistory() {
+  return useQuery<{ dca: DcaBot[]; grid: GridBot[] }, ApiError>({
+    queryKey: ['bot-history'],
+    queryFn: async () => {
+      const [contractDca, spotDca, grid, contractGrid] = await Promise.all([
+        okx<DcaBot>('/api/v5/tradingBot/dca/history-list', { algoOrdType: 'contract_dca', limit: 50 }),
+        okx<DcaBot>('/api/v5/tradingBot/dca/history-list', { algoOrdType: 'spot_dca', limit: 50 }),
+        okx<GridBot>('/api/v5/tradingBot/grid/orders-algo-history', { algoOrdType: 'grid', limit: 50 }),
+        okx<GridBot>('/api/v5/tradingBot/grid/orders-algo-history', { algoOrdType: 'contract_grid', limit: 50 }),
+      ])
+      return { dca: [...contractDca, ...spotDca], grid: [...grid, ...contractGrid] }
+    },
+    refetchInterval: SLOW,
   })
 }
 

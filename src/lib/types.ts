@@ -318,3 +318,82 @@ export interface Transfer {
   chain?: string
   fee?: string
 }
+
+/**
+ * A DCA bot as `tradingBot/dca/ongoing-list` reports it. OKX's UI calls this
+ * "DCA de futuros" when `algoOrdType` is `contract_dca`; `spot_dca` is the spot
+ * flavour of the same machine.
+ *
+ * It is a martingale: an initial order, then up to `maxSafetyOrds` further buys
+ * as price falls away, each `volMult` times the size of the last and `pxSteps`
+ * further down. So `investmentAmt` is capital *committed*, not capital *spent* —
+ * how much has actually been deployed only shows up in the position details.
+ */
+export interface DcaBot {
+  algoId: string
+  algoOrdType: string
+  instId: string
+  direction: string
+  lever: string
+  state: string
+  investmentAmt: string
+  investmentCcy: string
+  totalPnl: string
+  pnlRatio: string
+  totalFundingFee: string
+  arbitragePnL: string
+  /** Safety orders the bot is allowed to place before it runs dry. */
+  maxSafetyOrds: string
+  initOrdAmt: string
+  safetyOrdAmt: string
+  /** Each safety order is this multiple of the previous one. */
+  volMult: string
+  /** How far price must fall for the next safety order, as a fraction. */
+  pxSteps: string
+  allowReinvest: boolean
+  tpPriceRange: string
+  cTime: string
+  uTime: string
+}
+
+/** The live position behind a DCA bot, from `dca/position-details`. */
+export interface DcaPosition {
+  algoId: string
+  instId: string
+  avgPx: string
+  initPx: string
+  tpPx: string
+  slPx: string
+  liqPx: string
+  notionalUsd: string
+  sz: string
+  upl: string
+  fee: string
+  fundingFee: string
+  /** Safety orders already filled. Against maxSafetyOrds, this is the fuel gauge. */
+  fillSafetyOrds: string
+  curCycleId: string
+  startTime: string
+}
+
+/** A grid bot, from `tradingBot/grid/orders-algo-pending` or its history. */
+export interface GridBot {
+  algoId: string
+  algoOrdType: string
+  instId: string
+  instType: string
+  state: string
+  direction: string
+  lever: string
+  investment: string
+  totalPnl: string
+  gridProfit: string
+  floatProfit: string
+  pnlRatio: string
+  gridNum: string
+  minPx: string
+  maxPx: string
+  arbitrageNum: string
+  cTime: string
+  uTime: string
+}

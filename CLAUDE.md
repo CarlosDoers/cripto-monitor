@@ -57,6 +57,12 @@ Three of them exist because the obvious endpoint is silent on the thing that mat
 - **`/trade/orders-algo-pending`** — stop-loss and take-profit. These are **not** in `orders-pending`; OKX keeps conditional orders in a separate book, and `ordType` is required on the request, so `conditional` and `oco` both have to be fetched or a protected position still looks bare. This is the only way the app can tell "position with a stop" from "position with nothing behind it".
 - **`/asset/deposit-history`, `/asset/withdrawal-history`** — a balance that grew from a deposit reads exactly like one that grew from trading. Nothing else separates them.
 
+- **`/tradingBot/dca/ongoing-list`** — the bots OKX's UI calls *DCA de futuros*. This one is worth spelling out because it is not discoverable: it is **absent from the published v5 docs**, it does not follow the naming of any other bot family (`ongoing-list` / `history-list` / `position-details`, not `orders-algo-pending`), and its `algoOrdType` values are `contract_dca` and `spot_dca` — neither of which any grid endpoint accepts. The paths came from reading OKX's own `okx/agent-trade-kit` repository. Hours were spent guessing paths before that; go there first next time a bot family is missing.
+
+  The money is visible without it, which is what makes the gap easy to miss: bot capital shows up in `/account/balance` as frozen USDC that is not isolated margin, and their positions do **not** appear in `/account/positions` at all. So an account can hold four figures inside bots while the app shows one position and a healthy balance.
+
+- **`/tradingBot/dca/position-details`** — average price, take-profit, liquidation price, and `fillSafetyOrds`. That last one is the only real health metric a martingale has: a bot at 8 of 9 safety orders has nothing left to average with, so the next move against it goes straight to liquidation. PnL alone will not tell you that, which is why the Bots view leads with it.
+
 - **`/trade/fills-history`** — the fee *tier* gives a maker and a taker rate, but what decides whether a backtest applies is the **mix**. Each fill carries `execType` (`M`/`T`), so `feeMix()` in `src/lib/fees.ts` measures it: this account came out at 52 % maker and an effective 0.033 % a side (0.066 % round trip), against the 0.1 % the sweeps assume. The weighting deliberately avoids the contract multiplier — a fill's notional is `fee / rate`, not `size × price`, so the figure is exact without any per-instrument `ctVal`.
 
 `useFundingRate()` is gated on the instrument being a perp: asking about a spot pair is an error, not an empty result. The rate is per settlement period (8 h, so ×3 for a daily cost) and signed from the long side — a short earns what a long pays.
@@ -189,6 +195,23 @@ This is the one intraday strategy that clears costs, and the reasoning is not th
 - **The concentration to watch is 2026.** Positive every year (2022 +0.10, 2023 +0.10, 2024 +0.05, 2025 +0.08) but 2026 measures +0.56 and carries over half the total profit from 16 % of the trades. Excluding it, expectancy is ~+0.08 R — below `MIN_TRADABLE_R`.
 - **164 of 648 swept configurations passed both epochs, which is exactly the 25 % chance rate.** The count proves nothing. What does is the structure: NY 161/216 positive against London 0/216. Chance does not sort itself by anchor.
 - The volume filter is the paper's "stocks in play" screen with no stocks to screen. It lifts +0.14 R to +0.18 R and cuts two days in three, which is why both are offered as presets rather than one being obviously right.
+
+### Trading bots
+
+The Bots view reads two families. Grid bots need `algoOrdType` (`grid` or
+`contract_grid`, nothing else — `moon_grid`, `spot` and `contract` all error),
+and DCA bots need `contract_dca` or `spot_dca`, one family per request. Asking
+for one silently omits the others, so both are fetched and merged — the same
+trap as `ordType` on `/trade/orders-algo-pending`.
+
+The list is on `LIVE` and `position-details` on `SLOW`, deliberately: the list is
+one request for every bot and carries the live PnL, while the details cost one
+invocation *per bot* and add only numbers that change when a safety order fills.
+
+A subaccount named in the account (`/users/subaccount/list`) is not where the
+bots are unless it holds money — this account has one with 0.0007 USD in it,
+which sent the first investigation down a blind alley. Check `totalEq` before
+concluding anything from a subaccount's existence.
 
 Routing is hash-based in `src/lib/router.ts` (`useSyncExternalStore`, no router dependency). Adding a view means touching `ROUTES`, the `NAV` map in `Layout.tsx`, and the switch in `App.tsx`.
 

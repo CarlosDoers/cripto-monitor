@@ -113,6 +113,13 @@ export const IconSignal = (p: Props) => (
   </svg>
 )
 
+export const IconBots = (p: Props) => (
+  <svg {...base} className={p.className}>
+    <rect x="4" y="8" width="16" height="12" rx="2" />
+    <path d="M12 4v4M9 13h.01M15 13h.01M9.5 17h5" />
+  </svg>
+)
+
 export const IconPerformance = (p: Props) => (
   <svg {...base} className={p.className}>
     <path d="M3 3v18h18" />

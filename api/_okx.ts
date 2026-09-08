@@ -57,6 +57,25 @@ export const ALLOWED_PATHS = new Set([
   '/api/v5/market/candles',
   '/api/v5/market/history-candles',
   '/api/v5/public/instruments',
+
+  // Trading bots. Read-only like everything else: these list and describe
+  // running bots, they cannot start, stop or fund one. Only what the Bots view
+  // actually reads is listed — the DCA family also exposes create/stop, and
+  // those must never appear here.
+  //
+  // Two traps. The grid endpoints require `algoOrdType` (`grid` or
+  // `contract_grid`, nothing else), the same way /trade/orders-algo-pending
+  // requires `ordType` — ask without it and it errors, ask for one and the
+  // others are silently missing. And the DCA family, which is what OKX's UI
+  // calls "DCA de futuros", does not follow the naming of any other bot
+  // endpoint: it is `dca/ongoing-list`, not `dca/orders-algo-pending`, and its
+  // `algoOrdType` values are `contract_dca` and `spot_dca`. It is absent from
+  // the published v5 docs; the paths come from OKX's own agent-trade-kit.
+  '/api/v5/tradingBot/grid/orders-algo-pending',
+  '/api/v5/tradingBot/grid/orders-algo-history',
+  '/api/v5/tradingBot/dca/ongoing-list',
+  '/api/v5/tradingBot/dca/history-list',
+  '/api/v5/tradingBot/dca/position-details',
 ])
 
 const json = (body: unknown, status: number) =>

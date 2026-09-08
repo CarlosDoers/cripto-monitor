@@ -12,6 +12,7 @@ import { Signals } from './views/Signals'
 import { Markets } from './views/Markets'
 import { Portfolio } from './views/Portfolio'
 import { Positions } from './views/Positions'
+import { Bots } from './views/Bots'
 import { Orders } from './views/Orders'
 import { History } from './views/History'
 
@@ -77,6 +78,7 @@ function Views() {
       {route === 'rendimiento' && <Performance />}
       {route === 'cartera' && <Portfolio />}
       {route === 'posiciones' && <Positions />}
+      {route === 'bots' && <Bots />}
       {route === 'ordenes' && <Orders />}
       {route === 'historial' && <History />}
     </Layout>

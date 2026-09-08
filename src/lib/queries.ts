@@ -10,8 +10,11 @@ import type {
   ClosedPosition,
   DcaBot,
   DcaPosition,
+  CalendarEvent,
   FundingRate,
   GridBot,
+  IndexTicker,
+  OrderBook,
   Instrument,
   OpenInterest,
   Fill,
@@ -379,6 +382,54 @@ export function useBotHistory() {
     },
     refetchInterval: SLOW,
   })
+}
+
+/**
+ * Every spot index quoted in a currency, in one request.
+ *
+ * A derivative's premium over its index is real holding cost — a long bought at
+ * a premium pays it back on convergence — and asking per contract would be 171
+ * requests for the X-PERP board. `quoteCcy` returns the lot, so it is one.
+ */
+export function useIndexTickers(quoteCcy = 'USD') {
+  return useOkx<IndexTicker>(['index-tickers', quoteCcy], '/api/v5/market/index-tickers', {
+    quoteCcy,
+  })
+}
+
+/**
+ * Order book depth for one instrument.
+ *
+ * The ticker already gives the best bid and ask, so the spread needs no request.
+ * What this adds is what sits *behind* the top of book, which is what decides
+ * whether a position can actually be closed at the price on screen.
+ *
+ * One request per instrument, so only ever call it for something the user holds.
+ */
+export function useOrderBook(instId: string | undefined, sz = 50) {
+  return useQuery<OrderBook[], ApiError>({
+    queryKey: ['books', instId, sz],
+    queryFn: () => okx<OrderBook>('/api/v5/market/books', { instId: instId!, sz }),
+    enabled: Boolean(instId),
+    refetchInterval: LIVE,
+    staleTime: LIVE,
+  })
+}
+
+/**
+ * Scheduled macro releases, highest importance first.
+ *
+ * Context only. The endpoint serves roughly six weeks of past events and then
+ * only future scheduled ones, which is nowhere near enough history to measure
+ * whether they move anything — so nothing in the app may treat this as signal.
+ */
+export function useEconomicCalendar(importance = '3') {
+  return useOkx<CalendarEvent>(
+    ['economic-calendar', importance],
+    '/api/v5/public/economic-calendar',
+    { importance, limit: 100 },
+    { refetchInterval: SLOW, staleTime: SLOW },
+  )
 }
 
 /** Open interest across a product type — half of any liquidity picture. */

@@ -61,6 +61,16 @@ export const ALLOWED_PATHS = new Set([
   '/api/v5/market/candles',
   '/api/v5/market/history-candles',
   '/api/v5/public/instruments',
+  // The index a contract is priced against. `quoteCcy=USD` returns every index
+  // in one response, so the premium for all 171 X-PERP contracts costs a single
+  // request rather than one per row.
+  '/api/v5/market/index-tickers',
+  // Depth. The ticker already carries the top of book, so this is only worth a
+  // request for what it adds: how much size sits near the mid. A tight spread
+  // with nothing behind it is the trap this catches.
+  '/api/v5/market/books',
+  // Scheduled macro releases. Context, not signal — see the note in the card.
+  '/api/v5/public/economic-calendar',
 
   // Trading bots. Read-only like everything else: these list and describe
   // running bots, they cannot start, stop or fund one. Only what the Bots view

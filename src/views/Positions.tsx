@@ -4,6 +4,7 @@ import { Badge, Card, DeltaValue, EmptyState, ErrorNotice, Stat, TableSkeleton, 
 import { FundingCost, ProtectionBadge } from '../components/PositionGuard'
 import { guardsFor, hasStop, isShort } from '../lib/guards'
 import { PositionRisk } from '../components/PositionRisk'
+import { ExitDepth } from '../components/ExitDepth'
 import { IconAlert } from '../components/icons'
 
 export function Positions() {
@@ -190,6 +191,7 @@ export function Positions() {
           dimmed={isFetching && !isLoading}
         >
           <PositionRisk position={p} />
+          <ExitDepth position={p} />
         </Card>
       ))}
     </>

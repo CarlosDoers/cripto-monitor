@@ -399,3 +399,39 @@ export interface GridBot {
   cTime: string
   uTime: string
 }
+
+/** Spot index a derivative is priced against. */
+export interface IndexTicker {
+  instId: string
+  idxPx: string
+  high24h: string
+  low24h: string
+  open24h: string
+  ts: string
+}
+
+/** One side of the book is `[price, size, liquidatedOrders, orderCount]`. */
+export type BookLevel = [string, string, string, string]
+
+export interface OrderBook {
+  asks: BookLevel[]
+  bids: BookLevel[]
+  ts: string
+}
+
+/** A scheduled macro release. */
+export interface CalendarEvent {
+  calendarId: string
+  date: string
+  region: string
+  category: string
+  event: string
+  /** 1 low, 2 medium, 3 high. */
+  importance: string
+  /** Empty until the release lands. */
+  actual: string
+  forecast: string
+  previous: string
+  ccy: string
+  unit: string
+}

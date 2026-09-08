@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { useInstruments, useOpenInterest, useTickers } from './queries'
+import { useIndexTickers, useInstruments, useOpenInterest, useTickers } from './queries'
 import { num } from './format'
 
 /**
@@ -24,6 +24,12 @@ export interface Market {
   spreadBps: number
   /** 24h high-low range as a share of price. */
   rangePct: number
+  /**
+   * Premium over the spot index, as a fraction. Positive means the contract
+   * trades above spot, so a long pays that away as the two converge and a short
+   * collects it. NaN when the index is missing.
+   */
+  basis: number
   maxLeverage: number
   /** 0–100 composite of liquidity, cost and movement. */
   score: number
@@ -72,12 +78,15 @@ export function useMarkets(tradedInstIds: string[] = []) {
   const instruments = useInstruments('FUTURES')
   const tickers = useTickers('FUTURES')
   const openInterest = useOpenInterest('FUTURES')
+  // One request covers every index, so the premium costs nothing per row.
+  const indices = useIndexTickers('USD')
 
   const traded = useMemo(() => new Set(tradedInstIds), [tradedInstIds])
 
   const markets = useMemo<Market[]>(() => {
     const byTicker = new Map((tickers.data ?? []).map((t) => [t.instId, t]))
     const byOi = new Map((openInterest.data ?? []).map((o) => [o.instId, o]))
+    const byIndex = new Map((indices.data ?? []).map((i) => [i.instId, num(i.idxPx)]))
 
     const base = (instruments.data ?? [])
       .filter((i) => i.instId.includes('XPERP') && i.state === 'live')
@@ -88,6 +97,11 @@ export function useMarkets(tradedInstIds: string[] = []) {
         const ask = num(t?.askPx)
         const open = num(t?.open24h)
         const mid = (bid + ask) / 2
+        // ETH-USD_UM_XPERP-310404 is priced against the ETH-USD index. Verified
+        // against every shape on the board; a contract whose index is missing
+        // gets NaN rather than a fabricated zero premium.
+        const idxPx = byIndex.get(i.instId.replace(/_UM_XPERP-\d+$/, '')) ?? NaN
+        const basis = idxPx > 0 && last > 0 ? (last - idxPx) / idxPx : NaN
 
         return {
           instId: i.instId,
@@ -99,6 +113,7 @@ export function useMarkets(tradedInstIds: string[] = []) {
           openInterestUsd: num(byOi.get(i.instId)?.oiUsd),
           spreadBps: bid > 0 && ask > 0 && mid > 0 ? ((ask - bid) / mid) * 10_000 : NaN,
           rangePct: last > 0 ? ((num(t?.high24h) - num(t?.low24h)) / last) * 100 : 0,
+          basis,
           maxLeverage: num(i.lever),
           traded: traded.has(i.instId),
         }
@@ -140,12 +155,13 @@ export function useMarkets(tradedInstIds: string[] = []) {
         return { ...m, score, grade, reasons }
       })
       .sort((a, b) => b.score - a.score)
-  }, [instruments.data, tickers.data, openInterest.data, traded])
+  }, [instruments.data, tickers.data, openInterest.data, indices.data, traded])
 
   return {
     markets,
     isLoading: instruments.isLoading || tickers.isLoading,
-    isFetching: instruments.isFetching || tickers.isFetching || openInterest.isFetching,
+    isFetching:
+      instruments.isFetching || tickers.isFetching || openInterest.isFetching || indices.isFetching,
     error: instruments.error ?? tickers.error ?? openInterest.error,
     /** Open interest is a separate call; say so when it is missing. */
     hasOpenInterest: (openInterest.data?.length ?? 0) > 0,

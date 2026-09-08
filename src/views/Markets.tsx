@@ -2,7 +2,8 @@ import { useMemo, useState } from 'react'
 import { useMarkets, type Market } from '../lib/markets'
 import { useClosedPositions, usePositions } from '../lib/queries'
 import { pct, plural, price, ratio, usdCompact } from '../lib/format'
-import { Badge, Card, EmptyState, ErrorNotice, SearchInput, Stat, TableSkeleton, TableWrap } from '../components/ui'
+import { EconomicCalendar } from '../components/EconomicCalendar'
+import { Badge, Card, DeltaValue, EmptyState, ErrorNotice, SearchInput, Stat, TableSkeleton, TableWrap } from '../components/ui'
 
 type SortBy = 'score' | 'volume' | 'oi' | 'spread' | 'range' | 'change'
 
@@ -195,6 +196,7 @@ export function Markets() {
                   <th className="num">Volumen 24 h</th>
                   <th className="num">Posición abierta</th>
                   <th className="num">Horquilla</th>
+                  <th className="num">Prima</th>
                   <th className="num">Rango 24 h</th>
                   <th className="num">Apal.</th>
                 </tr>
@@ -233,6 +235,13 @@ export function Markets() {
                     <td className="num">
                       {Number.isFinite(m.spreadBps) ? `${ratio(m.spreadBps, 1)} pb` : '—'}
                     </td>
+                    <td className="num">
+                      {Number.isFinite(m.basis) ? (
+                        <DeltaValue value={m.basis}>{pct(m.basis, 3)}</DeltaValue>
+                      ) : (
+                        '—'
+                      )}
+                    </td>
                     <td className="num">{ratio(m.rangePct, 1)} %</td>
                     <td className="num sub">{m.maxLeverage}×</td>
                   </tr>
@@ -243,8 +252,12 @@ export function Markets() {
         )}
       </Card>
 
+      <EconomicCalendar />
+
       <p className="footnote">
-        Datos públicos de OKX, actualizados cada 30 segundos. La horquilla se mide sobre el mejor
+        Datos públicos de OKX, actualizados cada 30 segundos. La prima es la diferencia entre el
+        precio del contrato y su índice al contado: en positivo, un largo la paga al converger; en
+        negativo, la cobra. La horquilla se mide sobre el mejor
         precio de compra y de venta en el momento de la consulta y cambia constantemente; en
         contratos poco líquidos puede ser mucho peor de lo que muestre cualquier foto fija. La
         posición abierta viene de <code>/public/open-interest</code>, que OKX ya expresa en dólares.

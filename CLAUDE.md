@@ -222,7 +222,9 @@ bots are unless it holds money — this account has one with 0.0007 USD in it,
 which sent the first investigation down a blind alley. Check `totalEq` before
 concluding anything from a subaccount's existence.
 
-Routing is hash-based in `src/lib/router.ts` (`useSyncExternalStore`, no router dependency). Adding a view means touching `ROUTES`, the `NAV` map in `Layout.tsx`, and the switch in `App.tsx`.
+Routing is hash-based in `src/lib/router.ts` (`useSyncExternalStore`, no router dependency). Adding a view means touching `ROUTES`, the `NAV` map in `Layout.tsx`, and the switch in `App.tsx` — and nothing else, because every navigation surface derives from those three.
+
+That last part had to be fixed to be true. The phone's overflow menu used to be a hand-written `MOBILE_MORE` list, and Bots shipped **completely unreachable on mobile**: `NAV` is a `Record<Route, …>` so TypeScript demanded an entry for the new route, but a `Route[]` demands nothing, so the list simply went stale in silence while the desktop sidebar showed the view fine. `MOBILE_MORE` is now `ROUTES.filter(r => !MOBILE_PRIMARY.includes(r))`. `MOBILE_PRIMARY` stays hand-written on purpose — which four routes deserve a one-tap slot is an editorial call — but it can only ever *promote* a route, never hide one.
 
 ### Mobile
 

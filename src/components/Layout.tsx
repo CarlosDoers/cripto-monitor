@@ -71,8 +71,23 @@ const NAV: Record<Route, { label: string; description: string; Icon: typeof Icon
   },
 }
 
+/**
+ * The four the bottom bar reaches in one tap. An editorial choice about what
+ * gets used most, not a list of what exists.
+ */
 const MOBILE_PRIMARY: Route[] = ['resumen', 'senales', 'rendimiento', 'cartera']
-const MOBILE_MORE: Route[] = ['mercados', 'posiciones', 'ordenes', 'historial']
+
+/**
+ * Everything else, derived rather than listed — and it has to be.
+ *
+ * Written by hand, this went stale the moment a view was added: `NAV` is a
+ * `Record<Route, …>` so TypeScript demands an entry for a new route, but a
+ * `Route[]` demands nothing. Bots shipped completely unreachable on phones
+ * while the desktop sidebar, which does derive from `ROUTES`, showed it fine —
+ * and nothing failed, because there was nothing to fail. Derived, a new route
+ * is reachable everywhere by construction.
+ */
+const MOBILE_MORE: Route[] = ROUTES.filter((r) => !MOBILE_PRIMARY.includes(r))
 
 function LastUpdated() {
   const isFetching = useIsFetching()

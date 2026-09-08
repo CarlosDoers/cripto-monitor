@@ -65,6 +65,8 @@ Three of them exist because the obvious endpoint is silent on the thing that mat
 
 - **`/trade/fills-history`** — the fee *tier* gives a maker and a taker rate, but what decides whether a backtest applies is the **mix**. Each fill carries `execType` (`M`/`T`), so `feeMix()` in `src/lib/fees.ts` measures it: this account came out at 52 % maker and an effective 0.033 % a side (0.066 % round trip), against the 0.1 % the sweeps assume. The weighting deliberately avoids the contract multiplier — a fill's notional is `fee / rate`, not `size × price`, so the figure is exact without any per-instrument `ctVal`.
 
+**`/public/funding-rate-history`** answers what the carry has been costing, which the current rate cannot. A rate of 0.01 % is cheap if it has been flat and a warning if it has tripled in three days, and that difference decides whether a position is still worth holding. `FundingCost` shows the live daily figure next to the week's realised average; both are signed from the position's side, so a short reads "cobras" against its own seven-day mean.
+
 `useFundingRate()` is gated on the instrument being a perp: asking about a spot pair is an error, not an empty result. The rate is per settlement period (8 h, so ×3 for a daily cost) and signed from the long side — a short earns what a long pays.
 
 ### OKX quirks that shape the code
@@ -77,6 +79,7 @@ Three of them exist because the obvious endpoint is silent on the thing that mat
 - **Pages cap at 100.** `useClosedPositions` paginates with `after=<oldest uTime>` up to 5 pages and reports `truncated`, so statistics never silently mean "the last 100 trades".
 - **`posSide` only says `long`/`short` in hedge mode.** This account is one-way, so OKX reports `net` on every position and the direction lives in **the sign of `pos`**. Reading `posSide === 'short'` labelled a short as "Largo" *and* flipped the funding sign, so the app told the account it was paying funding on a short that was collecting it. Always go through `isShort()` in `src/lib/guards.ts`; never compare `posSide` directly.
 - **`mgnRatio` is empty at the account level when all margin is isolated.** Parsing it through `num()` yields 0, which the Resumen then printed as a reassuring "100 %" next to a position sitting at 7.4× maintenance. Fall back to the worst open position's ratio and say which one it is.
+- **It is not just `mgnRatio` — the whole account-level block goes empty.** With every position on isolated margin, `availEq`, `adjEq`, `imr` and `mmr` all come back as `""` on `/account/balance`, and `num()` turns each into a plausible-looking 0. Free margin therefore has to be summed out of `details[]` per currency, which is what `freeMargin` in `portfolio.ts` does. Anything read from the top level of that response needs the same check.
 - **`posId` is not unique in `positions-history`.** One position closed in several parts produces several rows sharing it, so it cannot be a React key on its own — React silently drops the duplicates from the table. `Trade.id` is `${posId}-${uTime}`.
 
 ### Data layer
@@ -87,7 +90,7 @@ Three of them exist because the obvious endpoint is silent on the thing that mat
 
 Two hooks compose the raw queries into what views actually need:
 
-- `src/lib/portfolio.ts` — merges the trading and funding wallets, prices everything in USD, and exposes `netWorth` (all wallets, from `asset-valuation`) alongside `totalUsd` (the priced holdings). Both Resumen and Cartera read `netWorth` so they can never disagree.
+- `src/lib/portfolio.ts` — merges the trading and funding wallets, prices everything in USD, and exposes `netWorth` (all wallets, from `asset-valuation`) alongside `totalUsd` (the priced holdings). Both Resumen and Cartera read `netWorth` so they can never disagree. It also derives `freeMargin` and `isolatedEq`, because the headline equity hides them: this account has read 7.998 US$ of net worth with **0,01 US$ actually free**, everything else locked in isolated margin and bot reservations. An account with no free margin cannot top up a position that turns, so the only choices left are close or be liquidated — the Salud de la Cuenta card says so when free margin drops under 1 % of equity.
 - `src/lib/performance.ts` — every trading statistic, plus the period filter. `computePerformance()` is a pure function; test ideas belong there.
 - `src/lib/signals.ts` — candles plus the indicator, for the Señales view.
 
@@ -258,6 +261,7 @@ Everything user-facing goes through `src/lib/format.ts` — `usd`, `qty`, `price
 
 - **Colour follows the entity, never its rank.** `src/lib/colors.ts` assigns a stable hue per currency and persists it. Only the top 7 get a hue; everything else is grey, matching the "Otros" segment — so the chart and the tables always agree.
 - Statistics under `MIN_SAMPLE` (5) trades render faded and hide their win rate. Two trades at 100 % is noise and the UI must not invite reading it as signal.
+- **Ticks can overlap; labels cannot.** `PositionRisk` places every marker by `left: %`, which is fine for the ticks and broke for the labels: on a position that has barely moved, entry and break-even land a few percent apart and their two prices printed interleaved into one unreadable string. Labels are now dropped when they would collide, in priority order — liquidation and mark price win because they are what the position is read against, entry and break-even yield. Any absolutely-positioned label track needs the same treatment.
 - **A `<span>` used as a bar must be given `display: block`.** An inline box ignores `width` and `height` outright, so the bar silently never draws while the DOM and the computed style both look correct — `getComputedStyle().width` happily reports `100%`. This has now bitten `.rail-fill`, `.rail-track`, `.avg-track` and `.avg-bar`. To sweep for it: find elements with an inline `width` style whose computed `display` is `inline`.
 - **An overlay with holes must break its path, not bridge it.** `linePath` in `PriceChart.tsx` keyed its `M` off `i === 0`, so any overlay whose first visible bar was `NaN` produced a path starting with `L` — invalid SVG the browser rejects outright, silently, with the console as the only clue. It also joined straight across gaps, drawing a level that was never there. Both were latent until the opening range, whose overlays exist only inside each day's window. The band underneath is a `<path>` of closed subpaths for the same reason; it was a single `<polygon>`, which spanned the holes.
 - Charts draw at measured pixel size (`useSize`) rather than a scaled viewBox, which would stretch strokes along one axis.

@@ -190,6 +190,27 @@ export function useCandleHistory(instId: string, bar: string, pages = 4) {
   })
 }
 
+/**
+ * Recent funding settlements for a perp, newest first.
+ *
+ * `useFundingRate` answers what the next settlement costs; this answers what the
+ * position has been paying. Both are needed: a rate of 0.01 % is cheap if it has
+ * been flat and a warning if it has tripled over three days.
+ *
+ * Settled history never changes, so it sits on SLOW — one page of 100 covers a
+ * month of eight-hour periods.
+ */
+export function useFundingHistory(instId: string | undefined, limit = 100) {
+  return useQuery<FundingRate[], ApiError>({
+    queryKey: ['funding-history', instId, limit],
+    queryFn: () =>
+      okx<FundingRate>('/api/v5/public/funding-rate-history', { instId: instId!, limit }),
+    enabled: Boolean(instId),
+    refetchInterval: SLOW,
+    staleTime: SLOW,
+  })
+}
+
 /** Historical candles never change, so they are fetched once and kept. */
 const ARCHIVE = 6 * 60 * 60 * 1000
 

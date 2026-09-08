@@ -51,6 +51,10 @@ export const ALLOWED_PATHS = new Set([
   // Public market data
   '/api/v5/public/open-interest',
   '/api/v5/public/funding-rate',
+  // What the carry has actually cost, not just what it costs right now. A perp
+  // whose rate has been climbing for a week is a different position from one
+  // that spiked today, and the current rate cannot tell them apart.
+  '/api/v5/public/funding-rate-history',
   '/api/v5/public/price-limit',
   '/api/v5/market/ticker',
   '/api/v5/market/tickers',

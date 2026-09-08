@@ -46,6 +46,12 @@ export function Overview() {
   const marginRatio =
     accountRatio > 0 ? accountRatio : positionRatios.length ? Math.min(...positionRatios) : 0
   const atRisk = openPositions.length > 0 && marginRatio > 0 && marginRatio < MARGIN_WARN
+  // Under 1 % of equity free is not a rounding detail: an isolated position that
+  // turns cannot be topped up, so the only remaining options are close or be
+  // liquidated. Relative, because "50 US$ free" means different things on a
+  // 500 US$ account and a 50.000 US$ one.
+  const locked =
+    portfolio.netWorth > 0 && portfolio.freeMargin / portfolio.netWorth < 0.01
 
   const tradingBal = num(valDetails?.trading)
   const fundingBal = num(valDetails?.funding)
@@ -190,6 +196,18 @@ export function Overview() {
                   <>
                     {' '}
                     <span className="sub">peor posición</span>
+                  </>
+                )}
+              </strong>
+            </li>
+            <li>
+              <span>Margen libre</span>
+              <strong>
+                {portfolio.isLoading ? '—' : usd(portfolio.freeMargin)}
+                {!portfolio.isLoading && locked && (
+                  <>
+                    {' '}
+                    <span className="sub">todo comprometido</span>
                   </>
                 )}
               </strong>

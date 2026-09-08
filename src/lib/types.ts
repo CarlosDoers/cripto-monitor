@@ -307,6 +307,8 @@ export interface FundingRate {
   /** OKX's estimate for the following period; often empty. */
   nextFundingRate: string
   nextFundingTime: string
+  /** What actually settled. Only on the history endpoint. */
+  realizedRate?: string
 }
 
 /** A deposit into or withdrawal out of the account. */

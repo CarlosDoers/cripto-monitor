@@ -47,6 +47,30 @@ export function PositionRisk({ position }: { position: Position }) {
     { key: 'liq', at: at(liq), label: 'Liquidación', value: price(liq), tone: 'bad' },
   ]
 
+  /**
+   * Ticks can sit anywhere, but labels have width. Entry and break-even land a
+   * fraction apart on a position that has barely moved, and their labels then
+   * print on top of each other — two prices interleaved into one unreadable
+   * string. Keep the ticks and drop the label of whichever matters least.
+   *
+   * Liquidation and the mark price are the two the position is actually read
+   * against, so they win; entry and break-even yield.
+   */
+  const MIN_GAP = 14
+  const byPriority = ['liq', 'mark', 'entry', 'be']
+  const placed: number[] = []
+  const labelled = new Set(
+    byPriority
+      .map((key) => marks.find((m) => m.key === key))
+      .filter((m) => m !== undefined)
+      .filter((m) => {
+        if (placed.some((p) => Math.abs(p - m.at) < MIN_GAP)) return false
+        placed.push(m.at)
+        return true
+      })
+      .map((m) => m.key),
+  )
+
   return (
     <div className="risk-scale">
       <div className="risk-scale-head">
@@ -65,7 +89,7 @@ export function PositionRisk({ position }: { position: Position }) {
       </div>
 
       <div className="risk-scale-labels">
-        {marks.map((m) => (
+        {marks.filter((m) => labelled.has(m.key)).map((m) => (
           <span key={m.key} className={`risk-scale-label risk-scale-label--${m.tone}`} style={{ left: `${m.at}%` }}>
             <span className="risk-scale-value">{m.value}</span>
             <span className="risk-scale-name">{m.label}</span>

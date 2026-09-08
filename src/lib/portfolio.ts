@@ -2,7 +2,7 @@ import { useMemo } from 'react'
 import { useBalance, useFunding, useTickers, useValuation } from './queries'
 import { num } from './format'
 import { setUsdToEur } from './currency'
-import type { Holding, Ticker } from './types'
+import type { BalanceDetail, Holding, Ticker } from './types'
 
 const STABLES = new Set(['USDT', 'USDC', 'DAI', 'TUSD', 'USD'])
 
@@ -127,7 +127,35 @@ export function usePortfolio() {
   const reported = num(valuation.data?.[0]?.totalBal)
   const netWorth = reported > 0 ? reported : totalUsd
 
+  /**
+   * Margin the account can still deploy.
+   *
+   * The account-level `availEq` is the same trap as `mgnRatio`: with every
+   * position on isolated margin OKX leaves `availEq`, `adjEq`, `imr` and `mmr`
+   * empty at the top level, and `num()` turns that into 0 — which would read as
+   * "nothing free" even on an account that is entirely liquid. The figure only
+   * exists per currency, so it has to be summed out of `details`.
+   *
+   * Worth showing because the headline equity hides it: an account can look
+   * healthy at four figures while every cent is locked in isolated margin and
+   * bot reservations, leaving nothing to top up a position that turns.
+   */
+  const details = balance.data?.[0]?.details ?? []
+  // Every figure in `details` is in its own currency; OKX has already priced the
+  // equity, so that ratio is the exchange rate and there is no second source to
+  // disagree with.
+  const inUsd = (d: BalanceDetail, field: keyof BalanceDetail) => {
+    const eq = num(d.eq)
+    return eq > 0 ? num(d[field] as string) * (num(d.eqUsd) / eq) : 0
+  }
+  const freeMargin = details.reduce((sum, d) => sum + inUsd(d, d.availEq ? 'availEq' : 'availBal'), 0)
+  /** Equity locked as isolated margin behind open positions. */
+  const isolatedEq = details.reduce((sum, d) => sum + inUsd(d, 'isoEq'), 0)
+
   return {
+    /** Deployable margin. Near zero means no room to defend a position. */
+    freeMargin,
+    isolatedEq,
     holdings,
     /** Sum of the priced holdings (trading + funding wallets). */
     totalUsd,

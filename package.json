@@ -10,7 +10,8 @@
     "preview": "vite preview",
     "candles": "node scripts/fetch-candles.mjs",
     "audit": "node --experimental-strip-types --import ./scripts/_hook.mjs scripts/audit-strategies.mjs",
-    "orb": "node --experimental-strip-types --import ./scripts/_hook.mjs scripts/orb-research.mjs"
+    "orb": "node --experimental-strip-types --import ./scripts/_hook.mjs scripts/orb-research.mjs",
+    "try": "node --experimental-strip-types --import ./scripts/_hook.mjs scripts/try-strategy.mjs"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.101.4",

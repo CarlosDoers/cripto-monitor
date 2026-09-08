@@ -13,6 +13,7 @@ npm run lint             # oxlint
 npm run candles          # populate ./.candles (needs npm run dev up)
 npm run audit            # every strategy vs. the profile it claims — exits non-zero on drift
 npm run orb              # the evidence behind the opening range, which the audit does not check
+npm run try -- <módulo>  # measure a candidate strategy that is not registered yet
 ./scripts/push-env.sh    # push .env.local vars to the linked Vercel project
 vercel --prod            # deploy (manual; a git push does NOT deploy)
 ```
@@ -107,6 +108,33 @@ The audit reads the declared figures **from `registry.ts` itself** rather than f
 It prints two lists, and they are two different kinds of wrong. **DESVIACIONES** fails the run: a declared figure that does not match the data is a lie the UI tells next to real money. **EDGE FLOJO EN UNA MITAD** does not: it flags a timeframe that is positive overall but under `MIN_TRADABLE_R` on one half of the history, which is a judgement about what is worth offering rather than a factual error. Two things sit on that list today — `donchian/fast` on the daily (in −0.09 / out +0.17) and `donchian/accurate` on the daily (in +0.01 / out +0.48). Both were fine on the shallower data the old figures came from; deepening the cache is what exposed them.
 
 `nativeTimeframe` on a profile says which timeframe `outOfSample`, `sampleSize` and `winRate` are measured on. It defaults to the daily, and only the opening range sets it — measuring a 15 m strategy on daily bars yields zero signals and would report a correct profile as broken.
+
+### Adding a strategy
+
+`npm run try -- src/lib/indicators/myIdea.ts` measures a candidate that is not
+in `registry.ts` yet and says whether it clears the bar: n ≥ 30, at or above
+`MIN_TRADABLE_R` net **in the aggregate and in both halves**, and at least
+0.05 R above a random entry with the same geometry. It writes nothing — a
+candidate that passes still gets registered by hand with the figures it printed,
+and then `npm run audit` checks that what was typed matches what was measured.
+The two scripts answer different questions: `try` asks whether an idea is worth
+shipping, `audit` asks whether the UI tells the truth about what shipped.
+
+It refuses to guess when the shape is wrong. A module that returns raw indicator
+output rather than a `StrategyResult` — `analyseTraps` does, and is adapted in
+`registry.ts` — produces zero resolved signals, which reads exactly like an idea
+that never fires. The harness says which of the two it is instead of printing a
+row of dashes.
+
+The `propose-strategy` skill in `.claude/skills/` drives that loop from a
+description in plain language. Its important half is not the code generation but
+the discipline written into it: **measure the idea as described and report that
+number**, cap changes to the trading rules at three and report every one, and
+treat a passing cell whose neighbours are all negative as a failure. Iterating
+until something passes manufactures a false positive — 164 of 648 configurations
+cleared both epochs in the opening-range sweep, which is exactly the rate chance
+produces. If that loop is ever wanted unattended (CI, a batch of ideas), the
+Claude API would only be driving `npm run try`; the harness stays the judge.
 
 **Nothing ships in `registry.ts` that loses money.** The Señales view offers three strategies and five presets, and every one of them is measured positive on the timeframe it is offered on. Four things were removed for failing that bar: `pullback` (+0.01 R), `reversal/original` (−0.15 R), `donchian/slow` (+0.87 in-sample, −0.14 out) and `donchian/momentum` (+0.74 in, +0.06 out). Explaining why a losing strategy loses is not worth the screen space — if one comes back, it must clear costs out of sample first.
 

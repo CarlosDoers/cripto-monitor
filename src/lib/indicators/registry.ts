@@ -1,5 +1,6 @@
 import { analyseTraps, TUNED_SETTINGS } from './reversalTrap'
 import { analyseDonchian, DONCHIAN_ACCURATE, DONCHIAN_SETTINGS } from './donchianBreakout'
+import { analyseOpeningRange, OPENING_RANGE_ALL, OPENING_RANGE_SETTINGS } from './openingRange'
 import type { Candle, Overlay, StrategyResult, StrategySignal } from './types'
 import { summarise } from './types'
 
@@ -33,11 +34,19 @@ import { summarise } from './types'
 export interface StrategyBacktest {
   /** Net expectancy in R per timeframe, across 10 instruments. */
   byTimeframe: Record<string, number>
-  /** Net expectancy on the daily half of history never used for tuning. */
+  /**
+   * The timeframe the strategy actually lives on, and the one the three figures
+   * below are measured against. Almost all of them are daily, but the opening
+   * range only exists on 15 m: its range is 30 minutes and its stop is that
+   * range rather than an ATR. Measured on the daily it produces no signals at
+   * all, and the audit would call a correct profile broken.
+   */
+  nativeTimeframe?: string
+  /** Net expectancy on the half of history never used for tuning. */
   outOfSample: number
-  /** Resolved daily signals behind those numbers. */
+  /** Resolved signals behind those numbers, on the native timeframe. */
   sampleSize: number
-  /** Measured daily hit rate, 0–1. */
+  /** Measured hit rate on the native timeframe, 0–1. */
   winRate: number
   /**
    * How well established the edge is. `reasonable` holds up out of sample;
@@ -72,6 +81,16 @@ export function timeframeVerdict(profile: StrategyBacktest, timeframe: string): 
   return 'blocked'
 }
 
+/**
+ * Whether the strategy can be computed on a timeframe at all. Almost all of
+ * them work anywhere and are gated purely on cost; the opening range is built
+ * out of 30-minute ranges and simply does not exist elsewhere, which is a
+ * different statement from "it loses money there" and has to read differently.
+ */
+export function appliesTo(profile: StrategyBacktest, timeframe: string): boolean {
+  return !profile.nativeTimeframe || profile.nativeTimeframe === timeframe
+}
+
 /** The timeframes this profile may actually be traded on, best first. */
 export function tradableTimeframes(profile: StrategyBacktest): string[] {
   return Object.entries(profile.byTimeframe)
@@ -94,8 +113,21 @@ export interface StrategyDef {
   /** One line, shown under the tab. */
   tagline: string
   description: string
-  /** Which regime it needs — used to flag when conditions are unfavourable. */
-  regime: 'trending' | 'ranging'
+  /**
+   * Which regime it needs — used to flag when conditions are unfavourable.
+   * `any` is not a shrug: it means the strategy was measured across regimes and
+   * stayed profitable in all of them, so a warning would be false. Do not reach
+   * for it without that measurement.
+   */
+  regime: 'trending' | 'ranging' | 'any'
+  /**
+   * Bars of deep history to pull from `/market/history-candles` on top of the
+   * live query. Only worth paying for when the strategy needs more than the
+   * ~1440 bars `/market/candles` will ever return: on the daily that is four
+   * years, on 15 m it is a fortnight. Costs one serverless call per 100 bars,
+   * fetched once and kept, so leave it unset unless the strategy is starved.
+   */
+  archiveBars?: number
   presets: StrategyPreset[]
   run(candles: Candle[], presetKey: string): StrategyResult
   backtest: StrategyBacktest
@@ -149,14 +181,14 @@ export const STRATEGIES: StrategyDef[] = [
       {
         key: 'tuned',
         label: 'Ajustada',
-        note: 'Bandas de 2,5 ATR y stop de 0,25. Es la configuración con mejor evidencia de toda la app: +0,54 R por señal en diario y +0,57 R en la mitad del histórico que no se usó para ajustarla. Al barrer 108 variantes alrededor, todas las vecinas siguen siendo positivas (+0,45 a +0,59 R), que es la señal de que el resultado no depende de haber acertado los parámetros exactos.',
+        note: 'Bandas de 2,5 ATR y stop de 0,25. Es la que más gana por señal de toda la app: +0,61 R en diario, y +0,40 R en la mitad del histórico que no se usó para ajustarla. Al barrer las variantes de alrededor, todas las vecinas seguían siendo positivas, que es la señal de que el resultado no depende de haber acertado los parámetros exactos. En 4 h mide +0,03 R, así que ese timeframe ya no se ofrece.',
       },
     ],
     run: runReversal,
     backtest: {
-      byTimeframe: { '15m': -0.33, '1H': 0.07, '4H': 0.15, '1D': 0.54 },
-      outOfSample: 0.57,
-      sampleSize: 115,
+      byTimeframe: { '15m': -0.20, '1H': -0.02, '4H': 0.03, '1D': 0.61 },
+      outOfSample: 0.40,
+      sampleSize: 141,
       winRate: 0.504,
       confidence: 'reasonable',
     },
@@ -172,17 +204,17 @@ export const STRATEGIES: StrategyDef[] = [
       {
         key: 'fast',
         label: 'Rendimiento',
-        note: 'Canal de 20 velas, stop de 2 ATR y trailing de 8. Es la que más gana por señal (+0,75 R en diario) y es positiva en los tres instrumentos con histórico largo, pero el resultado está muy concentrado: BTC +0,24 R y ETH +0,31 R frente a SOL +1,80 R. Sin la racha de SOL la ventaja es real pero mucho más modesta.',
+        note: 'Canal de 20 velas, stop de 2 ATR y trailing de 8. Mide +0,67 R por señal en diario, pero el resultado está concentrado en la segunda mitad del histórico: en la primera es negativa (−0,09 R). Con cuatro años de datos de 4 h también funciona ahí (+0,33 R), y en ese timeframe sí aguanta las dos mitades, así que es la opción más sólida de las dos.',
       },
       {
         key: 'accurate',
         label: 'Acierto',
-        note: 'Canal de 55 filtrado por la EMA(200), stop ceñido y objetivo fijo de 1,5 R. Acierta el 53 % en vez del 35 %, a cambio de ganar menos por señal (+0,31 R). Gana menos dinero pero es mucho más llevadera de operar, y es la única que mejora fuera de muestra (+0,47 R) en lugar de empeorar.',
+        note: 'Canal de 55 filtrado por la EMA(200), stop ceñido y objetivo fijo de 1,5 R. Acierta el 49 % en vez del 34 %, a cambio de ganar menos por señal (+0,21 R). Gana menos dinero pero es mucho más llevadera de operar, y mejora fuera de muestra (+0,48 R) en lugar de empeorar. La contrapartida es que casi todo ese resultado está en la segunda mitad del histórico: en la primera se queda en +0,01 R.',
         backtest: {
-          byTimeframe: { '15m': -0.42, '1H': -0.20, '4H': -0.07, '1D': 0.31 },
-          outOfSample: 0.47,
-          sampleSize: 115,
-          winRate: 0.53,
+          byTimeframe: { '15m': -0.18, '1H': -0.02, '4H': 0.07, '1D': 0.21 },
+          outOfSample: 0.48,
+          sampleSize: 143,
+          winRate: 0.490,
           confidence: 'weak',
         },
       },
@@ -190,11 +222,58 @@ export const STRATEGIES: StrategyDef[] = [
     run: (candles, presetKey) =>
       analyseDonchian(candles, presetKey === 'accurate' ? DONCHIAN_ACCURATE : DONCHIAN_SETTINGS),
     backtest: {
-      byTimeframe: { '15m': -0.49, '1H': -0.25, '4H': -0.06, '1D': 0.75 },
-      outOfSample: 0.34,
-      sampleSize: 111,
-      winRate: 0.351,
+      byTimeframe: { '15m': -0.10, '1H': 0.08, '4H': 0.33, '1D': 0.67 },
+      outOfSample: 0.17,
+      sampleSize: 134,
+      winRate: 0.343,
       confidence: 'weak',
+    },
+  },
+  {
+    key: 'opening',
+    label: 'Apertura',
+    tagline: 'Rotura del rango de apertura de Wall Street',
+    description:
+      'Toma los primeros 30 minutos desde que abre la bolsa de Nueva York, y entra cuando el precio rompe ese rango por cualquiera de los dos lados, con el stop en el extremo contrario. Cierra la posición 24 horas después, gane o pierda. Solo opera los días en que esa media hora mueve más volumen de lo habitual. Acierta poco —algo más de un tercio de las veces— porque los perdedores valen exactamente 1 R y a los ganadores se les deja correr todo el día. A diferencia de las otras dos, no depende del régimen: gana más con tendencia (+0,32 R) pero sigue ganando en mercado lateral (+0,12 R), que es donde pasa el 80 % del tiempo.',
+    // Measured across regimes: +0.119 R ranging, +0.317 mixed, +0.460 trending.
+    // It prefers a trend but never needs one, so the view's regime warning would
+    // be misinformation on the four days out of five that sit in chop.
+    regime: 'any',
+    // 45 days of 15 m. /market/candles tops out at a fortnight, which is less
+    // than the volume filter needs just to warm up.
+    archiveBars: 4320,
+    presets: [
+      {
+        key: 'selectiva',
+        label: 'Selectiva',
+        note: 'Solo los días en que la primera media hora mueve más de 1,2 veces su volumen habitual. Es el filtro de "stocks in play" del estudio original trasladado a un mercado donde no hay valores que elegir, y descarta dos de cada tres días. Gana más por señal a cambio de operar mucho menos.',
+      },
+      {
+        key: 'todas',
+        label: 'Todas',
+        note: 'Sin filtro de volumen: opera cada apertura. Gana algo menos por señal pero da más del triple de operaciones, así que produce más R al año. Es la opción sensata si el problema es que la selectiva casi nunca dispara.',
+        backtest: {
+          byTimeframe: { '15m': 0.14, '1H': 0, '4H': 0, '1D': 0 },
+          nativeTimeframe: '15m',
+          outOfSample: 0.12,
+          sampleSize: 5815,
+          winRate: 0.282,
+          confidence: 'reasonable',
+        },
+      },
+    ],
+    run: (candles, presetKey) =>
+      analyseOpeningRange(
+        candles,
+        presetKey === 'todas' ? OPENING_RANGE_ALL : OPENING_RANGE_SETTINGS,
+      ),
+    backtest: {
+      byTimeframe: { '15m': 0.18, '1H': 0, '4H': 0, '1D': 0 },
+      nativeTimeframe: '15m',
+      outOfSample: 0.23,
+      sampleSize: 1832,
+      winRate: 0.368,
+      confidence: 'reasonable',
     },
   },
 ]

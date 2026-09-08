@@ -1,6 +1,7 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { TIMEFRAMES, useSignals, type Timeframe } from '../lib/signals'
 import {
+  appliesTo,
   MIN_TRADABLE_R,
   profileOf,
   STRATEGIES,
@@ -296,7 +297,13 @@ export function Signals() {
     return list.slice(0, 20)
   }, [r.signals, filterOutcome])
 
+  const selectedTab = useRef<HTMLButtonElement>(null)
+  useEffect(() => {
+    selectedTab.current?.scrollIntoView({ block: 'nearest', inline: 'nearest' })
+  }, [strategyKey])
+
   const regimeFits =
+    strategy.regime === 'any' ||
     (strategy.regime === 'trending' && s.regime !== 'ranging') ||
     (strategy.regime === 'ranging' && s.regime !== 'trending')
 
@@ -334,11 +341,14 @@ export function Signals() {
 
   return (
     <>
-      {/* Strategy selection tabs */}
+      {/* Strategy selection tabs. The strip scrolls below ~720 px and a third
+          strategy pushed the last tab off-screen, so the active one was
+          invisible and none of the visible tabs looked selected. */}
       <div className="tabs" role="tablist" aria-label="Estrategias e Indicadores">
         {STRATEGIES.map((item) => (
           <button
             key={item.key}
+            ref={strategyKey === item.key ? selectedTab : null}
             role="tab"
             type="button"
             className="tab"
@@ -372,11 +382,13 @@ export function Signals() {
           </div>
 
           {/* A timeframe where the measured expectancy is negative is not a
-              choice worth offering: it is disabled and says why. */}
+              choice worth offering: it is disabled and says why. A strategy that
+              cannot be computed there at all says something different. */}
           <div className="seg-control">
             {TIMEFRAMES.map((t) => {
               const r = profile.byTimeframe[t.key] ?? 0
               const verdict = timeframeVerdict(profile, t.key)
+              const applies = appliesTo(profile, t.key)
               return (
                 <button
                   key={t.key}
@@ -385,9 +397,11 @@ export function Signals() {
                   disabled={verdict === 'blocked'}
                   onClick={() => setTimeframe(t.key)}
                   title={
-                    verdict === 'blocked'
-                      ? `Bloqueada: ${ratio(r)} R por señal en el barrido. Las comisiones se comen la ventaja.`
-                      : `Esperanza medida: ${ratio(r)} R por señal`
+                    !applies
+                      ? 'No aplica: esta estrategia se construye con velas de 15 m.'
+                      : verdict === 'blocked'
+                        ? `Bloqueada: ${ratio(r)} R por señal en el barrido. Las comisiones se comen la ventaja.`
+                        : `Esperanza medida: ${ratio(r)} R por señal`
                   }
                 >
                   {t.label}
@@ -436,8 +450,10 @@ export function Signals() {
         </div>
       )}
 
-      {/* The 4 h reversal measured +0.15 R but was positive on only 6 of 10
-          instruments. Positive is not the same as established. */}
+      {/* Positive is not the same as established: between MIN_TRADABLE_R and
+          STRONG_R the edge is real but thin against its own costs. Pointing at
+          the daily as the safer option only makes sense for a strategy that has
+          one — the opening range does not. */}
       {!s.isLoading && s.usableBars >= MIN_BARS && currentVerdict === 'marginal' && (
         <div className="notice notice--warning">
           <IconAlert />
@@ -445,13 +461,24 @@ export function Signals() {
             <p className="notice-title">
               En {currentTf?.label} la ventaja es pequeña, no sólida
             </p>
-            <p className="notice-text">
-              El barrido dio {ratio(profile.byTimeframe[timeframe] ?? 0)} R por señal después de
-              costes, frente a {ratio(profile.byTimeframe['1D'] ?? 0)} R en diario. Cada ida y
-              vuelta cuesta aquí <strong>{ratio(r.avgFeeR)} R</strong>, así que un pequeño cambio en
-              tus comisiones se lleva por delante el margen. La temporalidad diaria es la que tiene
-              la evidencia detrás.
-            </p>
+            {profile.nativeTimeframe ? (
+              <p className="notice-text">
+                El barrido dio {ratio(profile.byTimeframe[timeframe] ?? 0)} R por señal después de
+                costes, y cada ida y vuelta cuesta aquí <strong>{ratio(r.avgFeeR)} R</strong>: una
+                parte grande del margen se va en comisiones. No hay una temporalidad más segura a la
+                que moverse porque esta estrategia solo existe aquí. Lo que la sostiene es que el
+                stop sea el rango de apertura entero y no un ATR ceñido, así que vigila el
+                deslizamiento: la entrada es siempre una orden stop que cruza el libro.
+              </p>
+            ) : (
+              <p className="notice-text">
+                El barrido dio {ratio(profile.byTimeframe[timeframe] ?? 0)} R por señal después de
+                costes, frente a {ratio(profile.byTimeframe['1D'] ?? 0)} R en diario. Cada ida y
+                vuelta cuesta aquí <strong>{ratio(r.avgFeeR)} R</strong>, así que un pequeño cambio
+                en tus comisiones se lleva por delante el margen. La temporalidad diaria es la que
+                tiene la evidencia detrás.
+              </p>
+            )}
           </div>
         </div>
       )}
@@ -557,23 +584,32 @@ export function Signals() {
             <ul className="bt-list">
               {TIMEFRAMES.map((t) => {
                 const v = profile.byTimeframe[t.key] ?? 0
+                const applies = appliesTo(profile, t.key)
                 const isBlocked = timeframeVerdict(profile, t.key) === 'blocked'
                 return (
                   <li key={t.key} className={isBlocked ? 'is-blocked' : undefined}>
                     <span className="bt-tf">
                       {t.label}
-                      {isBlocked && <span className="bt-lock"> bloqueada</span>}
+                      {isBlocked && (
+                        <span className="bt-lock"> {applies ? 'bloqueada' : 'no aplica'}</span>
+                      )}
                     </span>
-                    <span className={`bt-val ${v > 0 ? 'delta--up' : 'delta--down'}`}>
-                      {v >= 0 ? '+' : '−'}
-                      {ratio(Math.abs(v))} R
-                    </span>
+                    {applies ? (
+                      <span className={`bt-val ${v > 0 ? 'delta--up' : 'delta--down'}`}>
+                        {v >= 0 ? '+' : '−'}
+                        {ratio(Math.abs(v))} R
+                      </span>
+                    ) : (
+                      <span className="bt-val sub">—</span>
+                    )}
                   </li>
                 )
               })}
             </ul>
             <p className="sub">
-              Acierto medido en diario <strong>{share(profile.winRate, 1)}</strong> sobre{' '}
+              Acierto medido en{' '}
+              {TIMEFRAMES.find((t) => t.key === (profile.nativeTimeframe ?? '1D'))?.label ?? 'diario'}{' '}
+              <strong>{share(profile.winRate, 1)}</strong> sobre{' '}
               {plural(profile.sampleSize, 'señal resuelta', 'señales resueltas')}. Fuera de muestra,
               en la mitad del histórico que no se usó para ajustar:{' '}
               <strong>{ratio(profile.outOfSample)} R</strong>.
@@ -581,15 +617,28 @@ export function Signals() {
                 ? ' Cae respecto al periodo de ajuste o la muestra es corta: trátalo como una ventaja posible, no demostrada.'
                 : ' Se mantiene fuera de muestra, que es la mejor evidencia disponible en la app.'}
             </p>
-            {blocked.length > 0 && (
-              <p className="sub">
-                {blocked.length === 1 ? 'La temporalidad' : 'Las temporalidades'}{' '}
-                {blocked.map((t) => t.label).join(', ')} {blocked.length === 1 ? 'está' : 'están'}{' '}
-                bloqueada{blocked.length === 1 ? '' : 's'} porque la esperanza medida no llega a{' '}
-                {ratio(MIN_TRADABLE_R)} R. No es que la estrategia falle más: el stop está tan cerca
-                del precio que la comisión se lleva la ventaja entera.
-              </p>
-            )}
+            {/* Two reasons a timeframe is off, and they are not interchangeable:
+                the cost of a tight stop, or the strategy not existing there at
+                all. Saying "the commission eats it" about the second is a lie. */}
+            {blocked.length > 0 &&
+              (profile.nativeTimeframe ? (
+                <p className="sub">
+                  Esta estrategia solo existe en{' '}
+                  {TIMEFRAMES.find((t) => t.key === profile.nativeTimeframe)?.label ??
+                    profile.nativeTimeframe}
+                  : el rango de apertura son 30 minutos y hace falta esa resolución para
+                  construirlo. El resto de temporalidades no están bloqueadas por comisiones, es
+                  que no se pueden calcular.
+                </p>
+              ) : (
+                <p className="sub">
+                  {blocked.length === 1 ? 'La temporalidad' : 'Las temporalidades'}{' '}
+                  {blocked.map((t) => t.label).join(', ')} {blocked.length === 1 ? 'está' : 'están'}{' '}
+                  bloqueada{blocked.length === 1 ? '' : 's'} porque la esperanza medida no llega a{' '}
+                  {ratio(MIN_TRADABLE_R)} R. No es que la estrategia falle más: el stop está tan
+                  cerca del precio que la comisión se lleva la ventaja entera.
+                </p>
+              ))}
           </div>
         </Card>
       </div>

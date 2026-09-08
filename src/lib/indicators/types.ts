@@ -14,6 +14,8 @@ export interface Candle {
   low: number
   close: number
   confirmed: boolean
+  /** Volumen en moneda base. Solo lo usa la apertura, para su filtro. */
+  vol?: number
 }
 
 export type SignalSide = 'long' | 'short'

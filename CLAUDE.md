@@ -10,9 +10,19 @@ Read-only dashboard for an OKX trading account. Vite + React 19 + TypeScript, de
 npm run dev              # Vite dev server; also runs the api/ function (see below)
 npm run build            # tsc -b && vite build — the typecheck gate
 npm run lint             # oxlint
+npm run candles          # populate ./.candles (needs npm run dev up)
+npm run audit            # every strategy vs. the profile it claims — exits non-zero on drift
+npm run orb              # the evidence behind the opening range, which the audit does not check
 ./scripts/push-env.sh    # push .env.local vars to the linked Vercel project
 vercel --prod            # deploy (manual; a git push does NOT deploy)
 ```
+
+The three script commands carry `--experimental-strip-types`. `scripts/_hook.mjs`
+resolves the extensionless imports so the scripts run the app's own TypeScript,
+but Node needs the flag to execute `.ts` at all before 23.6 — running them as a
+bare `node --import ...` fails with `ERR_UNKNOWN_FILE_EXTENSION`. This is what
+`erasableSyntaxOnly` in tsconfig is for, so never add an enum or a constructor
+parameter property to anything a script imports.
 
 There is no test suite. `npm run build` is the only automated check — always run it before calling work done.
 
@@ -66,6 +76,8 @@ Three of them exist because the obvious endpoint is silent on the thing that mat
 
 `src/lib/queries.ts` is one hook per endpoint over TanStack Query. Two cadences: `LIVE` (30 s) for balances, positions, prices; `SLOW` (5 min) for history. **Each tick is a serverless invocation** — raise these before adding polling. Intervals pause while the tab is backgrounded.
 
+`useCandleArchive` is the third cadence: never. It pulls deep history from `history-candles` for the strategies that declare `archiveBars`, with a 6 h `staleTime` and no refetch, because old candles are immutable and the fresh tail already arrives via `useCandleHistory`. **OKX allows 20 requests per 2 seconds on that endpoint**, and 44 pages chained off each other's last timestamp both serialises them and trips it — the view came back `Too Many Requests` and rendered nothing. Candles sit on a fixed grid, so every page's cursor is arithmetic: they go out in parallel batches of 10, each batch padded to 1.1 s. Do not remove the padding.
+
 Two hooks compose the raw queries into what views actually need:
 
 - `src/lib/portfolio.ts` — merges the trading and funding wallets, prices everything in USD, and exposes `netWorth` (all wallets, from `asset-valuation`) alongside `totalUsd` (the priced holdings). Both Resumen and Cartera read `netWorth` so they can never disagree.
@@ -79,15 +91,30 @@ Two hooks compose the raw queries into what views actually need:
 **Every number in a `backtest` profile must be measured, never written by hand.** The UI presents them as fact next to real money. An audit caught three invented profiles at once, including one claiming +0.58 R for a setup that actually measures +0.01 R.
 
 ```bash
-node scripts/fetch-candles.mjs                              # populate ./.candles (needs npm run dev up)
-node --import ./scripts/_hook.mjs scripts/audit-strategies.mjs
+npm run candles   # populate ./.candles (needs npm run dev up)
+npm run audit
 ```
+
+`scripts/fetch-candles.mjs` pages `/market/history-candles`, not
+`/market/candles`. The latter serves only the last ~1440 bars whatever you ask
+it, which on 15 m is a fortnight — the reason this file used to say intraday
+history was too short to test anything. The former reaches 2021, so 15 m is now
+~164 000 bars per instrument and an intraday strategy is measurable. It also
+stores `vol`, which the opening range needs for its volume filter.
 
 The audit reads the declared figures **from `registry.ts` itself** rather than from a copy, so it cannot go stale, and it exits non-zero on any drift. It also fails when a timeframe is selectable but measures below `MIN_TRADABLE_R` — that check is the guard rail, not a formality. Run it after touching any strategy parameter.
 
-**Nothing ships in `registry.ts` that loses money.** The Señales view offers two strategies and three presets, and every one of them is measured positive on the timeframe it is offered on. Four things were removed for failing that bar: `pullback` (+0.01 R), `reversal/original` (−0.15 R), `donchian/slow` (+0.87 in-sample, −0.14 out) and `donchian/momentum` (+0.74 in, +0.06 out). Explaining why a losing strategy loses is not worth the screen space — if one comes back, it must clear costs out of sample first.
+It prints two lists, and they are two different kinds of wrong. **DESVIACIONES** fails the run: a declared figure that does not match the data is a lie the UI tells next to real money. **EDGE FLOJO EN UNA MITAD** does not: it flags a timeframe that is positive overall but under `MIN_TRADABLE_R` on one half of the history, which is a judgement about what is worth offering rather than a factual error. Two things sit on that list today — `donchian/fast` on the daily (in −0.09 / out +0.17) and `donchian/accurate` on the daily (in +0.01 / out +0.48). Both were fine on the shallower data the old figures came from; deepening the cache is what exposed them.
 
-**Timeframe gating is derived, not listed.** `timeframeVerdict()` and `tradableTimeframes()` read `byTimeframe`, so the set of selectable timeframes updates automatically when a profile is re-measured and can never contradict it. Below `MIN_TRADABLE_R` (0.1) the button is disabled rather than hidden, so the reason stays visible. Switching strategy or preset snaps the timeframe to the best tradable one, because the breakout is daily-only while the reversal also allows 4 h.
+`nativeTimeframe` on a profile says which timeframe `outOfSample`, `sampleSize` and `winRate` are measured on. It defaults to the daily, and only the opening range sets it — measuring a 15 m strategy on daily bars yields zero signals and would report a correct profile as broken.
+
+**Nothing ships in `registry.ts` that loses money.** The Señales view offers three strategies and five presets, and every one of them is measured positive on the timeframe it is offered on. Four things were removed for failing that bar: `pullback` (+0.01 R), `reversal/original` (−0.15 R), `donchian/slow` (+0.87 in-sample, −0.14 out) and `donchian/momentum` (+0.74 in, +0.06 out). Explaining why a losing strategy loses is not worth the screen space — if one comes back, it must clear costs out of sample first.
+
+The reversal's 4 h was offered at a declared +0.15 R and measures **+0.03 R** on the deeper cache, so it is now blocked. Nothing had to be edited to block it: the verdict is derived from the number, so correcting the number was the whole fix.
+
+**Timeframe gating is derived, not listed.** `timeframeVerdict()` and `tradableTimeframes()` read `byTimeframe`, so the set of selectable timeframes updates automatically when a profile is re-measured and can never contradict it. Below `MIN_TRADABLE_R` (0.1) the button is disabled rather than hidden, so the reason stays visible. Switching strategy or preset snaps the timeframe to the best tradable one. `TIMEFRAMES` in `signals.ts` used to carry a hand-written `verdict` per timeframe; it was dead and it was wrong, and a list that is free to contradict the measurement is exactly what this design exists to avoid.
+
+**`appliesTo()` is a different question from `timeframeVerdict()`.** Blocked means the measured edge does not clear costs; not applicable means the strategy cannot be computed there at all. The opening range is built from 30-minute ranges, so on 1 h and above it is the second. Telling the user "the commission eats it" about a timeframe where nothing was ever measured is a lie, so the button tooltip, the backtest list and the explanatory paragraph all branch on it.
 
 Strategies are registered in `registry.ts` and the Señales view is driven entirely off that list — adding one means adding an entry there, not touching the view. Each implements the `StrategyResult` contract in `types.ts`, which prices everything in **R** so a fixed-target setup and a trailing one stay comparable.
 
@@ -111,15 +138,29 @@ Kept here because re-deriving it costs an hour and the conclusions shape the UI:
 - **For trend systems the exit IS the strategy.** Donchian 20 scores −0.19 R with a 3.5 ATR trail and **+0.91 R** with an 8 ATR trail. The win rate barely moves; the whole difference is how far winners are allowed to run. Never tighten a trail without re-running the sweep.
 - **The stop is the other half of it, and tighter won a re-sweep.** Donchian 20 at 2 ATR beats 3 ATR on every axis: +0.75 R against +0.50 R aggregate, better on each of BTC (0.24 vs 0.13), ETH (0.31 vs 0.16) and SOL (1.80 vs 1.25), and better out of sample (0.34 vs 0.19). Tightening the *initial* stop cuts losers without touching how far winners run — the opposite of tightening the trail.
 - **In-sample peaks are traps; check both epochs.** The 55-bar channel scored **+1.43 R** in-sample, the best number the sweep has ever produced, and **−0.02 R** out of sample. Anything that only looks good on one half gets deleted.
-- **Both strategies only clear costs on the daily.** Reversal +0.54 R (n=115, out-of-sample +0.57), Donchian +0.75 R (n=111, out-of-sample +0.34); everything shorter is flat or negative. The Donchian result is the weaker of the two despite the bigger headline, because it is concentrated in SOL's run — the UI says so in the preset note.
+- **The trend and reversal systems only clear costs on the daily** — the opening range is the exception and has its own section below. Reversal +0.61 R (n=141, out-of-sample +0.40), Donchian +0.67 R (n=134, out-of-sample +0.17); everything shorter is flat or negative except the Donchian on 4 h, which measures +0.33 R once there are four years of 4 h bars instead of a few months, and holds both halves (+0.43 / +0.25). The Donchian daily result is the weaker of the two despite the bigger headline: it is negative on the first half of the history.
 - **A flat neighbourhood is the real robustness test.** The reversal was re-swept over 108 nearby configurations: every one that produced enough signals scored +0.45 to +0.59 R on the daily. The edge does not depend on having landed on exact parameters, which is what distinguishes it from a curve fit.
 - Kaufman's efficiency ratio (`registry.ts`) reads the current regime. It has sat at 0.08–0.13 across all timeframes — firmly ranging, which is why mean reversion works and trend following struggles. The view surfaces it so the two tabs can be read as complements.
 - **Do not automate the regime switch.** Routing signals to the breakout above an efficiency ratio of 0.25–0.35 and to the reversal below scored +0.55 R against +0.54 R for the reversal alone. Because the ratio almost never clears the threshold, the trend branch barely fires and the "combination" is just the reversal with extra machinery. Measured, not assumed — the note is on `efficiencyRatio()`.
 - **A high hit rate is geometry, not signal.** With RANDOM entries and a wide stop against a near target (6 ATR stop, 0.4 R target), the hit rate is **73 %** with an expectancy of −0.006 R. Any candidate claiming 78–88 % must be checked against a random-entry control with the *same* stop/target geometry before it means anything. Five separate strategy families were explored (Bollinger+RSI, VWAP bands, deep pullback, multi-timeframe, target sweep); every "80 %+ hit rate" they produced fell inside the random band. None survived.
 - **The measured frontier**, on the only genuinely long history (daily BTC/ETH/SOL, 4 years, 571 configurations that stayed positive in both epochs): 50–55 % hit rate buys +0.31 R; 60–65 % buys +0.117 R; 70–75 % buys +0.081 R. There is no corner with "70 % and +0.25 R". Hit rate is bought at market price and gets expensive above 60 %.
-- **Beware the history the cache actually holds.** 15 m covers ~15 days and 1 H ~60 days; only daily BTC/ETH/SOL reaches four years. Aggregates over "10 instruments × 4 timeframes" are far less independent than the n suggests, and ETH/SOL appear twice (spot and perp). Weight daily results accordingly.
+- **Beware the history the cache actually holds.** This used to say 15 m covered ~15 days and 1 H ~60 days, and that was a property of the fetcher, not of OKX — `/market/candles` caps at ~1440 bars. On `history-candles` the cache now holds ~164 000 bars of 15 m per major instrument, back to 2022. The dated X-PERP contracts still have only months, aggregates over "10 instruments × 4 timeframes" are still far less independent than the n suggests, and ETH/SOL still appear twice (spot and perp).
 - **The pullback (Connors RSI2) hits 62–68 % and still makes nothing.** Measured expectancy is +0.01 R on the daily over n=176, and 25 combinations of stop, exit and target were swept without one reaching profitability. It was shipped first with a warning, then deleted: a strategy that wins two thirds of the time and loses money is exactly the trap this project keeps re-discovering, and leaving it selectable meant the app still offered it.
 - An RSI gate and a minimum reward-to-risk filter both *hurt*. A trend filter is structurally incompatible: the signal fires far from the moving average by construction, so "only trade with the trend" leaves almost no signals.
+
+#### The opening range, and why a 24/7 market has an opening
+
+This is the one intraday strategy that clears costs, and the reasoning is not the same as for the others. `npm run orb` re-derives all of it.
+
+- **Crypto borrows Wall Street's open.** At 09:30 in New York, BTC's 15 m volume runs at **1.48× the daily average** and the first half hour's range is 0.42 % against 0.25 % at UTC midnight. Sweeping all 24 hours of the New York clock, 09:30 is the **only clearly positive hour**: 08:30 measures −0.03 R and 10:30 −0.04 R. London's open is worse than useless — **0 of 216 configurations positive** — and UTC midnight, the hour the daily candle uses, has *below-average* volume.
+- **The anchor must follow daylight saving.** New York opens at 13:30 UTC in summer and 14:30 in winter. A fixed UTC anchor sends half the year to the wrong hour and smears the effect away.
+- **A wide stop is what makes 15 m survivable.** Cost in R is `feeRate / (stop distance / price)`. An ATR stop on 15 m sits ~0.25 % away, so a 0.1 % round trip costs 0.4 R. The opening range's stop is the *whole range*, ~0.55 % at the bell, which halves it. Measured +0.18 R at 0.1 %, +0.08 R at 0.2 %, dead at 0.3 %. **Every entry is a taker stop order**, so slippage is the risk that matters, not the signal.
+- **It beats its own geometry.** Random entries with the same stop distance, same window and same days measure −0.135 R, so the signal is worth **+0.29 R** over the shape of the trade. This is the control that killed five other candidate families.
+- **It does not need a trend.** Measured by Kaufman efficiency at entry: +0.119 R ranging, +0.317 R mixed, +0.460 R trending (n=13, noise). It prefers a trend and never needs one, which is why its `regime` is `any` — a value that means "measured across regimes", not "unknown".
+- **Both sides pay.** Longs +0.21 R, shorts +0.10 R, a 50/50 split. Without that, the whole thing would just be beta on a market that went up.
+- **The concentration to watch is 2026.** Positive every year (2022 +0.10, 2023 +0.10, 2024 +0.05, 2025 +0.08) but 2026 measures +0.56 and carries over half the total profit from 16 % of the trades. Excluding it, expectancy is ~+0.08 R — below `MIN_TRADABLE_R`.
+- **164 of 648 swept configurations passed both epochs, which is exactly the 25 % chance rate.** The count proves nothing. What does is the structure: NY 161/216 positive against London 0/216. Chance does not sort itself by anchor.
+- The volume filter is the paper's "stocks in play" screen with no stocks to screen. It lifts +0.14 R to +0.18 R and cuts two days in three, which is why both are offered as presets rather than one being obviously right.
 
 Routing is hash-based in `src/lib/router.ts` (`useSyncExternalStore`, no router dependency). Adding a view means touching `ROUTES`, the `NAV` map in `Layout.tsx`, and the switch in `App.tsx`.
 
@@ -130,6 +171,8 @@ Routing is hash-based in `src/lib/router.ts` (`useSyncExternalStore`, no router 
 This exists because horizontal scroll inside a card is where mobile data goes to die: at 390 px the tables were hiding 220–650 px of themselves, and the hidden part is always the right-hand columns — PnL, weight, result.
 
 Two things that only show up at that width: a `.card-head` with an action control squeezes its title into a one-word-per-line column unless it stacks, and a flex `<td>` will not shrink below its content, so an unbreakable instrument id like `ZEC-USD_UM_XPERP-310530` overflows the card until it gets `min-width: 0` plus `overflow-wrap`.
+
+A horizontally scrolling strip needs the selected item scrolled into view. Two strategy tabs just fit at 390 px; the third pushed the active tab off-screen, so the user saw two unselected tabs and no indication of which strategy was running. `Signals.tsx` puts a ref on the selected tab and calls `scrollIntoView({ block: 'nearest', inline: 'nearest' })` — `block: 'nearest'` matters, or selecting a tab yanks the page vertically.
 
 Chrome's window will not go below ~500 px on macOS, so `resize_page` cannot reach phone widths — use device emulation (`390x844x2,mobile,touch`) or the media query never fires.
 
@@ -165,6 +208,7 @@ Everything user-facing goes through `src/lib/format.ts` — `usd`, `qty`, `price
 - **Colour follows the entity, never its rank.** `src/lib/colors.ts` assigns a stable hue per currency and persists it. Only the top 7 get a hue; everything else is grey, matching the "Otros" segment — so the chart and the tables always agree.
 - Statistics under `MIN_SAMPLE` (5) trades render faded and hide their win rate. Two trades at 100 % is noise and the UI must not invite reading it as signal.
 - **A `<span>` used as a bar must be given `display: block`.** An inline box ignores `width` and `height` outright, so the bar silently never draws while the DOM and the computed style both look correct — `getComputedStyle().width` happily reports `100%`. This has now bitten `.rail-fill`, `.rail-track`, `.avg-track` and `.avg-bar`. To sweep for it: find elements with an inline `width` style whose computed `display` is `inline`.
+- **An overlay with holes must break its path, not bridge it.** `linePath` in `PriceChart.tsx` keyed its `M` off `i === 0`, so any overlay whose first visible bar was `NaN` produced a path starting with `L` — invalid SVG the browser rejects outright, silently, with the console as the only clue. It also joined straight across gaps, drawing a level that was never there. Both were latent until the opening range, whose overlays exist only inside each day's window. The band underneath is a `<path>` of closed subpaths for the same reason; it was a single `<polygon>`, which spanned the holes.
 - Charts draw at measured pixel size (`useSize`) rather than a scaled viewBox, which would stretch strokes along one axis.
 - Green/red is reserved for PnL polarity and always ships with a sign, an arrow, or a printed value — never colour alone.
 - Bar segments are separated by a 2px surface gap, never a border.

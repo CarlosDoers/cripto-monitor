@@ -7,7 +7,10 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "oxlint",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "candles": "node scripts/fetch-candles.mjs",
+    "audit": "node --experimental-strip-types --import ./scripts/_hook.mjs scripts/audit-strategies.mjs",
+    "orb": "node --experimental-strip-types --import ./scripts/_hook.mjs scripts/orb-research.mjs"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.101.4",

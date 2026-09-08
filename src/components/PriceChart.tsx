@@ -81,29 +81,55 @@ export function PriceChart({
   const x = (i: number) => PAD.left + i * slot + slot / 2
   const y = (v: number) => PAD.top + plotH - ((v - min) / (max - min)) * plotH
 
-  const linePath = (values: number[]) =>
-    view
-      .map((_, i) => {
-        const v = values[start + i]
-        return Number.isFinite(v) ? `${i === 0 ? 'M' : 'L'}${x(i).toFixed(1)},${y(v).toFixed(1)}` : ''
-      })
-      .filter(Boolean)
-      .join(' ')
+  /**
+   * A gap in an overlay has to break the path, not be bridged.
+   *
+   * Two things went wrong when it did not. Keying the `M` off `i === 0` emits a
+   * path starting with `L` whenever the first visible bar is NaN — invalid SVG,
+   * which the browser rejects outright. And joining across a hole draws a level
+   * that was never there: the opening range exists only inside its own window,
+   * so bridging two days invents a line between them.
+   */
+  const linePath = (values: number[]) => {
+    const parts: string[] = []
+    let drawing = false
+    view.forEach((_, i) => {
+      const v = values[start + i]
+      if (!Number.isFinite(v)) {
+        drawing = false
+        return
+      }
+      parts.push(`${drawing ? 'L' : 'M'}${x(i).toFixed(1)},${y(v).toFixed(1)}`)
+      drawing = true
+    })
+    return parts.join(' ')
+  }
 
-  // A band between two overlays, drawn where both exist.
+  // A band between two overlays, drawn where both exist. One closed subpath per
+  // contiguous run, for the same reason.
   const bandFor = (topKey: string, bottomValues: number[]) => {
     const top = result.overlays.find((o) => o.key === topKey)
     if (!top) return ''
-    const upperPts: string[] = []
-    const lowerPts: string[] = []
+    const subpaths: string[] = []
+    let upper: string[] = []
+    let lower: string[] = []
+    const flush = () => {
+      if (upper.length) subpaths.push(`M${upper.join(' L')} L${lower.join(' L')} Z`)
+      upper = []
+      lower = []
+    }
     view.forEach((_, i) => {
       const u = top.values[start + i]
       const l = bottomValues[start + i]
-      if (!Number.isFinite(u) || !Number.isFinite(l)) return
-      upperPts.push(`${x(i).toFixed(1)},${y(u).toFixed(1)}`)
-      lowerPts.unshift(`${x(i).toFixed(1)},${y(l).toFixed(1)}`)
+      if (!Number.isFinite(u) || !Number.isFinite(l)) {
+        flush()
+        return
+      }
+      upper.push(`${x(i).toFixed(1)},${y(u).toFixed(1)}`)
+      lower.unshift(`${x(i).toFixed(1)},${y(l).toFixed(1)}`)
     })
-    return upperPts.length ? `${upperPts.join(' ')} ${lowerPts.join(' ')}` : ''
+    flush()
+    return subpaths.join(' ')
   }
 
   const visibleSignals = result.signals.filter((s) => s.index >= start)
@@ -160,7 +186,7 @@ export function PriceChart({
 
         {result.overlays.map((o) =>
           o.fillTo ? (
-            <polygon key={`fill-${o.key}`} points={bandFor(o.fillTo, o.values)} fill="var(--accent)" opacity={0.05} />
+            <path key={`fill-${o.key}`} d={bandFor(o.fillTo, o.values)} fill="var(--accent)" opacity={0.05} />
           ) : null,
         )}
 

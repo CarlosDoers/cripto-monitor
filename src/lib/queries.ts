@@ -187,6 +187,85 @@ export function useCandleHistory(instId: string, bar: string, pages = 4) {
   })
 }
 
+/** Historical candles never change, so they are fetched once and kept. */
+const ARCHIVE = 6 * 60 * 60 * 1000
+
+/**
+ * Bar duration, used to compute every archive page's cursor up front. OKX caps
+ * `history-candles` at 20 requests per 2 seconds, and chaining 40-odd pages off
+ * each other's last timestamp both serialises them and trips that limit — the
+ * view came back "Too Many Requests". Candles sit on a fixed grid, so the
+ * cursors are arithmetic and the pages can go out in paced parallel batches.
+ */
+const BAR_MS: Record<string, number> = {
+  '1m': 60_000,
+  '3m': 180_000,
+  '5m': 300_000,
+  '15m': 900_000,
+  '30m': 1_800_000,
+  '1H': 3_600_000,
+  '2H': 7_200_000,
+  '4H': 14_400_000,
+  '6H': 21_600_000,
+  '12H': 43_200_000,
+  '1D': 86_400_000,
+}
+
+/** Ten requests, then wait out the rest of the second. Keeps under 20 per 2 s. */
+const ARCHIVE_BATCH = 10
+const ARCHIVE_BATCH_MS = 1_100
+
+/**
+ * Deep history, from `/market/history-candles`.
+ *
+ * `/market/candles` stops at roughly 1440 bars whatever you ask it, which on
+ * 15 m is two weeks — less than the opening range needs just to warm up its
+ * volume filter. This endpoint pages backwards without that ceiling.
+ *
+ * It costs one invocation per page, so it is only enabled for the strategies
+ * that ask for it (`archiveBars`), and it never refetches: old candles are
+ * immutable and the fresh tail already arrives via `useCandleHistory`.
+ */
+export function useCandleArchive(instId: string, bar: string, bars: number) {
+  const pages = Math.ceil(bars / 100)
+  const step = BAR_MS[bar] ?? 0
+  return useQuery<Candle[], ApiError>({
+    queryKey: ['candle-archive', instId, bar, pages],
+    queryFn: async () => {
+      const now = Date.now()
+      const cursors = Array.from({ length: pages }, (_, page) => String(now - page * 100 * step))
+      const all: Candle[] = []
+
+      for (let i = 0; i < cursors.length; i += ARCHIVE_BATCH) {
+        const started = Date.now()
+        const responses = await Promise.all(
+          cursors.slice(i, i + ARCHIVE_BATCH).map((after) =>
+            okx<Candle>('/api/v5/market/history-candles', { instId, bar, limit: 100, after }),
+          ),
+        )
+        for (const rows of responses) all.push(...rows)
+        const rest = ARCHIVE_BATCH_MS - (Date.now() - started)
+        if (i + ARCHIVE_BATCH < cursors.length && rest > 0) {
+          await new Promise((done) => setTimeout(done, rest))
+        }
+      }
+
+      // Pages computed from a grid overlap wherever a candle is missing.
+      const seen = new Set<string>()
+      return all
+        .filter((c) => !seen.has(c[0]) && seen.add(c[0]))
+        .sort((a, b) => Number(a[0]) - Number(b[0]))
+    },
+    enabled: Boolean(instId) && pages > 0 && step > 0,
+    staleTime: ARCHIVE,
+    gcTime: ARCHIVE,
+    refetchInterval: false,
+    // A rate limit is transient and blanks the whole view if it reaches it.
+    retry: 3,
+    retryDelay: (attempt) => 1_000 * 2 ** attempt,
+  })
+}
+
 /** Open interest across a product type — half of any liquidity picture. */
 export function useOpenInterest(instType: string) {
   return useOkx<OpenInterest>(['open-interest', instType], '/api/v5/public/open-interest', {

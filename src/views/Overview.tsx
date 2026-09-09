@@ -1,7 +1,7 @@
 import { usePortfolio } from '../lib/portfolio'
 import { usePerformance } from '../lib/performance'
-import { useBalance, usePositions, useValuation } from '../lib/queries'
-import { num, pct, qty, ratio, share, signedUsd, usd, usdCompact } from '../lib/format'
+import { useBalance, useDcaBots, useGridBots, usePositions, useValuation } from '../lib/queries'
+import { num, pct, plural, qty, ratio, share, signedUsd, usd, usdCompact } from '../lib/format'
 import { AllocationBar } from '../components/AllocationBar'
 import { HoldingsTable } from '../components/HoldingsTable'
 import { PnlCurve } from '../components/PnlCurve'
@@ -32,6 +32,8 @@ export function Overview() {
   const positions = usePositions()
   const valuation = useValuation()
   const perf = usePerformance('30d')
+  const dcaBots = useDcaBots()
+  const gridBots = useGridBots()
 
   const account = balance.data?.[0]
   const valDetails = valuation.data?.[0]?.details
@@ -52,6 +54,24 @@ export function Overview() {
   // 500 US$ account and a 50.000 US$ one.
   const locked =
     portfolio.netWorth > 0 && portfolio.freeMargin / portfolio.netWorth < 0.01
+
+  /**
+   * What the running bots are worth right now.
+   *
+   * This is a *slice* of the patrimonio, never an addition to it. Measured
+   * against this account: the bots' committed capital plus their PnL came to
+   * 1 175,55 US$ and `frozenBal − isoEq` came to 1 175,47 — the same money,
+   * eight cents apart. It already sits inside `totalEq`, and inside the
+   * `asset-valuation` figure the hero stat prints, so adding it would count it
+   * twice.
+   */
+  const botValue =
+    (dcaBots.data ?? []).reduce((sum, b) => sum + num(b.investmentAmt) + num(b.totalPnl), 0) +
+    (gridBots.data ?? []).reduce((sum, g) => sum + num(g.investment) + num(g.totalPnl), 0)
+  const botPnl =
+    (dcaBots.data ?? []).reduce((sum, b) => sum + num(b.totalPnl), 0) +
+    (gridBots.data ?? []).reduce((sum, g) => sum + num(g.totalPnl), 0)
+  const botCount = (dcaBots.data ?? []).length + (gridBots.data ?? []).length
 
   const tradingBal = num(valDetails?.trading)
   const fundingBal = num(valDetails?.funding)
@@ -208,6 +228,24 @@ export function Overview() {
                   <>
                     {' '}
                     <span className="sub">todo comprometido</span>
+                  </>
+                )}
+              </strong>
+            </li>
+            <li>
+              <span>En bots</span>
+              <strong>
+                {dcaBots.isLoading ? (
+                  '—'
+                ) : botCount === 0 ? (
+                  'ninguno'
+                ) : (
+                  <>
+                    {usd(botValue)}{' '}
+                    <span className="sub">
+                      {plural(botCount, 'bot', 'bots')} ·{' '}
+                      <DeltaValue value={botPnl}>{signedUsd(botPnl)}</DeltaValue>
+                    </span>
                   </>
                 )}
               </strong>

@@ -175,7 +175,10 @@ export interface Fill {
   execType: string
   fee: string
   feeCcy: string
+  /** Always "0" on spot — see computeSpot() in src/lib/spot.ts. */
   fillPnl: string
+  /** Pagination cursor for fills-history; `after` takes the oldest one. */
+  billId: string
   ts: string
 }
 

@@ -144,6 +144,40 @@ export function useFills(instType = 'SPOT') {
   )
 }
 
+/**
+ * Every spot fill, paginated.
+ *
+ * `useFills` stops at one page, which is fine for a recent-activity list and
+ * useless for a cost basis: FIFO needs the buy that a sell is matched against,
+ * and a truncated history turns "bought at 140" into "no purchase price known".
+ * Pages with `after=<oldest billId>` like `useClosedPositions`, and reports
+ * `truncated` so the view can say the oldest trades fell outside.
+ */
+export function useSpotFills() {
+  return useQuery<{ fills: Fill[]; truncated: boolean }, ApiError>({
+    queryKey: ['spot-fills'],
+    queryFn: async () => {
+      const fills: Fill[] = []
+      let after: string | undefined
+
+      for (let page = 0; page < MAX_PAGES; page++) {
+        const batch = await okx<Fill>('/api/v5/trade/fills-history', {
+          instType: 'SPOT',
+          limit: PAGE_SIZE,
+          after,
+        })
+        fills.push(...batch)
+        if (batch.length < PAGE_SIZE) return { fills, truncated: false }
+        after = batch[batch.length - 1].billId
+      }
+
+      return { fills, truncated: true }
+    },
+    refetchInterval: SLOW,
+    staleTime: SLOW,
+  })
+}
+
 export function useBills() {
   return useOkx<Bill>(
     ['bills'],

@@ -19,6 +19,7 @@ import {
   usd,
 } from '../lib/format'
 import { PnlCurve } from '../components/PnlCurve'
+import { SpotResults } from '../components/SpotResults'
 import { TradingCalendar } from '../components/TradingCalendar'
 import { HourlyBars } from '../components/HourlyBars'
 import { AvgCompare, DivergingBars, WinLossBar } from '../components/PerfCharts'
@@ -459,10 +460,13 @@ export function Performance() {
         {p.isLoading ? <TableSkeleton rows={8} cols={8} /> : <TradesTable trades={p.trades} />}
       </Card>
 
+      <SpotResults />
+
       <p className="footnote">
-        Las estadísticas cubren posiciones cerradas de derivados, con el PnL neto que reporta OKX
-        (ya descontadas comisiones y financiación). Las operaciones de spot no aparecen: OKX no
-        calcula un resultado por operación en spot, y estimarlo daría cifras poco fiables.
+        Todo lo anterior a «Resultado en Spot» cubre posiciones cerradas de derivados, con el PnL
+        neto que reporta OKX (ya descontadas comisiones y financiación). El bloque de spot se
+        calcula aparte y por reconstrucción, porque OKX no da resultado por operación en spot: sus
+        cifras no entran en la tasa de aciertos ni en el factor de beneficio de arriba.
         {p.truncated && (
           <>
             {' '}

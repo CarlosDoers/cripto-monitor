@@ -11,32 +11,7 @@ import {
   TableWrap,
 } from '../components/ui'
 import { IconAlert } from '../components/icons'
-import type { DcaBot, DcaPosition } from '../lib/types'
-
-/**
- * A DCA bot is a martingale. It opens with `initOrdAmt` and then averages down
- * with up to `maxSafetyOrds` further orders, each `volMult` times the last, as
- * price moves `pxSteps` against it.
- *
- * That makes the interesting number not the PnL but **how many safety orders it
- * has already spent**. A bot showing a small loss with eight of nine orders gone
- * is in far more trouble than one showing a bigger loss with none used, because
- * the first has nothing left to average with and the next move down goes
- * straight to the liquidation price.
- */
-function fuelUsed(bot: DcaBot, position: DcaPosition | undefined): number {
-  const max = num(bot.maxSafetyOrds)
-  if (!max) return 0
-  return Math.min(1, num(position?.fillSafetyOrds) / max)
-}
-
-/** How far price has to fall to liquidate, as a fraction of the average entry. */
-function liquidationRoom(position: DcaPosition | undefined): number | null {
-  const liq = num(position?.liqPx)
-  const avg = num(position?.avgPx)
-  if (!liq || !avg) return null
-  return Math.abs(avg - liq) / avg
-}
+import { fuelUsed, liquidationRoom, NEARLY_DRY } from '../lib/bots'
 
 export function Bots() {
   const dca = useDcaBots()
@@ -56,7 +31,7 @@ export function Bots() {
     (worst, b) => Math.max(worst, fuelUsed(b, positions.data?.[b.algoId])),
     0,
   )
-  const nearlyDry = bots.filter((b) => fuelUsed(b, positions.data?.[b.algoId]) >= 0.75)
+  const nearlyDry = bots.filter((b) => fuelUsed(b, positions.data?.[b.algoId]) >= NEARLY_DRY)
 
   const error = dca.error ?? grid.error
   if (error) {
@@ -195,7 +170,7 @@ export function Bots() {
                                 // No floor here: a bot that has fired nothing
                                 // must read as an empty gauge, not a sliver.
                                 width: `${used * 100}%`,
-                                background: used >= 0.75 ? 'var(--critical)' : 'var(--accent)',
+                                background: used >= NEARLY_DRY ? 'var(--critical)' : 'var(--accent)',
                               }}
                             />
                           </span>

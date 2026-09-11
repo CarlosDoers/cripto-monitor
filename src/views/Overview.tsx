@@ -1,11 +1,20 @@
 import { usePortfolio } from '../lib/portfolio'
 import { usePerformance } from '../lib/performance'
-import { useBalance, useDcaBots, useGridBots, usePositions, useValuation } from '../lib/queries'
-import { num, pct, plural, qty, ratio, share, signedUsd, usd, usdCompact } from '../lib/format'
+import {
+  useAlgoOrders,
+  useBalance,
+  useDcaBots,
+  useDcaPositions,
+  useGridBots,
+  usePositions,
+  useValuation,
+} from '../lib/queries'
+import { num, pct, plural, price, qty, ratio, share, signedUsd, usd, usdCompact } from '../lib/format'
 import { AllocationBar } from '../components/AllocationBar'
 import { HoldingsTable } from '../components/HoldingsTable'
 import { PnlCurve } from '../components/PnlCurve'
-import { isShort } from '../lib/guards'
+import { guardsFor, hasStop, isShort } from '../lib/guards'
+import { fuelUsed, liquidationRoom, NEARLY_DRY } from '../lib/bots'
 import { IconAlert, IconShield } from '../components/icons'
 import {
   Badge,
@@ -34,6 +43,9 @@ export function Overview() {
   const perf = usePerformance('30d')
   const dcaBots = useDcaBots()
   const gridBots = useGridBots()
+  const algos = useAlgoOrders()
+  const dcaList = dcaBots.data ?? []
+  const botPositions = useDcaPositions(dcaList)
 
   const account = balance.data?.[0]
   const valDetails = valuation.data?.[0]?.details
@@ -73,6 +85,62 @@ export function Overview() {
     (gridBots.data ?? []).reduce((sum, g) => sum + num(g.totalPnl), 0)
   const botCount = (dcaBots.data ?? []).length + (gridBots.data ?? []).length
 
+  /**
+   * The Resumen is the view that gets opened, so it has to carry every warning
+   * the app raises anywhere — not just its own. Before this, a position with no
+   * stop was flagged only in Posiciones and a bot running out of safety orders
+   * only in Bots, while this page said "Saludable". Measured the day it changed:
+   * the ETH bot sat at 7 of 9 safety orders with liquidation 14 % below its
+   * average, showing a green +75 US$, and nothing on this screen said so.
+   *
+   * Each warning uses the exact rule of the view it comes from (`hasStop`,
+   * `NEARLY_DRY`), so the two can never disagree about what counts.
+   */
+  // Only claimed once the stops have loaded, so a slow request never invents an alarm.
+  const unprotected = algos.data
+    ? openPositions.filter((p) => !hasStop(guardsFor(p, algos.data)))
+    : []
+  const botRisk = dcaList
+    .map((bot) => {
+      const position = botPositions.data?.[bot.algoId]
+      return { bot, position, used: fuelUsed(bot, position), room: liquidationRoom(position) }
+    })
+    .sort((a, b) => b.used - a.used)
+  const tightest = botRisk[0]
+  const dryBots = botRisk.filter((r) => r.used >= NEARLY_DRY)
+  const alarm = atRisk || unprotected.length > 0 || dryBots.length > 0
+  const attention: { key: string; text: string; href: string; link: string }[] = [
+    ...(atRisk
+      ? [{ key: 'margin', href: '#/posiciones', link: 'Ver posiciones', text: `Margen ajustado (${share(marginRatio, 0)}): se acerca al nivel de liquidación.` }]
+      : []),
+    ...(unprotected.length
+      ? [{ key: 'stop', href: '#/posiciones', link: 'Ver posiciones', text: `${plural(unprotected.length, 'posición sin stop', 'posiciones sin stop')} (${unprotected.map((p) => p.instId).join(', ')}): su pérdida solo tiene como límite la liquidación.` }]
+      : []),
+    ...dryBots.map((r) => ({
+      key: `bot-${r.bot.algoId}`,
+      href: '#/bots',
+      link: 'Ver bots',
+      text: `${r.bot.instId} ha gastado ${num(r.position?.fillSafetyOrds)} de ${r.bot.maxSafetyOrds} órdenes de seguridad${r.room !== null ? ` y la liquidación está a un ${share(r.room, 0)} del precio medio` : ''}: si el precio sigue en contra ya no le queda con qué promediar.`,
+    })),
+    ...(locked && openPositions.length > 0
+      ? [{ key: 'free', href: '#/posiciones', link: 'Ver posiciones', text: `Margen libre ${usd(portfolio.freeMargin)}: no queda con qué reforzar una posición que se tuerza.` }]
+      : []),
+  ]
+
+  /**
+   * Dust stays out of the two portfolio blocks. Before, five of the eight rows in
+   * "Activos Principales" and four named slices of the legend were coins worth
+   * one to four dollars printing "0,0 %", on an account of five figures. Relative
+   * rather than a dollar floor, like `locked`, and the omission is stated with
+   * its total so nothing disappears silently — Cartera still lists everything.
+   */
+  const DUST = 0.005
+  const mainHoldings = portfolio.holdings.filter((h) => h.weight >= DUST)
+  const dust = portfolio.holdings.filter((h) => h.weight < DUST && h.usd > 0)
+  const dustUsd = dust.reduce((sum, h) => sum + h.usd, 0)
+  const dustNote =
+    dust.length > 0 ? ` · ${plural(dust.length, 'saldo', 'saldos')} bajo el 0,5 % fuera (${usd(dustUsd)})` : ''
+
   const tradingBal = num(valDetails?.trading)
   const fundingBal = num(valDetails?.funding)
   const earnBal = num(valDetails?.earn)
@@ -88,17 +156,19 @@ export function Overview() {
 
   return (
     <>
-      {/* Alert banner if margin risk is high */}
-      {atRisk && (
-        <div className="notice notice--error">
+      {attention.length > 0 && (
+        <div className={`notice ${alarm ? 'notice--error' : 'notice--warning'}`}>
           <IconAlert />
           <div className="notice-body">
-            <p className="notice-title">Margen ajustado: {share(marginRatio, 0)}</p>
-            <p className="notice-text">
-              Con {openPositions.length}{' '}
-              {openPositions.length === 1 ? 'posición abierta' : 'posiciones abiertas'}, el margen
-              se acerca al nivel de liquidación.
-            </p>
+            <p className="notice-title">Requiere atención</p>
+            {attention.map((a) => (
+              <p key={a.key} className="notice-text">
+                {a.text}{' '}
+                <a className="card-link" href={a.href}>
+                  {a.link} →
+                </a>
+              </p>
+            ))}
           </div>
         </div>
       )}
@@ -171,16 +241,29 @@ export function Overview() {
             </span>
           }
         />
+        {/* Took the slot the 30-day costs had. The strip holds six and no more,
+            so a new figure up here means one moves out — costs still live in
+            Rendimiento as "Costes totales". */}
         <Stat
-          label="Costes (30d)"
-          loading={perf.isLoading}
-          value={<DeltaValue value={perf.totalCosts}>{signedUsd(perf.totalCosts)}</DeltaValue>}
+          label="En Bots"
+          loading={dcaBots.isLoading || gridBots.isLoading}
+          value={botCount > 0 ? usd(botValue) : '—'}
+          badge={
+            botCount > 0 ? (
+              <Badge variant="live" pulse>
+                {plural(botCount, 'activo', 'activos')}
+              </Badge>
+            ) : undefined
+          }
           foot={
-            <span>
-              {perf.grossPnl > 0
-                ? `${share(Math.abs(perf.totalCosts) / perf.grossPnl, 1)} del resultado bruto`
-                : 'comisiones y financiación'}
-            </span>
+            botCount > 0 ? (
+              <span>
+                <DeltaValue value={botPnl}>{signedUsd(botPnl)}</DeltaValue> · ya dentro del
+                patrimonio
+              </span>
+            ) : (
+              <span>Ningún bot en marcha</span>
+            )
           }
         />
       </div>
@@ -201,9 +284,15 @@ export function Overview() {
         <Card
           title="Salud de la Cuenta"
           action={
-            <Badge variant={atRisk ? 'warn' : marginRatio > 0 ? 'buy' : 'neutral'}>
+            <Badge variant={alarm ? 'warn' : marginRatio > 0 || botCount > 0 ? 'buy' : 'neutral'}>
               <IconShield />
-              {atRisk ? 'Riesgo Alto' : marginRatio > 0 ? 'Saludable' : 'Sin Riesgo'}
+              {atRisk
+                ? 'Riesgo Alto'
+                : alarm
+                  ? 'Revisar'
+                  : marginRatio > 0 || botCount > 0
+                    ? 'Saludable'
+                    : 'Sin Riesgo'}
             </Badge>
           }
         >
@@ -233,30 +322,32 @@ export function Overview() {
               </strong>
             </li>
             <li>
-              <span>En bots</span>
-              <strong>
-                {dcaBots.isLoading ? (
-                  '—'
-                ) : botCount === 0 ? (
-                  'ninguno'
-                ) : (
-                  <>
-                    {usd(botValue)}{' '}
-                    <span className="sub">
-                      {plural(botCount, 'bot', 'bots')} ·{' '}
-                      <DeltaValue value={botPnl}>{signedUsd(botPnl)}</DeltaValue>
-                    </span>
-                  </>
-                )}
-              </strong>
-            </li>
-            <li>
               <span>Posiciones abiertas</span>
               <strong>{openPositions.length}</strong>
             </li>
             <li>
               <span>Exposición nocional</span>
               <strong>{notional > 0 ? usdCompact(notional) : '—'}</strong>
+            </li>
+            <li>
+              <span>Bot más apurado</span>
+              <strong>
+                {tightest ? (
+                  <>
+                    <span className={tightest.used >= NEARLY_DRY ? 'delta--down' : undefined}>
+                      {num(tightest.position?.fillSafetyOrds)}/{tightest.bot.maxSafetyOrds}
+                    </span>{' '}
+                    <span className="sub">
+                      {tightest.bot.instId.split('-')[0]} órdenes de seguridad
+                      {tightest.room !== null && ` · liq. a ${share(tightest.room, 0)}`}
+                    </span>
+                  </>
+                ) : dcaBots.isLoading ? (
+                  '—'
+                ) : (
+                  'ninguno'
+                )}
+              </strong>
             </li>
             <li>
               <span>Esperanza por operación</span>
@@ -268,19 +359,19 @@ export function Overview() {
 
       <Card
           title="Distribución de la Cartera"
-          subtitle="Desglose porcentual por activo en USD"
+          subtitle={`Desglose porcentual por activo en USD${dustNote}`}
           dimmed={portfolio.isFetching && !portfolio.isLoading}
         >
           {portfolio.isLoading ? (
             <Skeleton height={32} />
           ) : (
-            <AllocationBar holdings={portfolio.holdings} />
+            <AllocationBar holdings={mainHoldings} />
           )}
         </Card>
 
       <Card
         title="Activos Principales"
-        subtitle="Top 8 por capitalización en la cuenta"
+        subtitle={`Top 8 por valor en la cuenta${dustNote}`}
         flush
         dimmed={portfolio.isFetching && !portfolio.isLoading}
         action={
@@ -292,7 +383,7 @@ export function Overview() {
         {portfolio.isLoading ? (
           <TableSkeleton rows={5} cols={6} />
         ) : (
-          <HoldingsTable holdings={portfolio.holdings} limit={8} showSparkline />
+          <HoldingsTable holdings={mainHoldings} limit={8} showSparkline />
         )}
       </Card>
 
@@ -340,9 +431,12 @@ export function Overview() {
                         </Badge>
                       </td>
                       <td className="num">{qty(num(p.pos))}</td>
-                      <td className="num">{num(p.avgPx) > 0 ? usd(num(p.avgPx)) : '—'}</td>
-                      <td className="num">{num(p.markPx) > 0 ? usd(num(p.markPx)) : '—'}</td>
-                      <td className="num">{liq > 0 ? usd(liq) : '—'}</td>
+                      {/* Contract prices, not money: price() keeps the precision
+                          the instrument trades at and never converts to euros,
+                          so they match Posiciones to the digit. */}
+                      <td className="num">{num(p.avgPx) > 0 ? price(num(p.avgPx)) : '—'}</td>
+                      <td className="num">{num(p.markPx) > 0 ? price(num(p.markPx)) : '—'}</td>
+                      <td className="num">{liq > 0 ? price(liq) : '—'}</td>
                       <td className="num">
                         <DeltaValue value={upl}>
                           {signedUsd(upl)}

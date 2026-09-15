@@ -2,11 +2,20 @@ import { useState } from 'react'
 import { useSize } from '../lib/useSize'
 import { dateTime, price as fmtPrice, plural } from '../lib/format'
 import type { Candle, StrategyResult } from '../lib/indicators/types'
+import type { Level } from '../lib/indicators/levels'
 
 const PAD = { top: 12, right: 66, bottom: 22, left: 10 }
 
 /** Past this many candles the bodies are thinner than a pixel. */
 const MAX_VISIBLE = 400
+
+/**
+ * Below this width a level label has nowhere to go: on a phone the candles
+ * start at the left edge, so the text prints over the price action instead of
+ * beside it. The lines stay — the axis on the right already says what price
+ * they sit at — and only the labels drop out.
+ */
+const LABEL_MIN_WIDTH = 520
 
 /** Rounded tick values bracketing the range. */
 function ticks(min: number, max: number, count = 5): number[] {
@@ -29,11 +38,19 @@ function ticks(min: number, max: number, count = 5): number[] {
 export function PriceChart({
   candles,
   result,
+  levels,
   visible = 160,
   height = 340,
 }: {
   candles: Candle[]
   result: StrategyResult
+  /**
+   * Where price has turned before. Description, not prediction: measured
+   * walk-forward against a random line at the same distance, no level technique
+   * beat it (see `npm run levels:sweep`). Drawn muted and dotted so it can never
+   * be mistaken for a signal the strategy produced.
+   */
+  levels?: Level[]
   visible?: number
   height?: number
 }) {
@@ -132,6 +149,26 @@ export function PriceChart({
     return subpaths.join(' ')
   }
 
+  // Deliberately filtered rather than folded into min/max: a level far from the
+  // current price would stretch the scale and flatten every candle on screen.
+  const visibleLevels = (levels ?? []).filter((l) => l.price > min && l.price < max)
+
+  /**
+   * Ticks can overlap; labels cannot — the same rule `PositionRisk` needed.
+   * Two levels a few ATRs apart land within a line height of each other and
+   * their prices print interleaved into one unreadable string. Every line is
+   * still drawn; only the label yields, and the strongest level keeps it.
+   */
+  const LABEL_GAP = 13
+  const labelled = new Set<number>()
+  const placedLabels: number[] = []
+  for (const l of [...visibleLevels].sort((a, b) => b.strength - a.strength)) {
+    const ly = y(l.price)
+    if (placedLabels.some((p) => Math.abs(p - ly) < LABEL_GAP)) continue
+    placedLabels.push(ly)
+    labelled.add(l.price)
+  }
+
   const visibleSignals = result.signals.filter((s) => s.index >= start)
   const hovered = hover !== null ? view[hover] : null
 
@@ -181,6 +218,32 @@ export function PriceChart({
             >
               {fmtPrice(v)}
             </text>
+          </g>
+        ))}
+
+        {visibleLevels.map((l) => (
+          <g key={`nivel-${l.price}`}>
+            <line
+              x1={PAD.left}
+              x2={w - PAD.right}
+              y1={y(l.price)}
+              y2={y(l.price)}
+              stroke="var(--ink-muted)"
+              strokeWidth={1}
+              strokeDasharray="1 4"
+              opacity={0.55}
+            />
+            {labelled.has(l.price) && w >= LABEL_MIN_WIDTH && (
+              <text
+                x={PAD.left + 4}
+                y={y(l.price) - 4}
+                fontSize={10}
+                fill="var(--ink-muted)"
+                style={{ fontVariantNumeric: 'tabular-nums' }}
+              >
+                {fmtPrice(l.price)} · {plural(l.touches, 'toque', 'toques')}
+              </text>
+            )}
           </g>
         ))}
 
@@ -345,6 +408,14 @@ export function PriceChart({
             {o.label}
           </li>
         ))}
+        {visibleLevels.length > 0 && (
+          <li className="legend-item">
+            <svg width="24" height="8" aria-hidden="true">
+              <line x1="0" y1="4" x2="24" y2="4" stroke="var(--ink-muted)" strokeDasharray="1 4" />
+            </svg>
+            Niveles · contexto, no señal
+          </li>
+        )}
         <li className="legend-item">
           <span style={{ color: 'var(--good)' }}>▲</span> Long
           <span style={{ color: 'var(--critical)', marginLeft: 8 }}>▼</span> Short

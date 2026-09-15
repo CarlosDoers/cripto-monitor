@@ -11,6 +11,8 @@
     "candles": "node scripts/fetch-candles.mjs",
     "audit": "node --experimental-strip-types --import ./scripts/_hook.mjs scripts/audit-strategies.mjs",
     "orb": "node --experimental-strip-types --import ./scripts/_hook.mjs scripts/orb-research.mjs",
+    "levels": "node --experimental-strip-types --import ./scripts/_hook.mjs scripts/levels-research.mjs",
+    "levels:sweep": "node --experimental-strip-types --import ./scripts/_hook.mjs scripts/levels-sweep.mjs",
     "try": "node --experimental-strip-types --import ./scripts/_hook.mjs scripts/try-strategy.mjs"
   },
   "dependencies": {

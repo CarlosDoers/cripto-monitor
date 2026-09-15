@@ -19,6 +19,7 @@ import {
 import { feeMix } from '../lib/fees'
 import { dateTime, num, plural, price, ratio, share, timeAgo } from '../lib/format'
 import { PriceChart } from '../components/PriceChart'
+import { findLevels } from '../lib/indicators/levels'
 import { IconAlert, IconActivity } from '../components/icons'
 import {
   Badge,
@@ -284,6 +285,20 @@ export function Signals() {
   const selected = instId || options[0] || 'BTC-USDT'
 
   const s = useSignals(selected, timeframe, strategyKey, preset.key)
+  const [showLevels, setShowLevels] = useState(true)
+
+  /**
+   * Levels come from the candles already on screen, so the timeframe is
+   * respected without a per-timeframe table: the merge tolerance is measured in
+   * ATRs, which are bigger on the daily than on 15 m by construction.
+   *
+   * Context only. Measured walk-forward against a random line at the same
+   * distance, no level technique beat it — `npm run levels:sweep`.
+   */
+  const levels = useMemo(
+    () => (showLevels ? findLevels(s.candles) : []),
+    [s.candles, showLevels],
+  )
   const r = s.result
   const currentTf = TIMEFRAMES.find((t) => t.key === timeframe)
   const lastPrice = s.candles.at(-1)?.close ?? 0
@@ -496,14 +511,30 @@ export function Signals() {
         subtitle={`${strategy.tagline} · Preset: ${preset.label}`}
         dimmed={dimmed}
         action={
-          <span className={`regime regime--${s.regime}`}>
+          <>
+            <div className="seg-control">
+              <button
+                type="button"
+                aria-pressed={showLevels}
+                onClick={() => setShowLevels((v) => !v)}
+                title="Dónde se ha girado el precio antes. No predice reacciones: medido contra una línea al azar, no la supera."
+              >
+                Niveles
+              </button>
+            </div>
+            <span className={`regime regime--${s.regime}`}>
             <span className="regime-dot" />
             {s.regime === 'trending' ? 'Mercado en Tendencia' : s.regime === 'mixed' ? 'Régimen Mixto' : 'Mercado Lateral'}
-            <span className="sub"> · Eficiencia {ratio(s.efficiency, 2)}</span>
-          </span>
+              <span className="sub"> · Eficiencia {ratio(s.efficiency, 2)}</span>
+            </span>
+          </>
         }
       >
-        {s.isLoading ? <Skeleton height={360} /> : <PriceChart candles={s.candles} result={r} height={360} />}
+        {s.isLoading ? (
+          <Skeleton height={360} />
+        ) : (
+          <PriceChart candles={s.candles} result={r} levels={levels} height={360} />
+        )}
       </Card>
 
       {!s.isLoading && s.usableBars >= MIN_BARS && !regimeFits && (

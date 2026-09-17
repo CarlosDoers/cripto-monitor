@@ -1,9 +1,24 @@
 import { useMemo, useState } from 'react'
-import { useBills, useFills, useTransfers } from '../lib/queries'
+import { useBills, useFills, useInstruments } from '../lib/queries'
+import { useMovements, type MovementStatus } from '../lib/transfers'
+import type { Fill, Instrument } from '../lib/types'
 import { colorOf } from '../lib/colors'
-import { priceOf, usePortfolio, useSpotPrices } from '../lib/portfolio'
+import { usePortfolio } from '../lib/portfolio'
 import { usePerformance } from '../lib/performance'
-import { dateTime, num, plural, price, qty, share, signedUsd, usd } from '../lib/format'
+import {
+  dateTime,
+  num,
+  plural,
+  price,
+  qty,
+  share,
+  shownAmount,
+  signedUsd,
+  signedUsdOrEur,
+  usd,
+  usdOrEur,
+} from '../lib/format'
+import { convert } from '../lib/currency'
 import {
   Badge,
   Card,
@@ -42,8 +57,36 @@ const BILL_TYPE: Record<string, string> = {
   '22': 'Devolución de préstamo',
 }
 
+/**
+ * A fill's notional in dollars.
+ *
+ * On spot and margin `fillSz` is in coins, so price × size is the notional. On
+ * perpetuals and futures it is in *contracts*, and each contract is `ctVal` of
+ * the underlying — 0.01 ZEC on ZEC-USD_UM_XPERP. Price × size without it printed
+ * a 5 748 US$ fill as 574 846 US$, and a hundred of them summed to 13.9 M against
+ * 168 k real. Inverse contracts are already denominated in dollars, so there the
+ * notional is just contracts × ctVal.
+ *
+ * Undefined while the contract size is unknown: a dash is honest, a figure off
+ * by two orders of magnitude is not.
+ */
+function notionalOf(fill: Fill, inst: Instrument | undefined): number | undefined {
+  const px = num(fill.fillPx)
+  const sz = num(fill.fillSz)
+  if (fill.instType === 'SPOT' || fill.instType === 'MARGIN') return px * sz
+  const ctVal = num(inst?.ctVal)
+  if (!(ctVal > 0)) return undefined
+  return inst!.ctType === 'inverse' ? sz * ctVal : px * sz * ctVal
+}
+
 function Fills({ instType }: { instType: string }) {
   const { data, isLoading, isFetching, error } = useFills(instType)
+  const instruments = useInstruments(instType)
+  const contracts = useMemo(
+    () => new Map((instruments.data ?? []).map((i) => [i.instId, i])),
+    [instruments.data],
+  )
+  const derivative = instType === 'SWAP' || instType === 'FUTURES'
   const [search, setSearch] = useState('')
 
   const filtered = useMemo(() => {
@@ -110,8 +153,16 @@ function Fills({ instType }: { instType: string }) {
                     </Badge>
                   </td>
                   <td className="num">{price(fillPx)}</td>
-                  <td className="num">{qty(fillSz)}</td>
-                  <td className="num">{usd(fillPx * fillSz)}</td>
+                  <td className="num">
+                    {qty(fillSz)}
+                    {derivative && <span className="sub"> contr.</span>}
+                  </td>
+                  <td className="num">
+                    {(() => {
+                      const notional = notionalOf(f, contracts.get(f.instId))
+                      return notional !== undefined ? usd(notional) : '—'
+                    })()}
+                  </td>
                   <td className="num">
                     {fee !== 0 ? (
                       <>
@@ -234,31 +285,39 @@ function Movements() {
   )
 }
 
+const STATUS: Record<MovementStatus, string> = {
+  done: 'Completado',
+  pending: 'En curso',
+  failed: 'Fallido',
+}
+
 /**
  * Money in and out of the account.
  *
  * Without this the portfolio total answers the wrong question: a balance that
  * grew because of a deposit reads exactly like one that grew from trading, and
  * nothing else in the app separates them.
+ *
+ * The value column is the table twin of the figures above it: summing the
+ * completed rows gives the Depósitos stat, so a total can always be traced back
+ * to the movements it came from.
  */
 function Transfers() {
-  const { data, isLoading, isFetching, error } = useTransfers()
-
-  const rows = useMemo(() => {
-    const deposits = (data?.deposits ?? []).map((t) => ({ ...t, kind: 'in' as const }))
-    const withdrawals = (data?.withdrawals ?? []).map((t) => ({ ...t, kind: 'out' as const }))
-    return [...deposits, ...withdrawals].sort((a, b) => Number(b.ts) - Number(a.ts))
-  }, [data])
+  const { movements, incomplete, isLoading, isFetching, error } = useMovements()
 
   if (error) {
     return <ErrorNotice title="No se pudieron cargar los movimientos externos" message={error.message} />
   }
-  if (isLoading) return <TableSkeleton rows={5} cols={4} />
-  if (rows.length === 0) {
+  if (isLoading) return <TableSkeleton rows={5} cols={6} />
+  if (movements.length === 0) {
     return (
       <EmptyState
         title="Sin depósitos ni retiradas"
-        hint="Todo el saldo de la cuenta procede de lo que has operado en ella."
+        hint={
+          incomplete
+            ? `No se pudo leer todo el historial (${incomplete}).`
+            : 'Todo el saldo de la cuenta procede de lo que has operado en ella.'
+        }
       />
     )
   }
@@ -271,29 +330,38 @@ function Transfers() {
             <th>Fecha</th>
             <th>Movimiento</th>
             <th className="num">Cantidad</th>
-            <th>Red</th>
+            <th className="num">Valor al llegar</th>
+            <th>Vía</th>
             <th>Estado</th>
           </tr>
         </thead>
         <tbody>
-          {rows.map((t, i) => (
-            <tr key={`${t.ts}-${t.ccy}-${i}`}>
-              <td className="sub">{dateTime(t.ts)}</td>
-              <td>
-                <Badge variant={t.kind === 'in' ? 'buy' : 'sell'}>
-                  {t.kind === 'in' ? 'Depósito' : 'Retirada'}
-                </Badge>
-              </td>
-              <td className="num">
-                <span className={t.kind === 'in' ? 'delta--up' : 'delta--down'}>
-                  {t.kind === 'in' ? '+' : '−'}
-                  {qty(num(t.amt))} <span className="ccy">{t.ccy}</span>
-                </span>
-              </td>
-              <td className="sub">{t.chain || '—'}</td>
-              <td className="sub">{t.state === '2' || t.state === '3' ? 'Completado' : 'En curso'}</td>
-            </tr>
-          ))}
+          {movements.map((m) => {
+            const failed = m.status === 'failed'
+            return (
+              <tr key={m.id}>
+                <td className="sub">{dateTime(m.ts)}</td>
+                <td>
+                  <Badge variant={failed ? 'neutral' : m.kind === 'in' ? 'buy' : 'sell'}>
+                    {m.kind === 'in' ? 'Depósito' : 'Retirada'}
+                  </Badge>
+                </td>
+                <td className="num">
+                  <span className={failed ? 'muted' : m.kind === 'in' ? 'delta--up' : 'delta--down'}>
+                    {m.kind === 'in' ? '+' : '−'}
+                    {qty(m.amount)} <span className="ccy">{m.ccy}</span>
+                  </span>
+                </td>
+                <td className="num">
+                  {m.value === undefined || m.valueEur === undefined || failed
+                    ? '—'
+                    : usdOrEur(m.value, m.valueEur)}
+                </td>
+                <td className="sub">{m.via}</td>
+                <td className="sub">{STATUS[m.status]}</td>
+              </tr>
+            )
+          })}
         </tbody>
       </table>
     </TableWrap>
@@ -308,43 +376,29 @@ function Transfers() {
  * only knows about trades, and `asset-valuation` only knows the total. Putting
  * the two side by side is the whole point of this view.
  *
- * Deposits arrive in whatever currency was sent, so they are priced at today's
- * spot rate — that answers "how much did I put in, in today's money", not what
- * it was worth on the day, which OKX does not report.
+ * Deposits are valued on the day they arrived (see `transfers.ts`), which is
+ * what makes **Resultado total** mean something: net worth minus what was put
+ * in is everything the account has made since — trading, bots, and the price
+ * of the coins it holds. Generado operando is only the first of those, which is
+ * why the two are shown apart and never added.
  */
 function Provenance() {
-  const transfers = useTransfers()
-  const prices = useSpotPrices()
+  const flows = useMovements()
   const perf = usePerformance('all')
   const portfolio = usePortfolio()
 
-  const { deposited, withdrawn, priced } = useMemo(() => {
-    let deposited = 0
-    let withdrawn = 0
-    let priced = 0
-    let total = 0
-    for (const [list, sign] of [
-      [transfers.data?.deposits ?? [], 1],
-      [transfers.data?.withdrawals ?? [], -1],
-    ] as const) {
-      for (const t of list) {
-        total++
-        const px = priceOf(t.ccy, prices)
-        if (px === undefined) continue
-        priced++
-        const value = num(t.amt) * px
-        if (sign > 0) deposited += value
-        else withdrawn += value
-      }
-    }
-    return { deposited, withdrawn, priced, total }
-  }, [transfers.data, prices])
-
-  const net = deposited - withdrawn
-  const loading = transfers.isLoading || perf.isLoading || portfolio.isLoading
+  const net = flows.deposited - flows.withdrawn
+  const netEur = flows.depositedEur - flows.withdrawnEur
+  // Net worth is a balance, so today's rate is the right one for it; what was
+  // put in keeps the rate of the day it arrived. In euros the result therefore
+  // includes what the dollar did in between, which is what a euro holder made.
+  const result = portfolio.netWorth - net
+  const resultEur = convert(portfolio.netWorth) - netEur
+  const loading = flows.isLoading || perf.isLoading || portfolio.isLoading
+  const partial = flows.unpriced > 0 || flows.incomplete !== null
 
   // Nothing to separate when no money has moved in or out.
-  if (!loading && priced === 0) return null
+  if (!loading && !flows.error && flows.deposits + flows.withdrawals === 0) return null
 
   return (
     <div className="kpi-row">
@@ -352,33 +406,44 @@ function Provenance() {
         label="Depósitos"
         hero
         loading={loading}
-        value={usd(deposited)}
+        value={usdOrEur(flows.deposited, flows.depositedEur)}
+        badge={partial ? <Badge variant="neutral">parcial</Badge> : undefined}
         foot={
-          <span>
-            {plural(transfers.data?.deposits.length ?? 0, 'movimiento', 'movimientos')} · a precio de
-            hoy
+          <span title={flows.incomplete ?? undefined}>
+            {plural(flows.deposits, 'movimiento', 'movimientos')} ·{' '}
+            {flows.unpriced > 0
+              ? `${flows.unpriced} sin precio`
+              : flows.incomplete
+                ? 'historial incompleto'
+                : 'valor al llegar'}
           </span>
         }
       />
       <Stat
         label="Retiradas"
         loading={loading}
-        value={usd(withdrawn)}
-        foot={
-          <span>{plural(transfers.data?.withdrawals.length ?? 0, 'movimiento', 'movimientos')}</span>
-        }
+        value={usdOrEur(flows.withdrawn, flows.withdrawnEur)}
+        foot={<span>{plural(flows.withdrawals, 'movimiento', 'movimientos')}</span>}
       />
       <Stat
         label="Aportación Neta"
         loading={loading}
-        value={<DeltaValue value={net}>{signedUsd(net)}</DeltaValue>}
+        value={<DeltaValue value={shownAmount(net, netEur)}>{signedUsdOrEur(net, netEur)}</DeltaValue>}
         foot={
           <span>
             {portfolio.netWorth > 0
-              ? `${share(Math.abs(net) / portfolio.netWorth, 1)} del patrimonio actual`
+              ? `${share(Math.abs(shownAmount(net, netEur)) / convert(portfolio.netWorth), 1)} del patrimonio actual`
               : 'dinero que metiste tú'}
           </span>
         }
+      />
+      <Stat
+        label="Resultado Total"
+        loading={loading}
+        value={
+          <DeltaValue value={shownAmount(result, resultEur)}>{signedUsdOrEur(result, resultEur)}</DeltaValue>
+        }
+        foot={<span>patrimonio menos lo aportado</span>}
       />
       <Stat
         label="Generado Operando"
@@ -396,8 +461,18 @@ function Provenance() {
   )
 }
 
+/**
+ * These lists are one page of 100, not the three months OKX keeps. On futures
+ * that is a few days of this account's activity, so a subtitle promising the
+ * whole window described a table missing most of it.
+ */
+const PAGE = 100
+
 export function History() {
   const [instType, setInstType] = useState<string>('SPOT')
+  // Same query keys as the tables below, so these read the cache, not the API.
+  const fills = useFills(instType)
+  const bills = useBills()
 
   return (
     <>
@@ -405,7 +480,11 @@ export function History() {
 
       <Card
         title="Ejecuciones y Fills"
-        subtitle="Operaciones completadas en los últimos 3 meses"
+        subtitle={
+          (fills.data?.length ?? 0) >= PAGE
+            ? `Las ${PAGE} más recientes · OKX conserva 3 meses`
+            : 'Operaciones completadas en los últimos 3 meses'
+        }
         flush
         action={
           <div className="seg-control">
@@ -433,7 +512,13 @@ export function History() {
         <Transfers />
       </Card>
 
-      <Card title="Movimientos de la Cuenta" subtitle="Transferencias, comisiones, tasas de funding e intereses" flush>
+      <Card
+        title="Movimientos de la Cuenta"
+        subtitle={`Transferencias, comisiones, tasas de funding e intereses${
+          (bills.data?.length ?? 0) >= PAGE ? ` · los ${PAGE} más recientes` : ''
+        }`}
+        flush
+      >
         <Movements />
       </Card>
     </>

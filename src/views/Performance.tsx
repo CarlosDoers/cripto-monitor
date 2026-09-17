@@ -363,12 +363,17 @@ export function Performance() {
                 label="Duración media"
                 value={p.avgDuration ? duration(p.avgDuration) : '—'}
               />
+              {/* Signed, not Math.abs: totalCosts is fees plus funding, and a
+                  short collecting funding can take it positive. Printed as an
+                  absolute value in red, that income read as a cost. */}
               <Metric
                 label="Costes totales"
-                value={<span className="delta--down">{usd(Math.abs(p.totalCosts))}</span>}
+                value={<DeltaValue value={p.totalCosts}>{signedUsd(p.totalCosts)}</DeltaValue>}
                 hint={
                   p.grossPnl !== 0
-                    ? `${share(Math.abs(p.totalCosts) / Math.abs(p.grossPnl), 0)} del bruto`
+                    ? `${share(Math.abs(p.totalCosts) / Math.abs(p.grossPnl), 0)} del bruto${
+                        p.totalCosts > 0 ? ' · la financiación cobrada supera a las comisiones' : ''
+                      }`
                     : undefined
                 }
               />

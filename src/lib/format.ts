@@ -91,6 +91,27 @@ export function signedUsd(value: number): string {
   return `${sign}${usd(Math.abs(value))}`
 }
 
+/**
+ * A money amount that carries its own euro figure, fixed on the day the money
+ * moved. `usd()` converts at today's rate, which is right for a balance and
+ * wrong for a deposit: 500 EUR sent in July printed as 505,63 € in September,
+ * because the dollar had moved since.
+ */
+export function usdOrEur(usdValue: number, eurValue: number): string {
+  return activeCurrency() === 'EUR' ? formatter('EUR', 2).format(eurValue) : usd(usdValue)
+}
+
+/** The figure `usdOrEur()` would print, for deciding its sign and colour. */
+export function shownAmount(usdValue: number, eurValue: number): number {
+  return activeCurrency() === 'EUR' ? eurValue : usdValue
+}
+
+export function signedUsdOrEur(usdValue: number, eurValue: number): string {
+  const shown = shownAmount(usdValue, eurValue)
+  const sign = shown > 0 ? '+' : shown < 0 ? '−' : ''
+  return `${sign}${usdOrEur(Math.abs(usdValue), Math.abs(eurValue))}`
+}
+
 export function dateTime(ms: string | number): string {
   const value = typeof ms === 'string' ? Number(ms) : ms
   if (!Number.isFinite(value) || value === 0) return '—'

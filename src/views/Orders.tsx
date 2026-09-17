@@ -36,12 +36,36 @@ function Side({ side }: { side: string }) {
   )
 }
 
+/**
+ * What the size and the executed amount are counted in, and how far the order
+ * got. They are not always the same unit: a spot market buy placed by amount
+ * has `sz` in the quote currency and `accFillSz` in the base, so 500 EUR buying
+ * 575,7 USDC printed as "500 · 575,7" — an order apparently overfilled by 15 %.
+ * Derivative sizes are contracts, never coins.
+ */
+function sizesOf(o: Order) {
+  const size = num(o.sz)
+  const filled = num(o.accFillSz)
+  if (o.instType !== 'SPOT' && o.instType !== 'MARGIN') {
+    return { size, filled, sizeUnit: 'contr.', filledUnit: 'contr.', progress: size > 0 ? filled / size : 0 }
+  }
+  const [base, quote] = o.instId.split('-')
+  const byQuote = o.tgtCcy === 'quote_ccy'
+  return {
+    size,
+    filled,
+    sizeUnit: byQuote ? quote : base,
+    filledUnit: base,
+    progress: size > 0 ? (byQuote ? filled * num(o.avgPx) : filled) / size : 0,
+  }
+}
+
 function OrderRows({ orders, showPnl }: { orders: Order[]; showPnl?: boolean }) {
   return (
     <tbody>
       {orders.map((o) => {
-        const filled = num(o.accFillSz)
-        const size = num(o.sz)
+        const { size, filled, sizeUnit, filledUnit, progress } = sizesOf(o)
+        const percent = Math.round(progress * 100)
         const pnl = num(o.pnl)
         const stateKey = o.state
         const isFilled = stateKey === 'filled'
@@ -59,11 +83,17 @@ function OrderRows({ orders, showPnl }: { orders: Order[]; showPnl?: boolean }) 
               <span className="badge badge--neutral">{ORDER_TYPE[o.ordType] ?? o.ordType}</span>
             </td>
             <td className="num">{num(o.px) > 0 ? price(num(o.px)) : 'Mercado'}</td>
-            <td className="num">{qty(size)}</td>
             <td className="num">
-              {qty(filled)}
-              {size > 0 && filled > 0 && filled < size && (
-                <span className="sub"> ({Math.round((filled / size) * 100)} %)</span>
+              {qty(size)} <span className="ccy">{sizeUnit}</span>
+            </td>
+            <td className="num">
+              {filled > 0 ? (
+                <>
+                  {qty(filled)} <span className="ccy">{filledUnit}</span>
+                  {percent < 100 && <span className="sub"> ({percent} %)</span>}
+                </>
+              ) : (
+                <span className="muted">—</span>
               )}
             </td>
             <td className="num">{num(o.avgPx) > 0 ? price(num(o.avgPx)) : '—'}</td>
@@ -169,7 +199,12 @@ export function Orders() {
 
       <Card
         title="Historial de Órdenes"
-        subtitle="Registro de los últimos 3 meses archivados por OKX"
+        subtitle={
+          // One page of 100, not the whole archive: on futures that is days.
+          (history.data?.length ?? 0) >= 100
+            ? 'Las 100 más recientes · OKX archiva 3 meses'
+            : 'Registro de los últimos 3 meses archivados por OKX'
+        }
         flush
         dimmed={history.isFetching && !history.isLoading}
         action={

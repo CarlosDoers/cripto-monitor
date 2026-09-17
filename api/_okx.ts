@@ -36,6 +36,12 @@ export const ALLOWED_PATHS = new Set([
   '/api/v5/asset/bills',
   '/api/v5/asset/deposit-history',
   '/api/v5/asset/withdrawal-history',
+  // Euros in and out by bank transfer. deposit-history only knows about coins
+  // sent on a chain, so without these a SEPA deposit is invisible: on this
+  // account that was 6 000 EUR of the 11 700 US$ put in, and the Historial
+  // presented the other half as the whole contribution.
+  '/api/v5/fiat/deposit-order-history',
+  '/api/v5/fiat/withdrawal-order-history',
 
   // Orders & fills
   '/api/v5/trade/orders-pending',

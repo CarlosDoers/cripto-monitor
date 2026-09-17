@@ -147,6 +147,13 @@ export interface Order {
   clOrdId: string
   px: string
   sz: string
+  /**
+   * Spot only: what `sz` is counted in. A market buy placed by amount is
+   * `quote_ccy`, so `sz` is the euros spent while `accFillSz` is still the coins
+   * received. Empty on limit orders and derivatives, where `sz` is base or
+   * contracts.
+   */
+  tgtCcy?: string
   ordType: string
   side: string
   posSide: string
@@ -231,8 +238,11 @@ export interface Instrument {
   baseCcy: string
   quoteCcy: string
   settleCcy: string
+  /** Contract size, in `ctValCcy`. Empty on spot and margin. */
   ctVal: string
   ctValCcy: string
+  /** `linear` or `inverse`: decides whether ctVal is in coin or in dollars. */
+  ctType: string
   state: string
   expTime: string
   /** Max leverage the contract allows. */
@@ -315,6 +325,12 @@ export interface FundingRate {
 }
 
 /** A deposit into or withdrawal out of the account. */
+/**
+ * A coin sent on a chain, from `asset/deposit-history` or `withdrawal-history`.
+ * `state` is a numeric code whose meaning differs between the two: `2` is
+ * success on both, but a deposit is already credited at `1`, and a withdrawal
+ * is failed or cancelled below `0`.
+ */
 export interface Transfer {
   ccy: string
   amt: string
@@ -322,6 +338,22 @@ export interface Transfer {
   state: string
   chain?: string
   fee?: string
+}
+
+/**
+ * Money moved by bank, from `fiat/deposit-order-history` and its withdrawal
+ * twin. `state` is a word here, not a code, and failed orders are listed too —
+ * two failed 500 EUR attempts sit in this account's history.
+ */
+export interface FiatOrder {
+  ordId: string
+  ccy: string
+  amt: string
+  fee: string
+  state: string
+  paymentMethod: string
+  cTime: string
+  uTime: string
 }
 
 /**

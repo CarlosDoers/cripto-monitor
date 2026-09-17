@@ -2042,10 +2042,6 @@ table.data td.num {
     font-size: 22px;
   }
 
-  .stat-value--hero {
-    font-size: 22px;
-  }
-
   .table-controls-bar {
     flex-direction: column;
     align-items: stretch;
@@ -2055,9 +2051,14 @@ table.data td.num {
     width: 100%;
   }
 
+  /* Stretched to the row, the buttons have to share it: centred, they left an
+     empty bordered cell beside "Spot" that read as a fifth, blank option. */
   .seg-control {
     width: 100%;
-    justify-content: center;
+  }
+
+  .seg-control button {
+    flex: 1 1 auto;
   }
 }
 

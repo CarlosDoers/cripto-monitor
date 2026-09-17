@@ -24,6 +24,7 @@ import type {
   Ticker,
   TradeFee,
   Transfer,
+  FiatOrder,
 } from './types'
 
 /**
@@ -559,6 +560,14 @@ export function useFundingRate(instId: string | undefined) {
 export interface TransferHistory {
   deposits: Transfer[]
   withdrawals: Transfer[]
+  fiatDeposits: FiatOrder[]
+  fiatWithdrawals: FiatOrder[]
+  /**
+   * Why part of the history could not be read, or null when all of it was. The
+   * contribution is a sum, so a missing half does not look missing — it looks
+   * like a smaller number. Whoever renders the total has to say so.
+   */
+  incomplete: string | null
 }
 
 /**
@@ -567,17 +576,103 @@ export interface TransferHistory {
  * Needed to read the portfolio honestly: a balance that grew because of a
  * deposit is not the same as one that grew from trading, and nothing else in
  * the app can tell them apart.
+ *
+ * Coins and bank transfers live in separate endpoints, and the obvious one only
+ * covers coins. A fiat request that fails does not take the coin history down
+ * with it — an account on an entity without euro rails has nothing there — but
+ * it is reported in `incomplete` rather than read as "no deposits".
  */
 export function useTransfers() {
   return useQuery<TransferHistory, ApiError>({
     queryKey: ['transfers'],
     queryFn: async () => {
-      const [deposits, withdrawals] = await Promise.all([
+      const problems: string[] = []
+      const optional = async <T,>(label: string, path: string): Promise<T[]> => {
+        try {
+          return await okx<T>(path, { limit: 100 })
+        } catch (error) {
+          if (error instanceof ApiError && error.isUnauthorized) throw error
+          problems.push(`${label}: ${error instanceof Error ? error.message : String(error)}`)
+          return []
+        }
+      }
+      const [deposits, withdrawals, fiatDeposits, fiatWithdrawals] = await Promise.all([
         okx<Transfer>('/api/v5/asset/deposit-history', { limit: 100 }),
         okx<Transfer>('/api/v5/asset/withdrawal-history', { limit: 100 }),
+        optional<FiatOrder>('depósitos bancarios', '/api/v5/fiat/deposit-order-history'),
+        optional<FiatOrder>('retiradas bancarias', '/api/v5/fiat/withdrawal-order-history'),
       ])
-      return { deposits, withdrawals }
+      // A full page means there may be more behind it, and these are not paged.
+      for (const [label, rows] of [
+        ['depósitos', deposits],
+        ['retiradas', withdrawals],
+        ['depósitos bancarios', fiatDeposits],
+        ['retiradas bancarias', fiatWithdrawals],
+      ] as const) {
+        if (rows.length >= 100) problems.push(`${label}: sólo los 100 más recientes`)
+      }
+      return {
+        deposits,
+        withdrawals,
+        fiatDeposits,
+        fiatWithdrawals,
+        incomplete: problems.length ? problems.join(' · ') : null,
+      }
     },
     refetchInterval: SLOW,
+  })
+}
+
+const DAY_MS = 86_400_000
+
+/**
+ * Daily candles covering `[from, to]`, one series per instrument.
+ *
+ * For valuing something on the day it happened, which no other endpoint can do:
+ * a deposit of SOL is a quantity, and what it was worth when it arrived is a
+ * question only the price history answers. `1Dutc` so a day means a UTC day and
+ * lines up with the timestamps OKX reports.
+ *
+ * Same pacing as the archive, for the same reason — this shares its 20-per-2 s
+ * limit — but it usually costs one request per currency: 100 daily bars reach
+ * back more than three months.
+ */
+export function useDailyCandles(ranges: { instId: string; from: number; to: number }[]) {
+  const cursors = ranges.flatMap(({ instId, from, to }) => {
+    const pages = Math.max(1, Math.ceil((to - from + DAY_MS) / (100 * DAY_MS)))
+    const newest = (Math.floor(to / DAY_MS) + 1) * DAY_MS
+    return Array.from({ length: pages }, (_, page) => ({
+      instId,
+      after: String(newest - page * 100 * DAY_MS),
+    }))
+  })
+  return useQuery<Map<string, Candle[]>, ApiError>({
+    queryKey: ['daily-candles', cursors],
+    queryFn: async () => {
+      const series = new Map<string, Candle[]>()
+      for (let i = 0; i < cursors.length; i += ARCHIVE_BATCH) {
+        const started = Date.now()
+        const batch = cursors.slice(i, i + ARCHIVE_BATCH)
+        const responses = await Promise.all(
+          batch.map(({ instId, after }) =>
+            okx<Candle>('/api/v5/market/history-candles', { instId, bar: '1Dutc', limit: 100, after }),
+          ),
+        )
+        batch.forEach(({ instId }, k) => {
+          series.set(instId, [...(series.get(instId) ?? []), ...responses[k]])
+        })
+        const rest = ARCHIVE_BATCH_MS - (Date.now() - started)
+        if (i + ARCHIVE_BATCH < cursors.length && rest > 0) {
+          await new Promise((done) => setTimeout(done, rest))
+        }
+      }
+      return series
+    },
+    enabled: cursors.length > 0,
+    staleTime: ARCHIVE,
+    gcTime: ARCHIVE,
+    refetchInterval: false,
+    retry: 3,
+    retryDelay: (attempt) => 1_000 * 2 ** attempt,
   })
 }

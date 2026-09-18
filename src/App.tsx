@@ -3,6 +3,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { ApiError, probe } from './lib/api'
 import { useRoute } from './lib/router'
 import { useCurrency } from './lib/currency'
+import { useEurRate } from './lib/portfolio'
 import { Layout } from './components/Layout'
 import { Gate } from './components/Gate'
 import { Card, ErrorNotice, Skeleton } from './components/ui'
@@ -70,6 +71,7 @@ function Views() {
   // changes. The formatters read the currency from a module store rather than
   // taking it as a prop, so without this only the sidebar would update.
   useCurrency()
+  useEurRate()
   return (
     <Layout route={route} navigate={navigate}>
       {route === 'resumen' && <Overview />}

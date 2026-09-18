@@ -272,6 +272,8 @@ The account settles in **USDC**, so every figure the API returns is in dollars. 
 
 `usd()` converts on the way out, so switching currency changes every figure at once. The catch: the formatters read a module store, not props, so **nothing re-renders on their own** — `Views` in `App.tsx` subscribes via `useCurrency()` to re-render the tree. Remove that call and only the sidebar updates.
 
+**The rate is loaded at the root, by `useEurRate()` in `Views`.** It used to be a side effect inside `usePortfolio()`, so only the views that price the portfolio ever set it. Opened straight on Rendimiento with euros selected, the rate stayed unknown, `activeCurrency()` fell back to dollars as designed, and every figure printed "US$" under a switch that read "€". The ticker strip fetches the same `tickers/SPOT` query on every screen, so loading the rate there costs no extra request. Anything a formatter depends on must be mounted independently of the route.
+
 **The calendar keys each trade on the day it CLOSED** — changed deliberately in `c6834be`; this note said "opened" for two weeks after that and was wrong. Closing day is when the result hit the balance, and it matches the 7/30/90-day filters in `computePerformance()`, which also cut on `uTime`, so the calendar's total for a month always equals that period's headline. The cost is that individual days can differ from OKX's own analytics page, which books a trade on the day it was opened.
 
 ### Visual direction — "terminal denso"

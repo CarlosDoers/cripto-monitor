@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useEffect, useMemo } from 'react'
 import { useBalance, useFunding, useTickers, useValuation } from './queries'
 import { num } from './format'
 import { setUsdToEur } from './currency'
@@ -10,6 +10,25 @@ export function priceOf(ccy: string, tickers: Map<string, Ticker>): number | und
   if (STABLES.has(ccy)) return 1
   const t = tickers.get(`${ccy}-USDT`) ?? tickers.get(`${ccy}-USDC`)
   return t ? num(t.last) : undefined
+}
+
+/**
+ * Feeds the euro rate to the formatters, from OKX's own USDC-EUR price so the
+ * figures match what its app shows instead of drifting against a fixed rate.
+ *
+ * Mounted once at the root, never inside a view. It used to be a side effect of
+ * `usePortfolio()`, so only the views that price the portfolio ever loaded the
+ * rate: opened on Rendimiento with euros selected, the rate stayed unknown and
+ * every figure fell back to dollars while the switch still read "€". The
+ * ticker strip fetches the same query on every screen, so this costs no request.
+ */
+export function useEurRate() {
+  const tickers = useTickers('SPOT')
+  useEffect(() => {
+    const byId = new Map((tickers.data ?? []).map((t) => [t.instId, t]))
+    const eur = num(byId.get('USDC-EUR')?.last) || num(byId.get('USDT-EUR')?.last)
+    if (eur > 0) setUsdToEur(eur)
+  }, [tickers.data])
 }
 
 /**
@@ -48,10 +67,6 @@ export function usePortfolio() {
   const tickerMap = useMemo(() => {
     const map = new Map<string, Ticker>()
     for (const t of tickers.data ?? []) map.set(t.instId, t)
-    // OKX's own USDC-EUR price, so the euro figures here match the ones its app
-    // shows instead of drifting against a hardcoded rate.
-    const eur = num(map.get('USDC-EUR')?.last) || num(map.get('USDT-EUR')?.last)
-    if (eur > 0) setUsdToEur(eur)
     return map
   }, [tickers.data])
 

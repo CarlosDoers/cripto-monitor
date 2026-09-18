@@ -9,9 +9,11 @@ import {
   Stat,
   TableSkeleton,
   TableWrap,
+  Help,
 } from '../components/ui'
 import { IconAlert } from '../components/icons'
 import { fuelUsed, liquidationRoom, NEARLY_DRY } from '../lib/bots'
+import { HELP } from '../lib/glossary'
 
 export function Bots() {
   const dca = useDcaBots()
@@ -63,6 +65,7 @@ export function Bots() {
       <div className="kpi-row">
         <Stat
           label="PnL de los Bots"
+          help={HELP.botPnl}
           hero
           glow
           loading={isLoading}
@@ -77,18 +80,21 @@ export function Bots() {
         />
         <Stat
           label="Capital Comprometido"
+          help={HELP.committed}
           loading={isLoading}
           value={usd(invested)}
           foot={<span>Reservado por los bots, no necesariamente desplegado</span>}
         />
         <Stat
           label="Munición Gastada"
+          help={HELP.fuelUsed}
           loading={isLoading}
           value={share(tightest, 0)}
           foot={<span>Órdenes de seguridad usadas por el bot más apurado</span>}
         />
         <Stat
           label="Financiación Acumulada"
+          help={HELP.funding}
           loading={isLoading}
           value={<DeltaValue value={funding}>{signedUsd(funding)}</DeltaValue>}
           foot={<span>Ya descontada del PnL de al lado, no se resta otra vez</span>}
@@ -121,10 +127,22 @@ export function Bots() {
                   <th>Dirección</th>
                   <th className="num">Comprometido</th>
                   <th className="num">Precio Medio</th>
-                  <th className="num">Objetivo</th>
-                  <th className="num">Liquidación</th>
-                  <th>Munición</th>
-                  <th className="num">Financiación</th>
+                  <th className="num">
+                    Objetivo
+                    <Help label="Objetivo">{HELP.botTarget}</Help>
+                  </th>
+                  <th className="num">
+                    Liquidación
+                    <Help label="Liquidación">{HELP.liqPrice}</Help>
+                  </th>
+                  <th>
+                    Munición
+                    <Help label="Munición">{HELP.fuelUsed}</Help>
+                  </th>
+                  <th className="num">
+                    Financiación
+                    <Help label="Financiación">{HELP.funding}</Help>
+                  </th>
                   <th className="num">PnL</th>
                 </tr>
               </thead>

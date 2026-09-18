@@ -1,4 +1,5 @@
-import { useEffect, useRef, type ReactNode } from 'react'
+import { useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
+import { createPortal } from 'react-dom'
 import { IconAlert, IconDown, IconInbox, IconSearch, IconUp } from './icons'
 import { pct } from '../lib/format'
 
@@ -82,6 +83,104 @@ export function Card({
   )
 }
 
+/**
+ * A "?" beside a figure that explains what it means.
+ *
+ * The explanation is portalled to `<body>` and positioned against the viewport,
+ * because the places that need one — table headers, KPI strips — sit inside
+ * cards and scroll containers that clip anything absolutely positioned.
+ *
+ * Hover opens it for a mouse, keyboard focus for a keyboard, and a tap pins it
+ * open on a phone, where there is no hover at all. The glyph is drawn by CSS,
+ * not text, so a `<th>` holding one still gives `TableWrap` a clean label.
+ */
+export function Help({ children, label }: { children: ReactNode; label?: string }) {
+  const [open, setOpen] = useState(false)
+  const [pinned, setPinned] = useState(false)
+  const [pos, setPos] = useState<{ top: number; left: number } | null>(null)
+  const button = useRef<HTMLButtonElement>(null)
+  const tip = useRef<HTMLDivElement>(null)
+  const id = useId()
+  const shown = open || pinned
+
+  const close = () => {
+    setOpen(false)
+    setPinned(false)
+  }
+
+  // Measure after render so the tip's own height decides whether it fits below.
+  useLayoutEffect(() => {
+    if (!shown || !button.current || !tip.current) return
+    const anchor = button.current.getBoundingClientRect()
+    const box = tip.current.getBoundingClientRect()
+    const gutter = 8
+    const below = anchor.bottom + 6
+    const top =
+      below + box.height > window.innerHeight - gutter ? anchor.top - 6 - box.height : below
+    const centred = anchor.left + anchor.width / 2 - box.width / 2
+    const left = Math.min(Math.max(centred, gutter), window.innerWidth - box.width - gutter)
+    setPos({ top: Math.max(gutter, top), left })
+  }, [shown])
+
+  useEffect(() => {
+    if (!shown) return
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && close()
+    const onDown = (e: PointerEvent) => {
+      if (!button.current?.contains(e.target as Node)) close()
+    }
+    // A fixed tip would drift away from its anchor on scroll; closing is simpler.
+    window.addEventListener('keydown', onKey)
+    window.addEventListener('pointerdown', onDown)
+    window.addEventListener('scroll', close, true)
+    window.addEventListener('resize', close)
+    return () => {
+      window.removeEventListener('keydown', onKey)
+      window.removeEventListener('pointerdown', onDown)
+      window.removeEventListener('scroll', close, true)
+      window.removeEventListener('resize', close)
+    }
+  }, [shown])
+
+  useEffect(() => {
+    if (!shown) setPos(null)
+  }, [shown])
+
+  return (
+    <>
+      <button
+        ref={button}
+        type="button"
+        className="help"
+        aria-label={label ? `Qué significa: ${label}` : 'Qué significa'}
+        aria-expanded={shown}
+        aria-describedby={shown ? id : undefined}
+        onPointerEnter={(e) => e.pointerType === 'mouse' && setOpen(true)}
+        onPointerLeave={(e) => e.pointerType === 'mouse' && setOpen(false)}
+        onFocus={(e) => e.currentTarget.matches(':focus-visible') && setOpen(true)}
+        onBlur={close}
+        onClick={(e) => {
+          // Inside a clickable row or header, the tap is for the help only.
+          e.stopPropagation()
+          setPinned((p) => !p)
+        }}
+      />
+      {shown &&
+        createPortal(
+          <div
+            ref={tip}
+            id={id}
+            role="tooltip"
+            className="help-tip"
+            style={pos ? { top: pos.top, left: pos.left } : { top: 0, left: 0, visibility: 'hidden' }}
+          >
+            {children}
+          </div>,
+          document.body,
+        )}
+    </>
+  )
+}
+
 export function Stat({
   label,
   value,
@@ -90,6 +189,7 @@ export function Stat({
   loading,
   glow,
   badge,
+  help,
 }: {
   label: string
   value: ReactNode
@@ -98,11 +198,16 @@ export function Stat({
   loading?: boolean
   glow?: boolean
   badge?: ReactNode
+  /** What the figure means, behind a "?" beside the label. */
+  help?: ReactNode
 }) {
   return (
     <article className={`stat${hero ? ' stat--hero' : ''}${glow ? ' stat--glow' : ''}`}>
       <div className="stat-header">
-        <p className="stat-label">{label}</p>
+        <p className="stat-label">
+          {label}
+          {help && <Help label={label}>{help}</Help>}
+        </p>
         {badge}
       </div>
       {loading ? (

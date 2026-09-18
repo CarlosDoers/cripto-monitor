@@ -30,6 +30,7 @@ import {
   TableSkeleton,
   TableWrap,
 } from '../components/ui'
+import { HELP } from '../lib/glossary'
 
 const INST_TYPES = [
   { key: 'SPOT', label: 'Spot' },
@@ -404,6 +405,7 @@ function Provenance() {
     <div className="kpi-row">
       <Stat
         label="Depósitos"
+        help={HELP.deposits}
         hero
         loading={loading}
         value={usdOrEur(flows.deposited, flows.depositedEur)}
@@ -427,6 +429,7 @@ function Provenance() {
       />
       <Stat
         label="Aportación Neta"
+        help={HELP.netContribution}
         loading={loading}
         value={<DeltaValue value={shownAmount(net, netEur)}>{signedUsdOrEur(net, netEur)}</DeltaValue>}
         foot={
@@ -439,6 +442,7 @@ function Provenance() {
       />
       <Stat
         label="Resultado Total"
+        help={HELP.totalResult}
         loading={loading}
         value={
           <DeltaValue value={shownAmount(result, resultEur)}>{signedUsdOrEur(result, resultEur)}</DeltaValue>
@@ -447,12 +451,14 @@ function Provenance() {
       />
       <Stat
         label="Generado Operando"
+        help={HELP.tradingResult}
         loading={loading}
         value={<DeltaValue value={perf.netPnl}>{signedUsd(perf.netPnl)}</DeltaValue>}
         foot={<span>{perf.count} posiciones cerradas · neto de costes</span>}
       />
       <Stat
         label="Costes de Operar"
+        help={HELP.totalCosts}
         loading={loading}
         value={<DeltaValue value={perf.totalCosts}>{signedUsd(perf.totalCosts)}</DeltaValue>}
         foot={<span>comisiones y financiación</span>}

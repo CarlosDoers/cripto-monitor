@@ -3,7 +3,8 @@ import { useMarkets, type Market } from '../lib/markets'
 import { useClosedPositions, usePositions } from '../lib/queries'
 import { pct, plural, price, ratio, usdCompact } from '../lib/format'
 import { EconomicCalendar } from '../components/EconomicCalendar'
-import { Badge, Card, DeltaValue, EmptyState, ErrorNotice, SearchInput, Stat, TableSkeleton, TableWrap } from '../components/ui'
+import { Badge, Card, DeltaValue, EmptyState, ErrorNotice, SearchInput, Stat, TableSkeleton, TableWrap, Help } from '../components/ui'
+import { HELP } from '../lib/glossary'
 
 type SortBy = 'score' | 'volume' | 'oi' | 'spread' | 'range' | 'change'
 
@@ -78,6 +79,7 @@ export function Markets() {
             cuántos existen. */}
         <Stat
           label="Recomendables ahora"
+          help={HELP.tradability}
           hero
           loading={isLoading}
           value={String(totals.good)}
@@ -97,6 +99,7 @@ export function Markets() {
         />
         <Stat
           label="Horquilla mediana"
+          help={HELP.spread}
           loading={isLoading}
           value={Number.isFinite(totals.medianSpread) ? `${ratio(totals.medianSpread, 1)} pb` : '—'}
           foot={<span>coste de entrar y salir</span>}
@@ -190,15 +193,33 @@ export function Markets() {
               <thead>
                 <tr>
                   <th>Contrato</th>
-                  <th>Operabilidad</th>
+                  <th>
+                    Operabilidad
+                    <Help label="Operabilidad">{HELP.tradability}</Help>
+                  </th>
                   <th className="num">Precio</th>
                   <th className="num">24 h</th>
                   <th className="num">Volumen 24 h</th>
-                  <th className="num">Posición abierta</th>
-                  <th className="num">Horquilla</th>
-                  <th className="num">Prima</th>
-                  <th className="num">Rango 24 h</th>
-                  <th className="num">Apal.</th>
+                  <th className="num">
+                    Posición abierta
+                    <Help label="Posición abierta">{HELP.openInterest}</Help>
+                  </th>
+                  <th className="num">
+                    Horquilla
+                    <Help label="Horquilla">{HELP.spread}</Help>
+                  </th>
+                  <th className="num">
+                    Prima
+                    <Help label="Prima">{HELP.basis}</Help>
+                  </th>
+                  <th className="num">
+                    Rango 24 h
+                    <Help label="Rango 24 h">{HELP.range24h}</Help>
+                  </th>
+                  <th className="num">
+                    Apal.
+                    <Help label="Apal.">{HELP.maxLeverage}</Help>
+                  </th>
                 </tr>
               </thead>
               <tbody>

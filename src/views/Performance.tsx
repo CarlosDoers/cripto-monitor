@@ -29,16 +29,31 @@ import {
   DeltaValue,
   EmptyState,
   ErrorNotice,
+  Help,
   SearchInput,
   Skeleton,
   TableSkeleton,
   TableWrap,
 } from '../components/ui'
+import { HELP, riskRewardHelp } from '../lib/glossary'
 
-function Metric({ label, value, hint }: { label: string; value: ReactNode; hint?: string }) {
+function Metric({
+  label,
+  value,
+  hint,
+  help,
+}: {
+  label: string
+  value: ReactNode
+  hint?: string
+  help?: ReactNode
+}) {
   return (
     <li>
-      <span className="metric-label">{label}</span>
+      <span className="metric-label">
+        {label}
+        {help && <Help label={label}>{help}</Help>}
+      </span>
       <span className="metric-value">{value}</span>
       {hint && <span className="metric-hint">{hint}</span>}
     </li>
@@ -276,7 +291,10 @@ export function Performance() {
 
         <ul className="perf-stats">
           <li>
-            <span className="metric-label">Tasa de aciertos</span>
+            <span className="metric-label">
+              Tasa de aciertos
+              <Help label="Tasa de aciertos">{HELP.winRate}</Help>
+            </span>
             <span className="metric-value">{p.count > 0 ? share(p.winRate, 1) : '—'}</span>
             <span className="metric-hint">
               {p.wins} ganadas · {p.losses} perdidas
@@ -288,14 +306,20 @@ export function Performance() {
             <span className="metric-hint">cerradas en el periodo</span>
           </li>
           <li>
-            <span className="metric-label">Riesgo / recompensa</span>
+            <span className="metric-label">
+              Riesgo / recompensa
+              <Help label="Riesgo / recompensa">{riskRewardHelp(p.riskReward)}</Help>
+            </span>
             <span className="metric-value">
               {p.riskReward > 0 ? `1:${ratio(p.riskReward)}` : '—'}
             </span>
             <span className="metric-hint">pérdida media frente a ganancia media</span>
           </li>
           <li>
-            <span className="metric-label">Factor de beneficio</span>
+            <span className="metric-label">
+              Factor de beneficio
+              <Help label="Factor de beneficio">{HELP.profitFactor}</Help>
+            </span>
             <span className="metric-value">{ratio(p.profitFactor)}</span>
             <span className="metric-hint">
               {p.profitFactor >= 1 ? 'ganas más de lo que pierdes' : 'pierdes más de lo que ganas'}
@@ -356,11 +380,13 @@ export function Performance() {
               <Metric label="Racha actual" value={streakLabel(p.currentStreak)} />
               <Metric
                 label="Mejor racha"
+                help={HELP.streak}
                 value={`${p.longestWinStreak} seguidas`}
                 hint={`Peor: ${Math.abs(p.longestLossStreak)} seguidas`}
               />
               <Metric
                 label="Duración media"
+                help={HELP.duration}
                 value={p.avgDuration ? duration(p.avgDuration) : '—'}
               />
               {/* Signed, not Math.abs: totalCosts is fees plus funding, and a
@@ -368,6 +394,7 @@ export function Performance() {
                   absolute value in red, that income read as a cost. */}
               <Metric
                 label="Costes totales"
+                help={HELP.totalCosts}
                 value={<DeltaValue value={p.totalCosts}>{signedUsd(p.totalCosts)}</DeltaValue>}
                 hint={
                   p.grossPnl !== 0

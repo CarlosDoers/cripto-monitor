@@ -32,6 +32,7 @@ import {
   TableWrap,
 } from '../components/ui'
 import type { StrategySignal } from '../lib/indicators/types'
+import { HELP } from '../lib/glossary'
 
 /** Below this many bars past warm-up there is nothing meaningful to measure. */
 const MIN_BARS = 30
@@ -557,12 +558,14 @@ export function Signals() {
       <div className="kpi-row">
         <Stat
           label="Señales Detectadas"
+          help={HELP.signalsDetected}
           loading={s.isLoading}
           value={String(r.signals.length)}
           foot={<span>{r.open > 0 ? `${r.open} sin resolver` : 'todas resueltas'}</span>}
         />
         <Stat
           label="Tasa de Aciertos"
+          help={HELP.signalWinRate}
           loading={s.isLoading}
           value={r.wins + r.losses > 0 ? share(r.winRate, 1) : '—'}
           foot={
@@ -573,12 +576,14 @@ export function Signals() {
         />
         <Stat
           label="Ganancia Media (Win)"
+          help={HELP.r}
           loading={s.isLoading}
           value={`${ratio(r.avgWinR)} R`}
           foot={<span>Por señal ganadora</span>}
         />
         <Stat
           label="Esperanza Matemática Neta"
+          help={HELP.expectancyR}
           hero
           glow
           loading={s.isLoading}

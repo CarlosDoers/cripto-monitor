@@ -658,6 +658,84 @@ button {
   font-weight: 500;
 }
 
+/* ---------- Help ("?") ---------- */
+
+/* A bordered square, not a circle: only status dots keep a radius here. The
+   glyph comes from CSS so a header holding one keeps a clean textContent. */
+.help {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 13px;
+  height: 13px;
+  margin-left: 5px;
+  padding: 0;
+  border: 1px solid var(--baseline);
+  background: transparent;
+  color: var(--ink-faint);
+  font: 600 8.5px/1 var(--mono);
+  letter-spacing: 0;
+  vertical-align: 1px;
+  cursor: help;
+  flex: none;
+  transition: color 0.12s ease, border-color 0.12s ease;
+}
+
+.help::before {
+  content: '?';
+}
+
+.help:hover,
+.help[aria-expanded='true'] {
+  color: var(--ink-primary);
+  border-color: var(--ink-secondary);
+}
+
+.help:focus-visible {
+  outline: 1px solid var(--accent);
+  outline-offset: 1px;
+}
+
+/* A larger target on touch screens without growing the drawn square. */
+@media (pointer: coarse) {
+  .help {
+    position: relative;
+  }
+
+  .help::after {
+    content: '';
+    position: absolute;
+    inset: -10px;
+  }
+}
+
+.help-tip {
+  position: fixed;
+  z-index: 1000;
+  width: max-content;
+  max-width: min(290px, calc(100vw - 16px));
+  padding: 9px 11px;
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-pop);
+  color: var(--ink-secondary);
+  font: 400 12px/1.5 var(--font);
+  letter-spacing: normal;
+  text-transform: none;
+  text-align: left;
+  white-space: normal;
+  pointer-events: none;
+}
+
+.help-tip strong {
+  color: var(--ink-primary);
+  font-weight: 600;
+}
+
+.help-tip p + p {
+  margin-top: 6px;
+}
+
 /* ---------- KPI Row & Stats ---------- */
 
 .kpi-row {

@@ -1,11 +1,12 @@
 import { useAlgoOrders, usePositions } from '../lib/queries'
 import { dateTime, num, pct, plural, price, qty, share, signedUsd, usd } from '../lib/format'
-import { Badge, Card, DeltaValue, EmptyState, ErrorNotice, Stat, TableSkeleton, TableWrap } from '../components/ui'
+import { Badge, Card, DeltaValue, EmptyState, ErrorNotice, Stat, TableSkeleton, TableWrap, Help } from '../components/ui'
 import { FundingCost, ProtectionBadge } from '../components/PositionGuard'
 import { guardsFor, hasStop, isShort } from '../lib/guards'
 import { PositionRisk } from '../components/PositionRisk'
 import { ExitDepth } from '../components/ExitDepth'
 import { IconAlert } from '../components/icons'
+import { HELP } from '../lib/glossary'
 
 export function Positions() {
   const { data, isLoading, isFetching, error } = usePositions()
@@ -50,6 +51,7 @@ export function Positions() {
       <div className="kpi-row">
         <Stat
           label="PnL No Realizado"
+          help={HELP.unrealisedPnl}
           hero
           glow
           loading={isLoading}
@@ -64,17 +66,20 @@ export function Positions() {
         />
         <Stat
           label="PnL Realizado (Sesión)"
+          help={HELP.realisedOpen}
           loading={isLoading}
           value={<DeltaValue value={realised}>{signedUsd(realised)}</DeltaValue>}
         />
         <Stat
           label="Exposición Nocional Total"
+          help={HELP.notional}
           loading={isLoading}
           value={usd(notional)}
           foot={<span>Valor total de contratos en mercado</span>}
         />
         <Stat
           label="Financiación Acumulada"
+          help={HELP.funding}
           loading={isLoading}
           value={<DeltaValue value={funding}>{signedUsd(funding)}</DeltaValue>}
           foot={<span>Tasas de funding de posiciones abiertas</span>}
@@ -103,12 +108,30 @@ export function Positions() {
                   <th>Lado</th>
                   <th className="num">Tamaño</th>
                   <th className="num">Precio Entrada</th>
-                  <th className="num">Precio Marca</th>
-                  <th className="num">Precio Liq.</th>
-                  <th className="num">Distancia Liq.</th>
-                  <th>Protección</th>
-                  <th className="num">Financiación</th>
-                  <th className="num">Margen Usado</th>
+                  <th className="num">
+                    Precio Marca
+                    <Help label="Precio Marca">{HELP.markPrice}</Help>
+                  </th>
+                  <th className="num">
+                    Precio Liq.
+                    <Help label="Precio Liq.">{HELP.liqPrice}</Help>
+                  </th>
+                  <th className="num">
+                    Distancia Liq.
+                    <Help label="Distancia Liq.">{HELP.liqDistance}</Help>
+                  </th>
+                  <th>
+                    Protección
+                    <Help label="Protección">{HELP.protection}</Help>
+                  </th>
+                  <th className="num">
+                    Financiación
+                    <Help label="Financiación">{HELP.funding}</Help>
+                  </th>
+                  <th className="num">
+                    Margen Usado
+                    <Help label="Margen Usado">{HELP.marginUsed}</Help>
+                  </th>
                   <th className="num">PnL No Realizado</th>
                   <th className="num">Apertura</th>
                 </tr>

@@ -4,6 +4,7 @@ import { num, usd, usdCompact } from '../lib/format'
 import { AllocationBar } from '../components/AllocationBar'
 import { HoldingsTable } from '../components/HoldingsTable'
 import { Card, Delta, ErrorNotice, Skeleton, Stat, TableSkeleton } from '../components/ui'
+import { HELP } from '../lib/glossary'
 
 export function Portfolio() {
   const portfolio = usePortfolio()
@@ -21,6 +22,7 @@ export function Portfolio() {
       <div className="kpi-row">
         <Stat
           label="Patrimonio Total"
+          help={HELP.netWorth}
           hero
           glow
           loading={portfolio.isLoading}

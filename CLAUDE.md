@@ -289,6 +289,12 @@ Flat surfaces, one-pixel rules, monospaced figures. `src/styles/tokens.css` sets
 
 Everything user-facing goes through `src/lib/format.ts` — `usd`, `qty`, `price`, `pct`, `share`, `ratio`, `duration`, `plural`, `axisTick`. **Never `toFixed()` in a component**: it emits a `.` decimal separator, which is wrong in es-ES. `qty()` and `price()` scale precision to magnitude, because BTC needs 8 decimals and SHIB does not.
 
+### Explanations ("?")
+
+Every figure whose name is jargon carries a `Help` from `src/components/ui.tsx`: `Stat` takes a `help` prop, and anywhere else — a table header, a health-list row — renders `<Help label="…">`. **The texts live only in `src/lib/glossary.tsx`** (`HELP`), because the same term sits on several views and three hand-written explanations of the hit rate become three different explanations. Say what the number is, then what to do with it; where a definition alone would not land, compute the part that does — `riskRewardHelp()` prints the hit rate at which the account's own ratio breaks even ("1:2,18 → basta acertar más del 31 %").
+
+Three details the component depends on. The tip is **portalled to `<body>` with fixed positioning**, because headers and KPI strips sit inside cards and scroll containers that clip anything absolute. The "?" glyph is **CSS content, not text**, so a `<th>` holding one still hands `TableWrap` a clean `data-label`. And a phone has no hover, so a tap pins it open; scrolling closes it rather than leaving it stranded. Below 720 px the `<thead>` is hidden by the card layout, so column help is desktop-only — anything a phone user must be able to look up belongs on a `Stat`, not only on a column.
+
 ### Charts
 
 `src/styles/tokens.css` holds a **categorical palette validated for colour-vision deficiency in both themes**. Do not change the `--series-*` hexes or their order without re-validating: the slot order is the safety mechanism, not decoration.

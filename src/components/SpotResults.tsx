@@ -11,7 +11,9 @@ import {
   Stat,
   TableSkeleton,
   TableWrap,
+  Help,
 } from './ui'
+import { HELP } from '../lib/glossary'
 
 /**
  * Below this share of proceeds priced, the headline is incomplete enough that
@@ -60,6 +62,7 @@ export function SpotResults() {
       <div className="kpi-row">
         <Stat
           label="Resultado en Spot"
+          help={HELP.spotResult}
           loading={isLoading}
           value={<DeltaValue value={spot.netUsd}>{signedUsd(spot.netUsd)}</DeltaValue>}
           badge={
@@ -73,12 +76,14 @@ export function SpotResults() {
         />
         <Stat
           label="Vendido sin Coste Conocido"
+          help={HELP.uncovered}
           loading={isLoading}
           value={usd(spot.uncoveredUsd)}
           foot={<span>Monedas llegadas por depósito: se vendieron aquí, se compraron fuera</span>}
         />
         <Stat
           label="Cobertura del Cálculo"
+          help={HELP.coverage}
           loading={isLoading}
           value={share(spot.coverage, 0)}
           foot={
@@ -118,7 +123,10 @@ export function SpotResults() {
                     <th className="num">Compras</th>
                     <th className="num">Ventas</th>
                     <th className="num">Comisiones</th>
-                    <th className="num">Sin coste conocido</th>
+                    <th className="num">
+                    Sin coste conocido
+                    <Help label="Sin coste conocido">{HELP.uncovered}</Help>
+                  </th>
                     <th className="num">Resultado</th>
                   </tr>
                 </thead>

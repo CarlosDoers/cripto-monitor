@@ -26,7 +26,9 @@ import {
   Stat,
   TableSkeleton,
   TableWrap,
+  Help,
 } from '../components/ui'
+import { HELP } from '../lib/glossary'
 
 /**
  * OKX reports the account margin ratio as a multiple of the maintenance
@@ -178,6 +180,7 @@ export function Overview() {
       <div className="kpi-row">
         <Stat
           label="Patrimonio Total"
+          help={HELP.netWorth}
           hero
           loading={portfolio.isLoading}
           value={usd(portfolio.netWorth)}
@@ -195,6 +198,7 @@ export function Overview() {
         />
         <Stat
           label="PnL No Realizado"
+          help={HELP.unrealisedPnl}
           loading={positions.isLoading}
           value={<DeltaValue value={unrealised}>{signedUsd(unrealised)}</DeltaValue>}
           foot={
@@ -213,12 +217,14 @@ export function Overview() {
         />
         <Stat
           label="PnL Realizado (30d)"
+          help={HELP.realisedPnl30}
           loading={perf.isLoading}
           value={<DeltaValue value={perf.netPnl}>{signedUsd(perf.netPnl)}</DeltaValue>}
           foot={<span>{perf.count} operaciones cerradas</span>}
         />
         <Stat
           label="Tasa de Aciertos"
+          help={HELP.winRate}
           loading={perf.isLoading}
           value={perf.count > 0 ? share(perf.winRate, 1) : '—'}
           foot={
@@ -229,6 +235,7 @@ export function Overview() {
         />
         <Stat
           label="Factor de Beneficio"
+          help={HELP.profitFactor}
           loading={perf.isLoading}
           value={
             perf.count > 0 && Number.isFinite(perf.profitFactor) ? ratio(perf.profitFactor) : '—'
@@ -246,6 +253,7 @@ export function Overview() {
             Rendimiento as "Costes totales". */}
         <Stat
           label="En Bots"
+          help={HELP.bots}
           loading={dcaBots.isLoading || gridBots.isLoading}
           value={botCount > 0 ? usd(botValue) : '—'}
           badge={
@@ -298,7 +306,10 @@ export function Overview() {
         >
           <ul className="health-list">
             <li>
-              <span>Ratio de margen</span>
+              <span>
+                Ratio de margen
+                <Help label="Ratio de margen">{HELP.marginRatio}</Help>
+              </span>
               <strong>
                 {marginRatio > 0 ? share(marginRatio, 0) : openPositions.length ? '—' : 'sin riesgo'}
                 {accountRatio === 0 && positionRatios.length > 0 && (
@@ -310,7 +321,10 @@ export function Overview() {
               </strong>
             </li>
             <li>
-              <span>Margen libre</span>
+              <span>
+                Margen libre
+                <Help label="Margen libre">{HELP.freeMargin}</Help>
+              </span>
               <strong>
                 {portfolio.isLoading ? '—' : usd(portfolio.freeMargin)}
                 {!portfolio.isLoading && locked && (
@@ -326,11 +340,17 @@ export function Overview() {
               <strong>{openPositions.length}</strong>
             </li>
             <li>
-              <span>Exposición nocional</span>
+              <span>
+                Exposición nocional
+                <Help label="Exposición nocional">{HELP.notional}</Help>
+              </span>
               <strong>{notional > 0 ? usdCompact(notional) : '—'}</strong>
             </li>
             <li>
-              <span>Bot más apurado</span>
+              <span>
+                Bot más apurado
+                <Help label="Bot más apurado">{HELP.tightestBot}</Help>
+              </span>
               <strong>
                 {tightest ? (
                   <>
@@ -350,7 +370,10 @@ export function Overview() {
               </strong>
             </li>
             <li>
-              <span>Esperanza por operación</span>
+              <span>
+                Esperanza por operación
+                <Help label="Esperanza por operación">{HELP.expectancy}</Help>
+              </span>
               <strong>{perf.count > 0 ? signedUsd(perf.expectancy) : '—'}</strong>
             </li>
           </ul>
@@ -410,8 +433,14 @@ export function Overview() {
                   <th>Lado</th>
                   <th className="num">Tamaño</th>
                   <th className="num">Precio Entrada</th>
-                  <th className="num">Precio Marca</th>
-                  <th className="num">Precio Liq.</th>
+                  <th className="num">
+                    Precio Marca
+                    <Help label="Precio Marca">{HELP.markPrice}</Help>
+                  </th>
+                  <th className="num">
+                    Precio Liq.
+                    <Help label="Precio Liq.">{HELP.liqPrice}</Help>
+                  </th>
                   <th className="num">PnL No Realizado</th>
                 </tr>
               </thead>

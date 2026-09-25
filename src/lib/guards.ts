@@ -45,3 +45,34 @@ export function isShort(position: Position): boolean {
   if (position.posSide === 'long') return false
   return num(position.pos) < 0
 }
+
+/** Under this distance to liquidation a position is flagged as in danger. */
+export const LIQ_DANGER = 0.1
+/** Under this one it is worth watching. */
+export const LIQ_WATCH = 0.25
+
+/**
+ * How far the mark price is from liquidation, as a fraction of the mark.
+ * Null when OKX gives no liquidation price (spot-like rows, cross margin with
+ * room to spare). Shared by Resumen and Posiciones so the two can never colour
+ * the same position differently.
+ */
+export function liquidationDistance(position: Position): number | null {
+  const liq = num(position.liqPx)
+  const mark = num(position.markPx)
+  return liq > 0 && mark > 0 ? Math.abs(mark - liq) / mark : null
+}
+
+/**
+ * A position's size and the unit it is in. Derivatives count **contracts**,
+ * whose value differs per instrument — 449 on ZEC X-Perp is not 449 ZEC — and
+ * margin positions count coins. The sign of `pos` is the direction on a one-way
+ * account, which `isShort()` already reports, so the size is always positive.
+ */
+export function positionSize(position: Position): { amount: number; unit: string } {
+  const amount = Math.abs(num(position.pos))
+  if (position.instType === 'MARGIN') {
+    return { amount, unit: position.posCcy || position.instId.split('-')[0] }
+  }
+  return { amount, unit: amount === 1 ? 'contrato' : 'contratos' }
+}

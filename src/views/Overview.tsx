@@ -12,14 +12,14 @@ import {
 import { num, pct, plural, price, qty, ratio, share, signedUsd, usd, usdCompact } from '../lib/format'
 import { AllocationBar } from '../components/AllocationBar'
 import { HoldingsTable } from '../components/HoldingsTable'
+import { ProtectionBadge } from '../components/PositionGuard'
 import { PnlCurve } from '../components/PnlCurve'
-import { guardsFor, hasStop, isShort } from '../lib/guards'
+import { guardsFor, hasStop, isShort, LIQ_DANGER, LIQ_WATCH, liquidationDistance, positionSize } from '../lib/guards'
 import { fuelUsed, liquidationRoom, NEARLY_DRY } from '../lib/bots'
 import { IconAlert, IconShield } from '../components/icons'
 import {
   Badge,
   Card,
-  Delta,
   DeltaValue,
   ErrorNotice,
   Skeleton,
@@ -36,6 +36,9 @@ import { HELP } from '../lib/glossary'
  * account is close to liquidation.
  */
 const MARGIN_WARN = 3
+
+/** Rows in the positions card; the rest are one click away in Posiciones. */
+const SHOWN_POSITIONS = 6
 
 export function Overview() {
   const portfolio = usePortfolio()
@@ -143,6 +146,23 @@ export function Overview() {
   const dustNote =
     dust.length > 0 ? ` · ${plural(dust.length, 'saldo', 'saldos')} bajo el 0,5 % fuera (${usd(dustUsd)})` : ''
 
+  /**
+   * What the spot holdings' prices did in 24 h, in dollars. This used to sit
+   * as a bare "+1,05 %" badge on Patrimonio Total, where it read as the net
+   * worth's own move — but it is only the price change of the coins held,
+   * weighted by their size, with stablecoins at zero. It knows nothing of the
+   * derivatives (the account's real risk) or of what was closed today. On the
+   * day it was caught, +1,05 % was SOL's +4 % on a quarter of the portfolio,
+   * next to −111 US$ of open futures PnL it did not include.
+   */
+  const spotMove = portfolio.holdings.reduce(
+    (sum, h) => (h.change24h ? sum + (h.usd * h.change24h) / (1 + h.change24h) : sum),
+    0,
+  )
+  // Effective leverage: exposure against everything the account owns. 1× means
+  // the positions move as much money as the whole patrimonio.
+  const leverage = portfolio.netWorth > 0 ? notional / portfolio.netWorth : 0
+
   const tradingBal = num(valDetails?.trading)
   const fundingBal = num(valDetails?.funding)
   const earnBal = num(valDetails?.earn)
@@ -184,11 +204,6 @@ export function Overview() {
           hero
           loading={portfolio.isLoading}
           value={usd(portfolio.netWorth)}
-          badge={
-            portfolio.change24h !== undefined ? (
-              <Delta ratio={portfolio.change24h}>{pct(portfolio.change24h)}</Delta>
-            ) : undefined
-          }
           foot={
             <span>
               Trading {usdCompact(tradingBal)} · Fondos {usdCompact(fundingBal)}
@@ -229,7 +244,7 @@ export function Overview() {
           value={perf.count > 0 ? share(perf.winRate, 1) : '—'}
           foot={
             <span>
-              {perf.count > 0 ? `${perf.wins} ganadas · ${perf.losses} perdidas` : '30 días'}
+              {perf.count > 0 ? `${perf.wins} ganadas · ${perf.losses} perdidas · 30 d` : '30 días'}
             </span>
           }
         />
@@ -279,7 +294,7 @@ export function Overview() {
       <div className="grid-2">
         <Card
           title="Curva de Resultado"
-          subtitle={`Últimos 30 días · ${signedUsd(perf.netPnl)}`}
+          subtitle={perf.isLoading ? 'Últimos 30 días' : `Últimos 30 días · ${signedUsd(perf.netPnl)}`}
           dimmed={perf.isFetching && !perf.isLoading}
         >
           {perf.isLoading ? (
@@ -292,11 +307,14 @@ export function Overview() {
         <Card
           title="Salud de la Cuenta"
           action={
-            <Badge variant={alarm ? 'warn' : marginRatio > 0 || botCount > 0 ? 'buy' : 'neutral'}>
+            // Any live warning turns it to Revisar, not only the alarms: with
+            // free margin exhausted it used to read "Saludable" right under a
+            // notice saying the account needed attention.
+            <Badge variant={attention.length > 0 ? 'warn' : marginRatio > 0 || botCount > 0 ? 'buy' : 'neutral'}>
               <IconShield />
               {atRisk
                 ? 'Riesgo Alto'
-                : alarm
+                : attention.length > 0
                   ? 'Revisar'
                   : marginRatio > 0 || botCount > 0
                     ? 'Saludable'
@@ -344,7 +362,17 @@ export function Overview() {
                 Exposición nocional
                 <Help label="Exposición nocional">{HELP.notional}</Help>
               </span>
-              <strong>{notional > 0 ? usdCompact(notional) : '—'}</strong>
+              <strong>
+                {notional > 0 ? usdCompact(notional) : '—'}
+                {leverage > 0 && (
+                  <>
+                    {' '}
+                    <span className={`sub ${leverage >= 3 ? 'delta--down' : ''}`}>
+                      {ratio(leverage, 1)}× el patrimonio
+                    </span>
+                  </>
+                )}
+              </strong>
             </li>
             <li>
               <span>
@@ -381,20 +409,20 @@ export function Overview() {
       </div>
 
       <Card
-          title="Distribución de la Cartera"
-          subtitle={`Desglose porcentual por activo en USD${dustNote}`}
-          dimmed={portfolio.isFetching && !portfolio.isLoading}
-        >
-          {portfolio.isLoading ? (
-            <Skeleton height={32} />
-          ) : (
-            <AllocationBar holdings={mainHoldings} />
-          )}
-        </Card>
+        title="Distribución de la Cartera"
+        subtitle={`Desglose porcentual por activo en USD${dustNote}`}
+        dimmed={portfolio.isFetching && !portfolio.isLoading}
+      >
+        {portfolio.isLoading ? <Skeleton height={32} /> : <AllocationBar holdings={mainHoldings} />}
+      </Card>
 
       <Card
         title="Activos Principales"
-        subtitle={`Top 8 por valor en la cuenta${dustNote}`}
+        subtitle={`Top 8 por valor en la cuenta${dustNote}${
+          portfolio.change24h !== undefined && Math.abs(spotMove) >= 0.01
+            ? ` · en 24 h sus precios mueven ${signedUsd(spotMove)} (${pct(portfolio.change24h)})`
+            : ''
+        }`}
         flush
         dimmed={portfolio.isFetching && !portfolio.isLoading}
         action={
@@ -415,7 +443,14 @@ export function Overview() {
         <Card
           title="Posiciones Abiertas en Tiempo Real"
           subtitle={
-            marginRatio > 0 ? `Ratio de margen ${share(marginRatio, 0)} · ${openPositions.length} abiertas` : undefined
+            [
+              marginRatio > 0 ? `Ratio de margen ${share(marginRatio, 0)}` : null,
+              openPositions.length > SHOWN_POSITIONS
+                ? `las ${SHOWN_POSITIONS} mayores de ${openPositions.length}`
+                : plural(openPositions.length, 'abierta', 'abiertas'),
+            ]
+              .filter(Boolean)
+              .join(' · ')
           }
           flush
           dimmed={positions.isFetching && !positions.isLoading}
@@ -431,23 +466,35 @@ export function Overview() {
                 <tr>
                   <th>Instrumento</th>
                   <th>Lado</th>
-                  <th className="num">Tamaño</th>
-                  <th className="num">Precio Entrada</th>
                   <th className="num">
-                    Precio Marca
+                    Nocional
+                    <Help label="Nocional">{HELP.notional}</Help>
+                  </th>
+                  <th className="num">Entrada</th>
+                  <th className="num">
+                    Marca
                     <Help label="Precio Marca">{HELP.markPrice}</Help>
                   </th>
                   <th className="num">
-                    Precio Liq.
+                    Liquidación
                     <Help label="Precio Liq.">{HELP.liqPrice}</Help>
+                  </th>
+                  <th>
+                    Protección
+                    <Help label="Protección">{HELP.protection}</Help>
                   </th>
                   <th className="num">PnL No Realizado</th>
                 </tr>
               </thead>
               <tbody>
-                {openPositions.slice(0, 6).map((p) => {
+                {[...openPositions]
+                  .sort((a, b) => num(b.notionalUsd) - num(a.notionalUsd))
+                  .slice(0, SHOWN_POSITIONS)
+                  .map((p) => {
                   const upl = num(p.upl)
                   const liq = num(p.liqPx)
+                  const room = liquidationDistance(p)
+                  const size = positionSize(p)
                   return (
                     <tr key={p.posId}>
                       <td>
@@ -459,13 +506,47 @@ export function Overview() {
                           {isShort(p) ? 'Corto' : 'Largo'}
                         </Badge>
                       </td>
-                      <td className="num">{qty(num(p.pos))}</td>
+                      {/* Dollars first: a count of contracts says nothing until
+                          it is multiplied by a contract value that differs per
+                          instrument, so it rides along as the unit it is. */}
+                      {/* One child per cell: below 720 px a cell is a flex row
+                          that pushes its children to opposite edges. */}
+                      <td className="num">
+                        <span>
+                          {num(p.notionalUsd) > 0 ? usd(num(p.notionalUsd)) : '—'}
+                          <span className="sub">
+                            {' '}
+                            · {qty(size.amount)} {size.unit}
+                          </span>
+                        </span>
+                      </td>
                       {/* Contract prices, not money: price() keeps the precision
                           the instrument trades at and never converts to euros,
                           so they match Posiciones to the digit. */}
                       <td className="num">{num(p.avgPx) > 0 ? price(num(p.avgPx)) : '—'}</td>
                       <td className="num">{num(p.markPx) > 0 ? price(num(p.markPx)) : '—'}</td>
-                      <td className="num">{liq > 0 ? price(liq) : '—'}</td>
+                      {/* The price alone does not say whether it is close; the
+                          distance does, in the thresholds Posiciones uses. */}
+                      <td className="num">
+                        <span>
+                          {liq > 0 ? price(liq) : '—'}
+                          {room !== null && (
+                            <>
+                              {' '}
+                              <span
+                                className={`badge badge--${room < LIQ_DANGER ? 'sell' : room < LIQ_WATCH ? 'warn' : 'neutral'}`}
+                              >
+                                a {share(room, 0)}
+                              </span>
+                            </>
+                          )}
+                        </span>
+                      </td>
+                      {/* The notice above names the positions without a stop;
+                          this is where the eye goes to find them. */}
+                      <td>
+                        <ProtectionBadge position={p} />
+                      </td>
                       <td className="num">
                         <DeltaValue value={upl}>
                           {signedUsd(upl)}

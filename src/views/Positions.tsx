@@ -2,7 +2,7 @@ import { useAlgoOrders, usePositions } from '../lib/queries'
 import { dateTime, num, pct, plural, price, qty, share, signedUsd, usd } from '../lib/format'
 import { Badge, Card, DeltaValue, EmptyState, ErrorNotice, Stat, TableSkeleton, TableWrap, Help } from '../components/ui'
 import { FundingCost, ProtectionBadge } from '../components/PositionGuard'
-import { guardsFor, hasStop, isShort } from '../lib/guards'
+import { guardsFor, hasStop, isShort, LIQ_DANGER, LIQ_WATCH, liquidationDistance, positionSize } from '../lib/guards'
 import { PositionRisk } from '../components/PositionRisk'
 import { ExitDepth } from '../components/ExitDepth'
 import { IconAlert } from '../components/icons'
@@ -142,8 +142,9 @@ export function Positions() {
                   const uplRatio = num(p.uplRatio)
                   const liq = num(p.liqPx)
                   const mark = num(p.markPx)
-                  const liqDist = liq > 0 && mark > 0 ? Math.abs(mark - liq) / mark : 0
-                  const isLiqRisk = liqDist > 0 && liqDist < 0.1
+                  const liqDist = liquidationDistance(p) ?? 0
+                  const isLiqRisk = liqDist > 0 && liqDist < LIQ_DANGER
+                  const size = positionSize(p)
 
                   return (
                     <tr key={p.posId}>
@@ -157,7 +158,13 @@ export function Positions() {
                           {p.lever && ` ${p.lever}×`}
                         </Badge>
                       </td>
-                      <td className="num">{qty(num(p.pos))}</td>
+                      {/* Unsigned: the side column already says which way, and a
+                          one-way short would otherwise print "-449". */}
+                      <td className="num">
+                        <span>
+                          {qty(size.amount)} <span className="sub">{size.unit}</span>
+                        </span>
+                      </td>
                       <td className="num">{num(p.avgPx) > 0 ? price(num(p.avgPx)) : '—'}</td>
                       <td className="num">{mark > 0 ? price(mark) : '—'}</td>
                       <td className="num">
@@ -172,7 +179,7 @@ export function Positions() {
                       <td className="num">
                         {liqDist > 0 ? (
                           <span
-                            className={`badge badge--${isLiqRisk ? 'sell' : liqDist < 0.25 ? 'warn' : 'neutral'}`}
+                            className={`badge badge--${isLiqRisk ? 'sell' : liqDist < LIQ_WATCH ? 'warn' : 'neutral'}`}
                           >
                             {share(liqDist, 1)}
                           </span>

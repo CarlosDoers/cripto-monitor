@@ -1,7 +1,7 @@
 import { useMemo } from 'react'
 import { useSpotFills } from '../lib/queries'
 import { computeSpot, DOLLAR_QUOTES } from '../lib/spot'
-import { dateTime, plural, qty, share, signedUsd, usd } from '../lib/format'
+import { dateTime, plural, quoteAmount, share, signedUsd, usd } from '../lib/format'
 import {
   Badge,
   Card,
@@ -75,7 +75,7 @@ export function SpotResults() {
           }
         />
         <Stat
-          label="Vendido sin Coste Conocido"
+          label="Sin Coste Conocido"
           help={HELP.uncovered}
           loading={isLoading}
           value={usd(spot.uncoveredUsd)}
@@ -144,10 +144,12 @@ export function SpotResults() {
                       <td className="num sub">{usd(p.fees)}</td>
                       <td className="num">
                         {p.uncoveredProceeds > 0 ? (
-                          <span className="delta--down">
+                          // Not red: this is money whose cost is unknown, not a
+                          // loss, and red is reserved for PnL polarity.
+                          <span>
                             {DOLLAR_QUOTES.has(p.quote)
                               ? usd(p.uncoveredProceeds)
-                              : `${qty(p.uncoveredProceeds)} ${p.quote}`}
+                              : quoteAmount(p.uncoveredProceeds, p.quote)}
                           </span>
                         ) : (
                           '—'

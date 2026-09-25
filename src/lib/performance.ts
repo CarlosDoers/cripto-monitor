@@ -34,6 +34,11 @@ export interface Trade {
   openPx: number
   closePx: number
   size: number
+  /**
+   * What `size` counts. Derivatives close in contracts, whose value differs per
+   * instrument — 674 on HYPE X-Perp is not 674 HYPE — and margin in coins.
+   */
+  sizeUnit: string
   /** Net of fees and funding. */
   pnl: number
   grossPnl: number
@@ -137,6 +142,7 @@ function toTrade(p: ClosedPosition): Trade {
     openPx: num(p.openAvgPx),
     closePx: num(p.closeAvgPx),
     size: num(p.closeTotalPos),
+    sizeUnit: p.instType === 'MARGIN' ? symbolOf(p.instId) : 'cont.',
     pnl,
     grossPnl: num(p.pnl),
     pnlRatio: num(p.pnlRatio),

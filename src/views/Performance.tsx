@@ -16,7 +16,6 @@ import {
   ratio,
   share,
   signedUsd,
-  usd,
 } from '../lib/format'
 import { PnlCurve } from '../components/PnlCurve'
 import { SpotResults } from '../components/SpotResults'
@@ -71,7 +70,11 @@ const PAGE = 15
 function TradesTable({ trades }: { trades: Trade[] }) {
   const [showAll, setShowAll] = useState(false)
   const [search, setSearch] = useState('')
-  const [filter, setFilter] = useState<'all' | 'win' | 'loss' | 'liq'>('all')
+  const [chosen, setFilter] = useState<'all' | 'win' | 'loss' | 'liq'>('all')
+  const liquidations = trades.filter((t) => t.liquidated).length
+  // The Liquidadas button hides when a period has none; a filter left on it
+  // would then empty the table with no visible control to undo it.
+  const filter = chosen === 'liq' && liquidations === 0 ? 'all' : chosen
 
   const filtered = useMemo(() => {
     let list = [...trades].reverse()
@@ -93,7 +96,7 @@ function TradesTable({ trades }: { trades: Trade[] }) {
         <SearchInput
           value={search}
           onChange={setSearch}
-          placeholder="Buscar por activo (ej. BTC, ETH)..."
+          placeholder="Buscar activo: BTC, ETH…"
           className="table-search"
         />
         <div className="seg-control">
@@ -109,22 +112,27 @@ function TradesTable({ trades }: { trades: Trade[] }) {
             aria-pressed={filter === 'win'}
             onClick={() => setFilter('win')}
           >
-            Ganadoras
+            Ganadoras ({trades.filter((t) => t.pnl > 0).length})
           </button>
           <button
             type="button"
             aria-pressed={filter === 'loss'}
             onClick={() => setFilter('loss')}
           >
-            Perdedoras
+            Perdedoras ({trades.filter((t) => t.pnl < 0).length})
           </button>
-          <button
-            type="button"
-            aria-pressed={filter === 'liq'}
-            onClick={() => setFilter('liq')}
-          >
-            Liquidadas
-          </button>
+          {/* Only when there is something to filter: at 390 px the four
+              buttons with their counts overflowed the page, and a filter that
+              always returns nothing is just width. */}
+          {liquidations > 0 && (
+            <button
+              type="button"
+              aria-pressed={filter === 'liq'}
+              onClick={() => setFilter('liq')}
+            >
+              Liquidadas ({liquidations})
+            </button>
+          )}
         </div>
       </div>
 
@@ -139,9 +147,15 @@ function TradesTable({ trades }: { trades: Trade[] }) {
               <th className="num">Precio Entrada</th>
               <th className="num">Precio Salida</th>
               <th className="num">Duración</th>
-              <th className="num">Comisiones</th>
+              <th className="num">
+                Costes
+                <Help label="Costes">{HELP.totalCosts}</Help>
+              </th>
               <th className="num">PnL Neto</th>
-              <th className="num">ROI</th>
+              <th className="num">
+                ROI
+                <Help label="ROI">{HELP.roi}</Help>
+              </th>
             </tr>
           </thead>
           <tbody>
@@ -163,11 +177,19 @@ function TradesTable({ trades }: { trades: Trade[] }) {
                     {t.lever > 0 && ` ${t.lever}×`}
                   </Badge>
                 </td>
-                <td className="num">{qty(t.size)}</td>
+                <td className="num">
+                  <span>
+                    {qty(t.size)} <span className="sub">{t.sizeUnit}</span>
+                  </span>
+                </td>
                 <td className="num">{price(t.openPx)}</td>
                 <td className="num">{price(t.closePx)}</td>
                 <td className="num sub">{t.duration ? duration(t.duration) : '—'}</td>
-                <td className="num sub">{usd(Math.abs(t.fee + t.fundingFee))}</td>
+                {/* Signed, as in Detalle: funding a short collects can outweigh
+                    the fee, and Math.abs printed that income as a cost. */}
+                <td className="num">
+                  <DeltaValue value={t.fee + t.fundingFee}>{signedUsd(t.fee + t.fundingFee)}</DeltaValue>
+                </td>
                 <td className="num">
                   <DeltaValue value={t.pnl}>{signedUsd(t.pnl)}</DeltaValue>
                 </td>
@@ -300,10 +322,17 @@ export function Performance() {
               {p.wins} ganadas · {p.losses} perdidas
             </span>
           </li>
+          {/* The count already heads the page; what it adds up to per trade
+              is the figure that says whether the process pays. */}
           <li>
-            <span className="metric-label">Operaciones</span>
-            <span className="metric-value">{p.count}</span>
-            <span className="metric-hint">cerradas en el periodo</span>
+            <span className="metric-label">
+              Esperanza por operación
+              <Help label="Esperanza por operación">{HELP.expectancy}</Help>
+            </span>
+            <span className={`metric-value ${p.expectancy >= 0 ? 'delta--up' : 'delta--down'}`}>
+              {p.count > 0 ? signedUsd(p.expectancy) : '—'}
+            </span>
+            <span className="metric-hint">{plural(p.count, 'operación', 'operaciones')} en el periodo</span>
           </li>
           <li>
             <span className="metric-label">
@@ -330,7 +359,7 @@ export function Performance() {
 
       <Card
         title="Calendario de trading"
-        subtitle="Resultado realizado por día"
+        subtitle="Resultado realizado por día · todo el historial, no solo el periodo elegido"
         dimmed={dimmed}
       >
         {p.isLoading ? <Skeleton height={280} /> : <TradingCalendar trades={p.allTrades} />}
@@ -425,8 +454,9 @@ export function Performance() {
                 value: g.pnl,
                 meta:
                   g.trades >= MIN_SAMPLE
-                    ? `${plural(g.trades, "op", "ops")} · ${share(g.winRate, 0)}`
-                    : `${plural(g.trades, "op", "ops")} · muestra corta`,
+                    ? `${plural(g.trades, 'op', 'ops')} · ${share(g.winRate, 0)}`
+                    : `${plural(g.trades, 'op', 'ops')} · muestra corta`,
+                thin: g.trades < MIN_SAMPLE,
               }))}
             />
           )}
@@ -441,7 +471,13 @@ export function Performance() {
                 key: g.key,
                 label: g.key === 'short' ? 'Cortos' : 'Largos',
                 value: g.pnl,
-                meta: `${plural(g.trades, "op", "ops")} · ${share(g.winRate, 0)}`,
+                // Same rule as every other bucket: four shorts at "100 %" is
+                // noise, and it printed as if it were a record.
+                meta:
+                  g.trades >= MIN_SAMPLE
+                    ? `${plural(g.trades, 'op', 'ops')} · ${share(g.winRate, 0)}`
+                    : `${plural(g.trades, 'op', 'ops')} · muestra corta`,
+                thin: g.trades < MIN_SAMPLE,
               }))}
             />
           )}
@@ -476,6 +512,7 @@ export function Performance() {
                     meta: b.reliable
                       ? `${plural(b.trades, 'op', 'ops')} · ${share(b.winRate, 0)}`
                       : `${plural(b.trades, 'op', 'ops')} · muestra corta`,
+                    thin: !b.reliable,
                   }))}
               />
             )}

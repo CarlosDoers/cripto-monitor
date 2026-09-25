@@ -58,6 +58,23 @@ export function qty(value: number): string {
   }).format(value)
 }
 
+/** Fiat currencies a spot pair can be quoted in on OKX. */
+const FIAT = new Set(['EUR', 'USD', 'GBP', 'BRL', 'TRY', 'AED', 'AUD', 'PLN'])
+
+/**
+ * An amount in a pair's own quote currency, never converted: `usd()` would
+ * relabel euros as dollars. Fiat is money and gets two decimals ("21,89 EUR");
+ * a crypto quote keeps the precision of a quantity. Before this, 21,885 EUR
+ * printed with three decimals, which in es-ES also reads like twenty-one
+ * thousand.
+ */
+export function quoteAmount(value: number, quote: string): string {
+  if (FIAT.has(quote)) {
+    return `${new Intl.NumberFormat('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value)} ${quote}`
+  }
+  return `${qty(value)} ${quote}`
+}
+
 export function price(value: number): string {
   const abs = Math.abs(value)
   const decimals = abs >= 1000 ? 2 : abs >= 1 ? 4 : abs >= 0.01 ? 5 : 8

@@ -106,6 +106,13 @@ export const HELP = {
     </p>
   ),
   duration: <p>Tiempo medio entre que abres una posición y la cierras.</p>,
+  roi: (
+    <p>
+      Resultado de la operación dividido entre el margen que pusiste, no entre su tamaño. Con
+      apalancamiento 5× un movimiento del 2 % en el precio es un ROI del 10 %, en las dos
+      direcciones.
+    </p>
+  ),
   streak: (
     <p>
       Operaciones seguidas con el mismo resultado. Una racha larga de pérdidas es normal incluso

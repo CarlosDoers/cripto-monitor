@@ -3071,3 +3071,9 @@ table.data td.num {
   font-weight: 600;
   color: var(--good);
 }
+
+/* Same rule as .hourly-col.is-thin: a bucket under MIN_SAMPLE trades reads as
+   noise, so it is drawn faded rather than hidden. */
+.diverging-row.is-thin {
+  opacity: 0.45;
+}

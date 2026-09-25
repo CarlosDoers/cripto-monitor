@@ -43,6 +43,11 @@ export interface DivergingRow {
   label: string
   value: number
   meta?: string
+  /**
+   * Under `MIN_SAMPLE` trades: drawn faded, like the hourly bars, so a bucket
+   * of two lucky trades cannot look as solid as one of forty.
+   */
+  thin?: boolean
 }
 
 /**
@@ -74,7 +79,7 @@ export function DivergingBars({
         const pct = (Math.abs(row.value) / span) * 100
         const positive = row.value >= 0
         return (
-          <li key={row.key} className="diverging-row">
+          <li key={row.key} className={`diverging-row${row.thin ? ' is-thin' : ''}`}>
             <span className="diverging-label">
               {row.label}
               {row.meta && <span className="sub"> {row.meta}</span>}

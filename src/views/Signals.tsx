@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { TIMEFRAMES, useSignals, type Timeframe } from '../lib/signals'
 import {
   appliesTo,
+  blockReason,
   MIN_TRADABLE_R,
   profileOf,
   STRATEGIES,
@@ -404,7 +405,10 @@ export function Signals() {
     (strategy.regime === 'ranging' && s.regime !== 'trending')
 
   const currentVerdict = timeframeVerdict(profile, timeframe)
-  const blocked = TIMEFRAMES.filter((t) => timeframeVerdict(profile, t.key) === 'blocked')
+  const blockedFor = (reason: string) => TIMEFRAMES.filter((t) => blockReason(profile, t.key) === reason)
+  const costBlocked = blockedFor('cost')
+  const unstableBlocked = blockedFor('unstable')
+  const bestTf = TIMEFRAMES.find((t) => t.key === tradableTimeframes(profile)[0])
 
   /**
    * Switching strategy or preset can invalidate the timeframe — the breakout is
@@ -488,7 +492,8 @@ export function Signals() {
             {TIMEFRAMES.map((t) => {
               const r = profile.byTimeframe[t.key] ?? 0
               const verdict = analysis ? 'open' : timeframeVerdict(profile, t.key)
-              const applies = appliesTo(profile, t.key)
+              const reason = blockReason(profile, t.key)
+              const halves = profile.halves[t.key]
               if (analysis) {
                 return (
                   <button
@@ -509,11 +514,13 @@ export function Signals() {
                   disabled={verdict === 'blocked'}
                   onClick={() => setTimeframe(t.key)}
                   title={
-                    !applies
+                    reason === 'not-applicable'
                       ? 'No aplica: esta estrategia se construye con velas de 15 m.'
-                      : verdict === 'blocked'
+                      : reason === 'cost'
                         ? `Bloqueada: ${ratio(r)} R por señal en el barrido. Las comisiones se comen la ventaja.`
-                        : `Esperanza medida: ${ratio(r)} R por señal`
+                        : reason === 'unstable'
+                          ? `Bloqueada: ${ratio(r)} R de media, pero ${ratio(Math.min(...(halves ?? [0])))} R en una de las dos mitades del histórico. No se sostiene.`
+                          : `Esperanza medida: ${ratio(r)} R por señal`
                   }
                 >
                   {t.label}
@@ -599,7 +606,7 @@ export function Signals() {
             <p className="notice-title">
               En {currentTf?.label} la ventaja es pequeña, no sólida
             </p>
-            {profile.nativeTimeframe ? (
+            {profile.exclusive ? (
               <p className="notice-text">
                 El barrido dio {ratio(profile.byTimeframe[timeframe] ?? 0)} R por señal después de
                 costes, y cada ida y vuelta cuesta aquí <strong>{ratio(r.avgFeeR)} R</strong>: una
@@ -611,10 +618,10 @@ export function Signals() {
             ) : (
               <p className="notice-text">
                 El barrido dio {ratio(profile.byTimeframe[timeframe] ?? 0)} R por señal después de
-                costes, frente a {ratio(profile.byTimeframe['1D'] ?? 0)} R en diario. Cada ida y
-                vuelta cuesta aquí <strong>{ratio(r.avgFeeR)} R</strong>, así que un pequeño cambio
-                en tus comisiones se lleva por delante el margen. La temporalidad diaria es la que
-                tiene la evidencia detrás.
+                costes, frente a {ratio(profile.byTimeframe[bestTf?.key ?? '1D'] ?? 0)} R en{' '}
+                {bestTf?.label}. Cada ida y vuelta cuesta aquí <strong>{ratio(r.avgFeeR)} R</strong>,
+                así que un pequeño cambio en tus comisiones se lleva por delante el margen.
+                {bestTf ? ` ${bestTf.label} es la temporalidad con la evidencia detrás.` : ''}
               </p>
             )}
           </div>
@@ -825,19 +832,29 @@ export function Signals() {
           <Card title="Validación y Backtest Estadístico">
             <div className="prose">
               <p>
-                Barrido sobre 10 instrumentos principales, puntuado por esperanza en R neta de comisiones (0,1 %):
+                Barrido sobre hasta 10 instrumentos, puntuado por esperanza en R neta de comisiones
+                (0,1 %). En diario solo BTC, ETH y SOL tienen años de historia; los contratos X-Perp
+                cuentan en las temporalidades cortas:
               </p>
               <ul className="bt-list">
                 {TIMEFRAMES.map((t) => {
                   const v = profile.byTimeframe[t.key] ?? 0
                   const applies = appliesTo(profile, t.key)
-                  const isBlocked = timeframeVerdict(profile, t.key) === 'blocked'
+                  const reason = blockReason(profile, t.key)
+                  const isBlocked = reason !== null
                   return (
                     <li key={t.key} className={isBlocked ? 'is-blocked' : undefined}>
                       <span className="bt-tf">
                         {t.label}
                         {isBlocked && (
-                          <span className="bt-lock"> {applies ? 'bloqueada' : 'no aplica'}</span>
+                          <span className="bt-lock">
+                            {' '}
+                            {reason === 'not-applicable'
+                              ? 'no aplica'
+                              : reason === 'unstable'
+                                ? 'inestable'
+                                : 'bloqueada'}
+                          </span>
                         )}
                       </span>
                       {applies ? (
@@ -866,25 +883,43 @@ export function Signals() {
               {/* Two reasons a timeframe is off, and they are not interchangeable:
                   the cost of a tight stop, or the strategy not existing there at
                   all. Saying "the commission eats it" about the second is a lie. */}
-              {blocked.length > 0 &&
-                (profile.nativeTimeframe ? (
-                  <p className="sub">
-                    Esta estrategia solo existe en{' '}
-                    {TIMEFRAMES.find((t) => t.key === profile.nativeTimeframe)?.label ??
-                      profile.nativeTimeframe}
-                    : el rango de apertura son 30 minutos y hace falta esa resolución para
-                    construirlo. El resto de temporalidades no están bloqueadas por comisiones, es
-                    que no se pueden calcular.
-                  </p>
-                ) : (
-                  <p className="sub">
-                    {blocked.length === 1 ? 'La temporalidad' : 'Las temporalidades'}{' '}
-                    {blocked.map((t) => t.label).join(', ')} {blocked.length === 1 ? 'está' : 'están'}{' '}
-                    bloqueada{blocked.length === 1 ? '' : 's'} porque la esperanza medida no llega a{' '}
-                    {ratio(MIN_TRADABLE_R)} R. No es que la estrategia falle más: el stop está tan
-                    cerca del precio que la comisión se lleva la ventaja entera.
-                  </p>
-                ))}
+              {profile.exclusive && (
+                <p className="sub">
+                  Esta estrategia solo existe en{' '}
+                  {TIMEFRAMES.find((t) => t.key === profile.nativeTimeframe)?.label ??
+                    profile.nativeTimeframe}
+                  : el rango de apertura son 30 minutos y hace falta esa resolución para
+                  construirlo. El resto de temporalidades no están bloqueadas por comisiones, es
+                  que no se pueden calcular.
+                </p>
+              )}
+              {costBlocked.length > 0 && (
+                <p className="sub">
+                  {costBlocked.length === 1 ? 'La temporalidad' : 'Las temporalidades'}{' '}
+                  {costBlocked.map((t) => t.label).join(', ')}{' '}
+                  {costBlocked.length === 1 ? 'está bloqueada' : 'están bloqueadas'} porque la
+                  esperanza medida no llega a {ratio(MIN_TRADABLE_R)} R. No es que la estrategia
+                  falle más: el stop está tan cerca del precio que la comisión se lleva la ventaja
+                  entera.
+                </p>
+              )}
+              {/* A third reason, and it is not the commission: the average
+                  clears the bar on the strength of one half of the history, or
+                  of a handful of trades. */}
+              {unstableBlocked.length > 0 && (
+                <p className="sub">
+                  {unstableBlocked.map((t) => {
+                    const [a, b] = profile.halves[t.key] ?? [0, 0]
+                    return (
+                      <span key={t.key}>
+                        En {t.label} la media es de {ratio(profile.byTimeframe[t.key] ?? 0)} R, pero
+                        mide {ratio(a)} R en la primera mitad del histórico y {ratio(b)} R en la
+                        segunda: no se sostiene en las dos, así que no se ofrece.{' '}
+                      </span>
+                    )
+                  })}
+                </p>
+              )}
             </div>
           </Card>
         </div>

@@ -51,24 +51,6 @@ export const DONCHIAN_SETTINGS: DonchianSettings = {
   feeRate: 0.001,
 }
 
-/**
- * Higher hit rate, smaller edge. A 55-bar breakout filtered by the EMA(200),
- * with a tight stop and a fixed 1.5 R target instead of a trail.
- *
- * On four years of daily BTC/ETH/SOL this lifts the hit rate from ~40 % to 53 %
- * while expectancy drops from ~0.47 R to 0.31 R — the classic trade. It is
- * offered because a higher hit rate is easier to sit through, not because it
- * makes more money. **Daily only**: on shorter timeframes it is negative.
- */
-export const DONCHIAN_ACCURATE: DonchianSettings = {
-  ...DONCHIAN_SETTINGS,
-  channelLen: 55,
-  stopAtr: 1.5,
-  trailAtr: 0,
-  targetR: 1.5,
-  trendLen: 200,
-}
-
 export function analyseDonchian(
   candles: Candle[],
   settings: DonchianSettings = DONCHIAN_SETTINGS,

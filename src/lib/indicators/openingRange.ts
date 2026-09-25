@@ -19,14 +19,20 @@ import { feeInR, summarise, type Candle, type Overlay, type StrategyResult, type
  * ATR multiple but **the whole opening range**, which at the bell measures
  * ~0.55 % instead of the ~0.25 % typical of this timeframe. Cost in R is
  * `feeRate / (stop distance / price)`, so a wide range halves it. Measured at
- * +0.16 R with a 0.1 % round trip, still positive (+0.08 R) at 0.2 %, dead at
- * 0.3 %. That last number is the one to watch: every entry here is a taker stop
- * order, so slippage is the real risk, not the signal.
+ * +0.25 R with a 0.1 % round trip, +0.14 R at 0.2 %, +0.02 R at 0.3 %. That
+ * last number is the one to watch: every entry here is a taker stop order, so
+ * slippage is the real risk, not the signal.
  *
- * The volume filter is the "stocks in play" screen of the original paper, where
- * trading only the names with abnormal volume is where nearly all the result
- * comes from. There are no names to screen here, so the demand is that the
- * opening range itself move more volume than its own recent average.
+ * **Weekdays only.** New York does not open on Saturday or Sunday, so there is
+ * nothing to borrow, and the 1 640 weekend trades measured −0.17 R. Dropping
+ * them lifts every open from +0.14 R to +0.25 R and BTC from −0.01 to +0.18.
+ *
+ * That is also what the volume filter turned out to be. It was the paper's
+ * "stocks in play" screen — trade only the opens that move more volume than
+ * usual — and it looked like it worked: +0.18 R against +0.14 without it. But
+ * it was dropping 92 % of weekends, which trade thin. With the weekends gone it
+ * lowers the result at every threshold from 1.0× to 2.0×, so it is off
+ * (`minRelVolume: 0`) and stays in the settings only so the sweep can test it.
  *
  * Only meaningful on 15 m candles: the range is 30 minutes and it takes that
  * resolution to build it. On any other timeframe `analyseOpeningRange` returns
@@ -44,33 +50,27 @@ export interface OpeningRangeSettings {
   minRelVolume: number
   /** How many previous opens that average is taken over. */
   relVolumeLookback: number
+  /** Skip Saturdays and Sundays, when New York has no open to borrow. */
+  weekdaysOnly: boolean
   feeRate: number
 }
 
 /**
- * Measured on BTC/ETH/SOL, 15 m, 2022-01 → 2026-09. Varying one parameter at a
- * time — range from 15 to 90 minutes, hold from 6 to 36 hours, volume filter
- * from 1.0 to 2.0, fixed targets of 2 R to 8 R or none — all 21 variants stay
- * positive across both halves of the history. That flat neighbourhood is what
- * separates a real result from having landed on lucky parameters.
+ * Measured on BTC/ETH/SOL, 15 m, 2022-01 → 2026-09 (`npm run orb`). Varying
+ * one parameter at a time, every range from 15 to 90 minutes and every hold
+ * from 6 to 36 hours stays positive; only the 60-minute range misses the bar on
+ * one half. That flat neighbourhood is what separates a real result from having
+ * landed on lucky parameters — and the 30-minute range is the paper's, not the
+ * best cell (15 minutes measures higher and was left alone).
  */
 export const OPENING_RANGE_SETTINGS: OpeningRangeSettings = {
   anchorMinuteNY: 570, // 09:30
   rangeMinutes: 30,
   holdHours: 24,
-  minRelVolume: 1.2,
-  relVolumeLookback: 14,
-  feeRate: 0.001,
-}
-
-/**
- * Every open, with no volume screen. Measured lower per signal than the filtered
- * version but it fires more than three times as often, so it produces more R per
- * year — the same trade the Donchian presets offer between size and frequency.
- */
-export const OPENING_RANGE_ALL: OpeningRangeSettings = {
-  ...OPENING_RANGE_SETTINGS,
   minRelVolume: 0,
+  relVolumeLookback: 14,
+  weekdaysOnly: true,
+  feeRate: 0.001,
 }
 
 const BAR_MS = 900_000 // 15 m
@@ -133,6 +133,9 @@ function buildRanges(candles: Candle[], settings: OpeningRangeSettings): Opening
   const ranges: OpeningRange[] = []
 
   for (const dayStart of days) {
+    // The anchor falls at 13:30–14:30 UTC, so the UTC date is New York's date.
+    const weekday = new Date(dayStart).getUTCDay()
+    if (settings.weekdaysOnly && (weekday === 0 || weekday === 6)) continue
     const anchor = nyAnchorTime(dayStart, anchorMinuteNY)
     const start = byTime.get(anchor)
     if (start === undefined || start + length >= candles.length) continue

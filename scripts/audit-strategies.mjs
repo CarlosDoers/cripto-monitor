@@ -92,6 +92,19 @@ for (const strategy of STRATEGIES) {
       if (verdict !== 'blocked' && measured < MIN_TRADABLE_R && sigs.length >= 20) {
         problems.push(`${name} · ${bar}: SELECCIONABLE pero mide ${measured.toFixed(2)} R`)
       }
+      // The halves are declared too, because the gate reads them: a timeframe
+      // is only selectable if both clear the bar. Declared halves that drift
+      // from the data would open or close a timeframe on a false number.
+      const halves = profile.halves?.[bar]
+      if (halves && sigs.length >= 20) {
+        if (Math.abs(halves[0] - ins) > TOL || Math.abs(halves[1] - out) > TOL) {
+          problems.push(
+            `${name} · ${bar}: mitades medidas ${ins.toFixed(2)} / ${out.toFixed(2)} vs declaradas ${halves[0]} / ${halves[1]}`,
+          )
+        }
+      } else if (measured >= MIN_TRADABLE_R && sigs.length >= 20) {
+        problems.push(`${name} · ${bar}: supera el umbral pero no declara sus mitades (in ${ins.toFixed(2)} / out ${out.toFixed(2)})`)
+      }
       if (verdict !== 'blocked' && sigs.length >= 20 && Math.min(ins, out) < MIN_TRADABLE_R) {
         weak.push(
           `${name} · ${bar}: seleccionable, pero una mitad del histórico mide ${Math.min(ins, out).toFixed(2)} R (in ${ins.toFixed(2)} / out ${out.toFixed(2)})`,

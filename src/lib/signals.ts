@@ -1,7 +1,7 @@
 import { useMemo } from 'react'
 import { useCandleArchive, useCandleHistory } from './queries'
 import { efficiencyRatio, regimeOf, strategyByKey } from './indicators/registry'
-import type { Candle } from './indicators/types'
+import { summarise, type Candle } from './indicators/types'
 
 /**
  * Just the labels. Whether a timeframe is worth offering is derived per strategy
@@ -21,12 +21,21 @@ export const TIMEFRAMES = [
 
 export type Timeframe = (typeof TIMEFRAMES)[number]['key']
 
-export function useSignals(instId: string, bar: Timeframe, strategyKey: string, presetKey: string) {
-  const strategy = strategyByKey(strategyKey)
+/** No strategy runs in the Análisis tab: it is candles, levels and trendlines. */
+const NO_STRATEGY = summarise([], [], 0, null)
+
+/** `strategyKey` null is the Análisis tab: candles only, no strategy run. */
+export function useSignals(
+  instId: string,
+  bar: Timeframe,
+  strategyKey: string | null,
+  presetKey: string,
+) {
+  const strategy = strategyKey ? strategyByKey(strategyKey) : null
   const query = useCandleHistory(instId, bar)
   // Deep history for the strategies that need more than /market/candles will
   // ever return. The two overlap; the merge below dedupes on timestamp.
-  const archive = useCandleArchive(instId, bar, strategy.archiveBars ?? 0)
+  const archive = useCandleArchive(instId, bar, strategy?.archiveBars ?? 0)
 
   const candles = useMemo<Candle[]>(
     () => {
@@ -51,7 +60,7 @@ export function useSignals(instId: string, bar: Timeframe, strategyKey: string, 
   )
 
   const result = useMemo(
-    () => strategy.run(candles, presetKey),
+    () => (strategy ? strategy.run(candles, presetKey) : NO_STRATEGY),
     [strategy, candles, presetKey],
   )
 

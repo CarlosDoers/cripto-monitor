@@ -3,19 +3,13 @@ import { useSize } from '../lib/useSize'
 import { dateTime, price as fmtPrice, plural } from '../lib/format'
 import type { Candle, StrategyResult } from '../lib/indicators/types'
 import type { Level } from '../lib/indicators/levels'
+import { chartStart } from '../lib/chartWindow'
+import { lineAt, type Trendline } from '../lib/indicators/trendlines'
 
 const PAD = { top: 12, right: 66, bottom: 22, left: 10 }
 
-/** Past this many candles the bodies are thinner than a pixel. */
-const MAX_VISIBLE = 400
-
-/**
- * Below this width a level label has nowhere to go: on a phone the candles
- * start at the left edge, so the text prints over the price action instead of
- * beside it. The lines stay — the axis on the right already says what price
- * they sit at — and only the labels drop out.
- */
-const LABEL_MIN_WIDTH = 520
+/** Height of a price tag in the axis gutter, and the gap two need between them. */
+const TAG_H = 14
 
 /** Rounded tick values bracketing the range. */
 function ticks(min: number, max: number, count = 5): number[] {
@@ -39,6 +33,7 @@ export function PriceChart({
   candles,
   result,
   levels,
+  trendlines,
   visible = 160,
   height = 340,
 }: {
@@ -51,6 +46,12 @@ export function PriceChart({
    * be mistaken for a signal the strategy produced.
    */
   levels?: Level[]
+  /**
+   * Diagonal support and resistance, with indices into `candles`. The same
+   * verdict as the levels — no better than a parallel line at a random distance
+   * (`npm run trendlines`) — so they are drawn in ink, never in a strategy colour.
+   */
+  trendlines?: Trendline[]
   visible?: number
   height?: number
 }) {
@@ -65,12 +66,7 @@ export function PriceChart({
     )
   }
 
-  // Widen the window if needed so the most recent signal is always on screen —
-  // otherwise a chart of a signal indicator can show no signals at all.
-  const lastSignal = result.signals.at(-1)
-  const wanted = lastSignal ? Math.max(visible, candles.length - lastSignal.index + 12) : visible
-  const span = Math.min(wanted, MAX_VISIBLE, candles.length)
-  const start = Math.max(0, candles.length - span)
+  const start = chartStart(candles, result, visible)
   const view = candles.slice(start)
   const w = Math.max(width, 300)
   const plotW = w - PAD.left - PAD.right
@@ -82,6 +78,7 @@ export function PriceChart({
     min = Math.min(min, view[i].low)
     max = Math.max(max, view[i].high)
     for (const o of result.overlays) {
+      if (o.context) continue
       const v = o.values[start + i]
       if (Number.isFinite(v)) {
         min = Math.min(min, v)
@@ -153,20 +150,41 @@ export function PriceChart({
   // current price would stretch the scale and flatten every candle on screen.
   const visibleLevels = (levels ?? []).filter((l) => l.price > min && l.price < max)
 
+  const lastBar = candles.length - 1
+  const plotRight = w - PAD.right
+  // A trendline is drawn if any stretch of it crosses the plot — the clip path
+  // trims the rest. Filtering on where it sits *now* hid an ascending
+  // resistance that ran along the recent highs and left the top of the scale
+  // only on the last few bars, while the table under the chart still listed it.
+  const inRange = (v: number) => v > min && v < max
+  const visibleTrends = (trendlines ?? []).filter((t) => {
+    const a = t.p1
+    const b = lineAt(t, lastBar)
+    return t.i1 >= start && Math.min(a, b) < max && Math.max(a, b) > min
+  })
+
   /**
    * Ticks can overlap; labels cannot — the same rule `PositionRisk` needed.
-   * Two levels a few ATRs apart land within a line height of each other and
-   * their prices print interleaved into one unreadable string. Every line is
-   * still drawn; only the label yields, and the strongest level keeps it.
+   * Every line is drawn, and each one's price goes into the axis gutter as a
+   * tag, like a hand-drawn line in TradingView. The gutter is the one place a
+   * label never lands on a candle, which is what forced the old left-edge
+   * labels off phones entirely. Trendlines claim their slot first — there are
+   * at most four — then levels by strength.
    */
-  const LABEL_GAP = 13
-  const labelled = new Set<number>()
-  const placedLabels: number[] = []
+  const tags: { key: string; y: number; value: number; strong: boolean }[] = []
+  const claim = (key: string, value: number, strong: boolean) => {
+    const ty = y(value)
+    if (tags.some((t) => Math.abs(t.y - ty) < TAG_H)) return
+    tags.push({ key, y: ty, value, strong })
+  }
+  // A tag only where the line is on the scale today; an off-scale tag would
+  // pin itself to the edge and claim a price the axis does not show.
+  for (const t of visibleTrends) {
+    const now = lineAt(t, lastBar)
+    if (inRange(now)) claim(`t-${t.i1}-${t.i2}`, now, true)
+  }
   for (const l of [...visibleLevels].sort((a, b) => b.strength - a.strength)) {
-    const ly = y(l.price)
-    if (placedLabels.some((p) => Math.abs(p - ly) < LABEL_GAP)) continue
-    placedLabels.push(ly)
-    labelled.add(l.price)
+    claim(`l-${l.price}`, l.price, false)
   }
 
   const visibleSignals = result.signals.filter((s) => s.index >= start)
@@ -206,7 +224,7 @@ export function PriceChart({
         </defs>
 
         {ticks(min, max).map((v) => (
-          <g key={v}>
+          <g key={v} opacity={tags.some((t) => Math.abs(t.y - y(v)) < TAG_H) ? 0 : 1}>
             <line x1={PAD.left} x2={w - PAD.right} y1={y(v)} y2={y(v)} stroke="var(--gridline)" />
             <text
               x={w - PAD.right + 6}
@@ -221,31 +239,62 @@ export function PriceChart({
           </g>
         ))}
 
+        <clipPath id="plot-area">
+          <rect x={PAD.left} y={PAD.top} width={plotW} height={plotH} />
+        </clipPath>
+
         {visibleLevels.map((l) => (
-          <g key={`nivel-${l.price}`}>
-            <line
-              x1={PAD.left}
-              x2={w - PAD.right}
-              y1={y(l.price)}
-              y2={y(l.price)}
-              stroke="var(--ink-muted)"
-              strokeWidth={1}
-              strokeDasharray="1 4"
-              opacity={0.55}
-            />
-            {labelled.has(l.price) && w >= LABEL_MIN_WIDTH && (
-              <text
-                x={PAD.left + 4}
-                y={y(l.price) - 4}
-                fontSize={10}
-                fill="var(--ink-muted)"
-                style={{ fontVariantNumeric: 'tabular-nums' }}
-              >
-                {fmtPrice(l.price)} · {plural(l.touches, 'toque', 'toques')}
-              </text>
-            )}
-          </g>
+          <line
+            key={`nivel-${l.price}`}
+            x1={PAD.left}
+            x2={plotRight}
+            y1={y(l.price)}
+            y2={y(l.price)}
+            stroke="var(--ink-muted)"
+            strokeWidth={1}
+            opacity={0.35 + l.strength * 0.35}
+          >
+            <title>
+              {l.kind === 'soporte' ? 'Soporte' : 'Resistencia'} horizontal en {fmtPrice(l.price)} ·{' '}
+              {plural(l.touches, 'toque', 'toques')}
+            </title>
+          </line>
         ))}
+
+        <g clipPath="url(#plot-area)">
+          {visibleTrends.map((t) => (
+            <g key={`tendencia-${t.i1}-${t.i2}`}>
+              <line
+                x1={x(t.i1 - start)}
+                x2={plotRight}
+                y1={y(t.p1)}
+                y2={y(lineAt(t, lastBar + 0.5))}
+                stroke="var(--ink-secondary)"
+                strokeWidth={1.25}
+                opacity={0.8}
+              >
+                <title>
+                  Línea de tendencia de {t.kind} · {plural(t.touches, 'toque', 'toques')} · ahora en{' '}
+                  {fmtPrice(lineAt(t, lastBar))}
+                </title>
+              </line>
+              {[
+                [t.i1, t.p1],
+                [t.i2, t.p2],
+              ].map(([i, p]) => (
+                <circle
+                  key={i}
+                  cx={x(i - start)}
+                  cy={y(p)}
+                  r={2.5}
+                  fill="var(--surface-1)"
+                  stroke="var(--ink-secondary)"
+                  strokeWidth={1}
+                />
+              ))}
+            </g>
+          ))}
+        </g>
 
         {result.overlays.map((o) =>
           o.fillTo ? (
@@ -256,6 +305,7 @@ export function PriceChart({
         {result.overlays.map((o) => (
           <path
             key={o.key}
+            clipPath={o.context ? 'url(#plot-area)' : undefined}
             d={linePath(o.values)}
             fill="none"
             stroke={o.colour}
@@ -352,6 +402,31 @@ export function PriceChart({
           )
         })}
 
+        {/* Drawn after the axis so each tag covers the tick label under it. */}
+        {tags.map((t) => (
+          <g key={t.key} pointerEvents="none">
+            <rect
+              x={plotRight + 2}
+              y={t.y - TAG_H / 2}
+              width={PAD.right - 4}
+              height={TAG_H}
+              fill="var(--surface-2)"
+              stroke="var(--ink-muted)"
+              strokeWidth={t.strong ? 1 : 0.5}
+            />
+            <text
+              x={plotRight + 6}
+              y={t.y}
+              dominantBaseline="middle"
+              fontSize={10}
+              fill={t.strong ? 'var(--ink-primary)' : 'var(--ink-secondary)'}
+              style={{ fontVariantNumeric: 'tabular-nums' }}
+            >
+              {fmtPrice(t.value)}
+            </text>
+          </g>
+        ))}
+
         <text x={PAD.left} y={height - 5} fontSize={11} fill="var(--ink-muted)">
           {new Date(view[0].time).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })}
         </text>
@@ -411,27 +486,44 @@ export function PriceChart({
         {visibleLevels.length > 0 && (
           <li className="legend-item">
             <svg width="24" height="8" aria-hidden="true">
-              <line x1="0" y1="4" x2="24" y2="4" stroke="var(--ink-muted)" strokeDasharray="1 4" />
+              <line x1="0" y1="4" x2="24" y2="4" stroke="var(--ink-muted)" />
             </svg>
-            Niveles · contexto, no señal
+            Soportes y resistencias
           </li>
         )}
-        <li className="legend-item">
-          <span style={{ color: 'var(--good)' }}>▲</span> Long
-          <span style={{ color: 'var(--critical)', marginLeft: 8 }}>▼</span> Short
-        </li>
-        <li className="legend-item">
-          <svg width="24" height="8" aria-hidden="true">
-            <line x1="0" y1="4" x2="24" y2="4" stroke="var(--ink-secondary)" strokeDasharray="5 4" />
-          </svg>
-          Salida
-        </li>
-        <li className="legend-item">
-          <svg width="24" height="8" aria-hidden="true">
-            <line x1="0" y1="4" x2="24" y2="4" stroke="var(--ink-secondary)" strokeDasharray="2 3" />
-          </svg>
-          Stop
-        </li>
+        {visibleTrends.length > 0 && (
+          <li className="legend-item">
+            <svg width="24" height="8" aria-hidden="true">
+              <line x1="0" y1="7" x2="24" y2="1" stroke="var(--ink-secondary)" strokeWidth={1.25} />
+            </svg>
+            Líneas de tendencia
+          </li>
+        )}
+        {(visibleLevels.length > 0 || visibleTrends.length > 0) && (
+          <li className="legend-item sub">contexto, no señal</li>
+        )}
+        {/* The signal anatomy only means something when there are signals —
+            the Análisis tab has none and printed Long/Short/Stop anyway. */}
+        {result.signals.length > 0 && (
+          <>
+            <li className="legend-item">
+              <span style={{ color: 'var(--good)' }}>▲</span> Long
+              <span style={{ color: 'var(--critical)', marginLeft: 8 }}>▼</span> Short
+            </li>
+            <li className="legend-item">
+              <svg width="24" height="8" aria-hidden="true">
+                <line x1="0" y1="4" x2="24" y2="4" stroke="var(--ink-secondary)" strokeDasharray="5 4" />
+              </svg>
+              Salida
+            </li>
+            <li className="legend-item">
+              <svg width="24" height="8" aria-hidden="true">
+                <line x1="0" y1="4" x2="24" y2="4" stroke="var(--ink-secondary)" strokeDasharray="2 3" />
+              </svg>
+              Stop
+            </li>
+          </>
+        )}
       </ul>
     </div>
   )

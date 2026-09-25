@@ -2832,3 +2832,34 @@ table.data td.num {
   font-family: var(--font);
   font-weight: 400;
 }
+
+/* Nearest support and resistance under the Señales chart. */
+.chart-context {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 18px;
+  margin-top: 10px;
+}
+
+.chart-context strong {
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-primary);
+}
+
+/* Análisis: the current price sits in the ladder between resistances and supports. */
+.levels-price-row,
+.levels-price-row td {
+  background: var(--surface-2);
+}
+
+@media (max-width: 720px) {
+  .levels-price-row td {
+    background: none;
+  }
+}
+
+.levels-note {
+  padding: 14px 18px 16px;
+  border-top: 1px solid var(--border);
+}

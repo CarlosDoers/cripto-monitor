@@ -185,14 +185,19 @@ export function analyseOpeningRange(
   const orHigh = new Array<number>(candles.length).fill(NaN)
   const orLow = new Array<number>(candles.length).fill(NaN)
 
-  for (const range of ranges) {
+  for (const [n, range] of ranges.entries()) {
     const first = range.start + range.length
     const end = Math.min(candles.length, first + holdBars)
     // The last window of a live history is usually still running. Closing it
     // just because the data ends would turn an open trade into a result.
     const complete = first + holdBars <= candles.length
 
-    for (let i = first; i < end; i++) {
+    // A 24 h window ends exactly where the next day's range is fixed, so drawn
+    // to its end the two days' lines join into one path with a vertical step
+    // between them — a level that never existed. The drawing stops where the
+    // next range starts forming; the trade itself still runs to `end`.
+    const drawEnd = Math.min(end, ranges[n + 1]?.start ?? end)
+    for (let i = first; i < drawEnd; i++) {
       orHigh[i] = range.high
       orLow[i] = range.low
     }

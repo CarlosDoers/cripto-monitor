@@ -53,6 +53,12 @@ export interface Overlay {
   dashed?: boolean
   /** Fill the area down to this other overlay. */
   fillTo?: string
+  /**
+   * Context rather than part of a strategy: left out of the price scale and
+   * clipped to the plot. A 200-period average far from price would otherwise
+   * stretch the axis and flatten every candle — the rule the levels follow.
+   */
+  context?: boolean
 }
 
 export interface StrategyResult {

@@ -295,7 +295,9 @@ export function strategyByKey(key: string): StrategyDef {
  */
 export function efficiencyRatio(candles: Candle[], window = 100): number {
   if (candles.length < window + 1) return 0
-  const c = candles.map((k) => k.close)
+  // Only the last `window + 1` closes are read. Mapping the whole series copied
+  // the 15 m archive — tens of thousands of bars — on every change of it.
+  const c = candles.slice(-(window + 1)).map((k) => k.close)
   const end = c.length - 1
   const net = Math.abs(c[end] - c[end - window])
   let path = 0

@@ -52,13 +52,13 @@ export const LEVEL_SETTINGS: LevelSettings = {
   maxLevels: 6,
 }
 
-interface Pivot {
+export interface Pivot {
   price: number
   index: number
 }
 
 /** Swing highs and lows. A pivot needs `pivot` bars each side, so the last ones never qualify. */
-function pivots(candles: Candle[], span: number): { highs: Pivot[]; lows: Pivot[] } {
+export function pivots(candles: Candle[], span: number): { highs: Pivot[]; lows: Pivot[] } {
   const highs: Pivot[] = []
   const lows: Pivot[] = []
   for (let i = span; i < candles.length - span; i++) {

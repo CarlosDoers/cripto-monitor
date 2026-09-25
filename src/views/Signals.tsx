@@ -21,6 +21,8 @@ import { feeMix } from '../lib/fees'
 import { dateTime, num, pct, plural, price, ratio, share, timeAgo } from '../lib/format'
 import { PriceChart } from '../components/PriceChart'
 import { LevelsTable } from '../components/LevelsTable'
+import { ReversalWatch } from '../components/ReversalWatch'
+import { trapWatch, TUNED_SETTINGS } from '../lib/indicators/reversalTrap'
 import { chartStart } from '../lib/chartWindow'
 import { findLevels } from '../lib/indicators/levels'
 import { findTrendlines, lineAt } from '../lib/indicators/trendlines'
@@ -312,8 +314,21 @@ export function Signals() {
   const selected = instId || options[0] || 'BTC-USDT'
 
   const s = useSignals(selected, timeframe, analysis ? null : strategyKey, preset.key)
-  const [showLevels, setShowLevels] = useState(true)
-  const [showTrends, setShowTrends] = useState(true)
+  /**
+   * Context lines are on by default in Análisis, where they are the point, and
+   * off on a strategy tab, where six levels and two trendlines drew over the
+   * strategy's own bands and trade boxes until neither could be read. Each
+   * mode keeps its own choice.
+   */
+  const [context, setContext] = useState({
+    analysis: { levels: true, trends: true },
+    strategy: { levels: false, trends: false },
+  })
+  const mode = analysis ? 'analysis' : 'strategy'
+  const showLevels = context[mode].levels
+  const showTrends = context[mode].trends
+  const toggleContext = (key: 'levels' | 'trends') =>
+    setContext((c) => ({ ...c, [mode]: { ...c[mode], [key]: !c[mode][key] } }))
   // Off by default: six levels and two trendlines already fill the chart, and
   // an average is the easiest line there to over-read as a signal.
   const [showMas, setShowMas] = useState(false)
@@ -367,6 +382,22 @@ export function Signals() {
   )
   const currentTf = TIMEFRAMES.find((t) => t.key === timeframe)
   const lastPrice = s.candles.at(-1)?.close ?? 0
+
+  // The reversal's rule applied to the last closed candle. Its bands are
+  // already in the result as overlays, so nothing is recomputed.
+  const watch = useMemo(() => {
+    if (analysis || strategy.key !== 'reversal') return null
+    const band = (key: string) => r.overlays.find((o) => o.key === key)?.values ?? []
+    return trapWatch(
+      s.candles,
+      band('upper'),
+      band('basis'),
+      band('lower'),
+      r.signals.at(-1)?.index ?? null,
+      r.active?.side ?? null,
+      TUNED_SETTINGS,
+    )
+  }, [analysis, strategy.key, r, s.candles])
 
   /**
    * The nearest line on each side, horizontal or diagonal. On a chart with six
@@ -635,6 +666,15 @@ export function Signals() {
         </Card>
       )}
 
+      {watch && !s.isLoading && s.usableBars >= MIN_BARS && (
+        <ReversalWatch
+          watch={watch}
+          active={r.active}
+          trapWindow={TUNED_SETTINGS.trapWindow}
+          lastClosed={s.candles.at(-1)?.time ?? 0}
+        />
+      )}
+
       {/* Main Chart Card */}
       <Card
         title={`${selected} · ${currentTf?.label}`}
@@ -650,7 +690,7 @@ export function Signals() {
               <button
                 type="button"
                 aria-pressed={showLevels}
-                onClick={() => setShowLevels((v) => !v)}
+                onClick={() => toggleContext('levels')}
                 title="Soportes y resistencias horizontales: precios donde se ha girado antes. No predicen reacciones: medidos contra una línea al azar, no la superan."
               >
                 Horizontales
@@ -658,7 +698,7 @@ export function Signals() {
               <button
                 type="button"
                 aria-pressed={showTrends}
-                onClick={() => setShowTrends((v) => !v)}
+                onClick={() => toggleContext('trends')}
                 title="Líneas de tendencia: rectas que unen dos o más mínimos (soporte) o máximos (resistencia) sin que ninguna vela haya cerrado al otro lado. Contexto, no señal: medidas contra una paralela al azar, no la superan."
               >
                 Tendencias

@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useSize } from '../lib/useSize'
-import { dateTime, price as fmtPrice, plural } from '../lib/format'
+import { dateTime, price as fmtPrice, plural, ratio } from '../lib/format'
 import type { Candle, StrategyResult } from '../lib/indicators/types'
 import type { Level } from '../lib/indicators/levels'
 import { chartStart } from '../lib/chartWindow'
@@ -168,14 +168,20 @@ export function PriceChart({
    * Every line is drawn, and each one's price goes into the axis gutter as a
    * tag, like a hand-drawn line in TradingView. The gutter is the one place a
    * label never lands on a candle, which is what forced the old left-edge
-   * labels off phones entirely. Trendlines claim their slot first — there are
-   * at most four — then levels by strength.
+   * labels off phones entirely. The strategy's own lines claim their slot
+   * first — the reversal's base is its target, the number the whole trade is
+   * about — then trendlines, then levels by strength.
    */
-  const tags: { key: string; y: number; value: number; strong: boolean }[] = []
-  const claim = (key: string, value: number, strong: boolean) => {
+  const tags: { key: string; y: number; value: number; strong: boolean; colour?: string }[] = []
+  const claim = (key: string, value: number, strong: boolean, colour?: string) => {
     const ty = y(value)
     if (tags.some((t) => Math.abs(t.y - ty) < TAG_H)) return
-    tags.push({ key, y: ty, value, strong })
+    tags.push({ key, y: ty, value, strong, colour })
+  }
+  for (const o of result.overlays) {
+    if (o.context) continue
+    const now = o.values[lastBar]
+    if (Number.isFinite(now) && inRange(now)) claim(`o-${o.key}`, now, true, o.colour)
   }
   // A tag only where the line is on the scale today; an off-scale tag would
   // pin itself to the edge and claim a price the axis does not show.
@@ -206,22 +212,6 @@ export function PriceChart({
         role="img"
         aria-label={`Gráfico de velas con ${plural(visibleSignals.length, 'señal', 'señales')}`}
       >
-        <defs>
-          {(['long', 'short'] as const).map((side) => (
-            <marker
-              key={side}
-              id={`arrow-${side}`}
-              viewBox="0 0 8 8"
-              refX={7}
-              refY={4}
-              markerWidth={5}
-              markerHeight={5}
-              orient="auto-start-reverse"
-            >
-              <path d="M0,1 L7,4 L0,7 z" fill={side === 'long' ? 'var(--good)' : 'var(--critical)'} />
-            </marker>
-          ))}
-        </defs>
 
         {ticks(min, max).map((v) => (
           <g key={v} opacity={tags.some((t) => Math.abs(t.y - y(v)) < TAG_H) ? 0 : 1}>
@@ -315,6 +305,72 @@ export function PriceChart({
           />
         ))}
 
+        {/* Each trade as the two boxes TradingView's position tool draws: from
+            entry to target in green, from entry to stop in red, spanning the
+            bars it was open. Dashed and dotted rails carried the same prices
+            but had to be decoded; a box reads as "this much to win, this much
+            to lose" at a glance, and the printed R at its end says which one
+            happened. Clipped, because a stop can sit off the price scale. */}
+        <g clipPath="url(#plot-area)">
+          {visibleSignals.map((s) => {
+            const i = s.index - start
+            const endIndex = Math.min(s.closedIndex ?? candles.length - 1, candles.length - 1)
+            const x0 = x(i)
+            const x1 = Math.max(x(endIndex - start), x0 + slot)
+            // Trailing strategies have no fixed target; the exit price is the story.
+            const finish = s.target ?? s.closedPrice
+            const box = (a: number, b: number) => ({
+              x: x0,
+              y: Math.min(y(a), y(b)),
+              width: x1 - x0,
+              height: Math.max(1, Math.abs(y(a) - y(b))),
+            })
+            // Without a fixed target the exit box is only green if it made money.
+            const finishGood = s.target !== undefined || (s.resultR ?? 0) >= 0
+            return (
+              <g key={`box-${s.index}-${s.side}`}>
+                {finish !== undefined && (
+                  <>
+                    <rect
+                      {...box(s.entry, finish)}
+                      fill={finishGood ? 'var(--good)' : 'var(--critical)'}
+                      opacity={0.13}
+                    />
+                    <line
+                      x1={x0}
+                      x2={x1}
+                      y1={y(finish)}
+                      y2={y(finish)}
+                      stroke={finishGood ? 'var(--good)' : 'var(--critical)'}
+                      strokeWidth={1}
+                      opacity={0.8}
+                    />
+                  </>
+                )}
+                <rect {...box(s.entry, s.stop)} fill="var(--critical)" opacity={0.1} />
+                <line
+                  x1={x0}
+                  x2={x1}
+                  y1={y(s.stop)}
+                  y2={y(s.stop)}
+                  stroke="var(--critical)"
+                  strokeWidth={1}
+                  opacity={0.6}
+                />
+                <line
+                  x1={x0}
+                  x2={x1}
+                  y1={y(s.entry)}
+                  y2={y(s.entry)}
+                  stroke="var(--ink-secondary)"
+                  strokeWidth={1}
+                  opacity={0.7}
+                />
+              </g>
+            )
+          })}
+        </g>
+
         {view.map((c, i) => {
           const up = c.close >= c.open
           const colour = up ? 'var(--good)' : 'var(--critical)'
@@ -339,63 +395,37 @@ export function PriceChart({
           const long = s.side === 'long'
           const colour = long ? 'var(--good)' : 'var(--critical)'
           const endIndex = Math.min(s.closedIndex ?? candles.length - 1, candles.length - 1)
-          const xEnd = x(Math.max(endIndex - start, i + 1))
+          const x1 = Math.max(x(endIndex - start), x(i) + slot)
           const marker = long ? y(candles[s.index].low) + 16 : y(candles[s.index].high) - 16
-          // Trailing strategies have no fixed target; the exit price is the story.
           const finish = s.target ?? s.closedPrice
-
+          // The result sits beside the line the trade ended on: the target or
+          // exit for a winner, the stop for a loser.
+          const endPrice = s.outcome === 'loss' && s.target !== undefined ? s.stop : finish
+          const r = s.resultR
           return (
             <g key={`${s.index}-${s.side}`}>
-              {finish !== undefined && (
-                <>
-                  <line
-                    x1={x(i)}
-                    x2={xEnd}
-                    y1={y(finish)}
-                    y2={y(finish)}
-                    stroke={colour}
-                    strokeWidth={1}
-                    strokeDasharray="5 4"
-                    opacity={0.85}
-                  />
-                  <line
-                    x1={x(i)}
-                    x2={xEnd}
-                    y1={y(s.entry)}
-                    y2={y(finish)}
-                    stroke={colour}
-                    strokeWidth={1.2}
-                    opacity={0.65}
-                    markerEnd={`url(#arrow-${s.side})`}
-                  />
-                </>
-              )}
-              <line
-                x1={x(i)}
-                x2={xEnd}
-                y1={y(s.stop)}
-                y2={y(s.stop)}
-                stroke={colour}
-                strokeWidth={1}
-                strokeDasharray="2 3"
-                opacity={0.5}
-              />
               <path
                 d={long ? `M${x(i)},${marker - 7} l5,8 l-10,0 z` : `M${x(i)},${marker + 7} l5,-8 l-10,0 z`}
                 fill={colour}
                 stroke="var(--surface-1)"
                 strokeWidth={1}
               />
-              {s.outcome === 'win' && finish !== undefined && (
+              {s.outcome !== 'open' && r !== undefined && endPrice !== undefined && (
                 <text
-                  x={xEnd}
-                  y={long ? y(finish) - 6 : y(finish) + 14}
-                  textAnchor="middle"
-                  fontSize={12}
-                  fontWeight={700}
-                  fill={colour}
+                  x={Math.min(x1 + 3, plotRight - 2)}
+                  y={y(endPrice)}
+                  dominantBaseline="middle"
+                  textAnchor={x1 + 40 > plotRight ? 'end' : 'start'}
+                  fontSize={10.5}
+                  fontWeight={600}
+                  fill={r >= 0 ? 'var(--good)' : 'var(--critical)'}
+                  stroke="var(--surface-1)"
+                  strokeWidth={3}
+                  paintOrder="stroke"
+                  style={{ fontFamily: 'var(--mono)', fontVariantNumeric: 'tabular-nums' }}
                 >
-                  ✓
+                  {r >= 0 ? '+' : '−'}
+                  {ratio(Math.abs(r), 1)} R
                 </text>
               )}
             </g>
@@ -411,8 +441,8 @@ export function PriceChart({
               width={PAD.right - 4}
               height={TAG_H}
               fill="var(--surface-2)"
-              stroke="var(--ink-muted)"
-              strokeWidth={t.strong ? 1 : 0.5}
+              stroke={t.colour ?? 'var(--ink-muted)'}
+              strokeWidth={t.colour ? 1.5 : t.strong ? 1 : 0.5}
             />
             <text
               x={plotRight + 6}
@@ -511,16 +541,21 @@ export function PriceChart({
               <span style={{ color: 'var(--critical)', marginLeft: 8 }}>▼</span> Short
             </li>
             <li className="legend-item">
-              <svg width="24" height="8" aria-hidden="true">
-                <line x1="0" y1="4" x2="24" y2="4" stroke="var(--ink-secondary)" strokeDasharray="5 4" />
+              <svg width="14" height="10" aria-hidden="true">
+                <rect width="14" height="10" fill="var(--good)" opacity={0.25} />
+                <line x1="0" y1="0.5" x2="14" y2="0.5" stroke="var(--good)" />
               </svg>
-              Salida
+              {result.signals.some((x) => x.target !== undefined) ? 'Hasta el objetivo' : 'Hasta la salida'}
             </li>
             <li className="legend-item">
-              <svg width="24" height="8" aria-hidden="true">
-                <line x1="0" y1="4" x2="24" y2="4" stroke="var(--ink-secondary)" strokeDasharray="2 3" />
+              <svg width="14" height="10" aria-hidden="true">
+                <rect width="14" height="10" fill="var(--critical)" opacity={0.2} />
+                <line x1="0" y1="9.5" x2="14" y2="9.5" stroke="var(--critical)" />
               </svg>
-              Stop
+              Hasta el stop
+            </li>
+            <li className="legend-item">
+              <span className="legend-r">± R</span> resultado de cada operación
             </li>
           </>
         )}

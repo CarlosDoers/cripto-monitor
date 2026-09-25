@@ -351,3 +351,82 @@ export function analyseTraps(
     warmup,
   }
 }
+
+/**
+ * Where the last confirmed candle leaves the reversal, in the terms the view
+ * explains it: inside the envelope with nothing to do, outside it and waiting
+ * for a close back in, or outside for too long to count.
+ *
+ * It re-derives the two conditions `analyseTraps` checks — the outside-the-band
+ * counter against `trapWindow`, and the shared cooldown — from the same series,
+ * so "a close back inside would fire" is exactly what the next bar would do.
+ */
+export interface TrapWatch {
+  close: number
+  upper: number
+  basis: number
+  lower: number
+  /** Where the last close sits. */
+  zone: 'above' | 'inside' | 'below'
+  /** Consecutive bars whose wick crossed the band on the current side. */
+  barsOutside: number
+  /** Bars left before another signal may fire; 0 when free. */
+  cooldown: number
+  /** A close back inside on the next bar would produce a signal. */
+  armed: boolean
+  /** Too long outside: a close back in no longer counts as a trap. */
+  expired: boolean
+  /** Close relative to each band, as a fraction of price. */
+  toUpper: number
+  toLower: number
+  toBasis: number
+}
+
+export function trapWatch(
+  candles: Pick<Candle, 'high' | 'low' | 'close'>[],
+  upper: number[],
+  basis: number[],
+  lower: number[],
+  lastSignalIndex: number | null,
+  /** Side of the trade still running, if any: a second one on that side never opens. */
+  activeSide: SignalSide | null,
+  settings: TrapSettings = DEFAULT_SETTINGS,
+): TrapWatch | null {
+  const last = candles.length - 1
+  if (last < 1 || !Number.isFinite(upper[last]) || !Number.isFinite(lower[last])) return null
+
+  const close = candles[last].close
+  const zone = close > upper[last] ? 'above' : close < lower[last] ? 'below' : 'inside'
+
+  // The counter `analyseTraps` keeps: consecutive wicks through the band.
+  let barsOutside = 0
+  if (zone !== 'inside') {
+    for (let i = last; i >= 0; i--) {
+      const through = zone === 'above' ? candles[i].high > upper[i] : candles[i].low < lower[i]
+      if (!through) break
+      barsOutside++
+    }
+  }
+
+  const sinceSignal = lastSignalIndex === null ? Infinity : last + 1 - lastSignalIndex
+  const cooldown = Math.max(0, settings.signalGap - sinceSignal)
+
+  return {
+    close,
+    upper: upper[last],
+    basis: basis[last],
+    lower: lower[last],
+    zone,
+    barsOutside,
+    cooldown,
+    armed:
+      zone !== 'inside' &&
+      barsOutside <= settings.trapWindow &&
+      cooldown === 0 &&
+      activeSide !== (zone === 'below' ? 'long' : 'short'),
+    expired: zone !== 'inside' && barsOutside > settings.trapWindow,
+    toUpper: upper[last] / close - 1,
+    toLower: lower[last] / close - 1,
+    toBasis: basis[last] / close - 1,
+  }
+}

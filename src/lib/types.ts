@@ -249,6 +249,10 @@ export interface Instrument {
   lever: string
   /** Family, e.g. `BTC-USD_UM_XPERP`. */
   instFamily: string
+  /** `1` crypto, `3` stocks (AAPL, META, even pre-IPO ANTHROPIC), `4` commodities (CL, XAU…). */
+  instCategory?: string
+  /** Listing time, ms. The X-Perp board was listed on 2026-03-30, which caps its history. */
+  listTime?: string
 }
 
 /** A single position in the portfolio, merged from trading + funding accounts. */

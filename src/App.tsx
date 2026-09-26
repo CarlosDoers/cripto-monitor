@@ -11,6 +11,7 @@ import { Overview } from './views/Overview'
 import { Performance } from './views/Performance'
 import { Signals } from './views/Signals'
 import { Markets } from './views/Markets'
+import { Screener } from './views/Screener'
 import { Portfolio } from './views/Portfolio'
 import { Positions } from './views/Positions'
 import { Bots } from './views/Bots'
@@ -77,6 +78,7 @@ function Views() {
       {route === 'resumen' && <Overview />}
       {route === 'senales' && <Signals />}
       {route === 'mercados' && <Markets />}
+      {route === 'screener' && <Screener />}
       {route === 'rendimiento' && <Performance />}
       {route === 'cartera' && <Portfolio />}
       {route === 'posiciones' && <Positions />}

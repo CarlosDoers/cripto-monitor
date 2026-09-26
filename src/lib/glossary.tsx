@@ -252,6 +252,41 @@ export const HELP = {
       </p>
     </>
   ),
+  screener: (
+    <>
+      <p>
+        Cada atajo filtra el tablero; ninguno es una recomendación. Medido sobre 30 criptos del
+        tablero y 248 semanas desde 2022, comparando lo que cada atajo seleccionaba con el resto de
+        contratos esa misma semana:
+      </p>
+      <p>
+        <strong>Sobrecompra</strong> y <strong>volumen inusual</strong> ganan de media, pero por unas
+        pocas subidas enormes: el contrato típico se queda por detrás del resto.{' '}
+        <strong>Sobreventa</strong> no anticipa ningún rebote. Lo único que se sostiene en todos los
+        cortes es que, tras un <strong>CHoCH bajista</strong>, el contrato va de media un 1 % peor que
+        el resto la semana siguiente: poco, y es una de nueve pruebas.
+      </p>
+    </>
+  ),
+  rsi: (
+    <p>
+      Índice de fuerza relativa de 14 días, de 0 a 100. Por encima de 70 se suele llamar
+      sobrecompra y por debajo de 30 sobreventa. Describe cuánto ha subido o bajado seguido, no
+      cuándo se va a dar la vuelta: en tendencia puede pasar semanas por encima de 70.
+    </p>
+  ),
+  volatility: (
+    <p>
+      Rango medio diario (máximo menos mínimo, sobre el cierre) de los últimos 30 días. Un 5 %
+      significa que un día normal recorre un 5 % de punta a punta: con él se dimensiona un stop.
+    </p>
+  ),
+  relVolume: (
+    <p>
+      Volumen de las últimas 24 horas dividido entre la media diaria de los 20 días anteriores. 2×
+      es el doble de lo habitual: algo ha atraído dinero, sin decir en qué dirección.
+    </p>
+  ),
   breadth: (
     <p>
       Cuántos contratos suben y cuántos bajan en 24 h. Si BTC sube pero la mayoría baja, la subida

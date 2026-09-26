@@ -1,4 +1,4 @@
-import { useQuery, type UseQueryOptions } from '@tanstack/react-query'
+import { useQueries, useQuery, type UseQueryOptions } from '@tanstack/react-query'
 import { okx, ApiError } from './api'
 import type {
   AccountBalance,
@@ -674,5 +674,64 @@ export function useDailyCandles(ranges: { instId: string; from: number; to: numb
     refetchInterval: false,
     retry: 3,
     retryDelay: (attempt) => 1_000 * 2 ** attempt,
+  })
+}
+
+/**
+ * Request starts in the last `PACE_MS`, shared by every paced call. The
+ * screener asks for daily candles on eighty contracts at once, and OKX allows
+ * 40 requests per 2 s on the candle endpoints — the archive already learned
+ * that a burst comes back `Too Many Requests` and renders nothing.
+ */
+const paceStarts: number[] = []
+const PACE_LIMIT = 10
+const PACE_MS = 1_100
+
+async function paced<T>(call: () => Promise<T>): Promise<T> {
+  for (;;) {
+    const now = Date.now()
+    while (paceStarts.length && now - paceStarts[0] >= PACE_MS) paceStarts.shift()
+    if (paceStarts.length < PACE_LIMIT) {
+      paceStarts.push(now)
+      return call()
+    }
+    await new Promise((done) => setTimeout(done, PACE_MS - (now - paceStarts[0]) + 5))
+  }
+}
+
+/** A daily candle changes once a day; an hour is plenty fresh for a screen. */
+const DAILY = 60 * 60 * 1000
+
+/**
+ * Daily UTC candles for a set of contracts, one query each so the set can
+ * change without refetching the rest. `1Dutc` rather than `1D`: OKX's plain
+ * daily closes at midnight Hong Kong time, 16:00 UTC, which is not what anyone
+ * means by "today". 200 bars reaches past the X-Perp listing date anyway.
+ */
+export function useDailyBoard(instIds: string[]) {
+  return useQueries({
+    queries: instIds.map((instId) => ({
+      queryKey: ['daily-board', instId],
+      queryFn: async () => {
+        const rows = await paced(() =>
+          okx<Candle>('/api/v5/market/candles', { instId, bar: '1Dutc', limit: 200 }),
+        )
+        return rows.sort((a, b) => Number(a[0]) - Number(b[0]))
+      },
+      staleTime: DAILY,
+      refetchInterval: DAILY,
+      retry: 2,
+    })),
+    combine: (results) => {
+      const byInst: Record<string, Candle[]> = {}
+      results.forEach((r, i) => {
+        if (r.data) byInst[instIds[i]] = r.data
+      })
+      return {
+        byInst,
+        loaded: results.filter((r) => r.data).length,
+        pending: results.filter((r) => r.isPending).length,
+      }
+    },
   })
 }

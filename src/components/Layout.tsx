@@ -21,6 +21,7 @@ import {
   IconWallet,
   IconShield,
   IconSparkles,
+  IconFilter,
 } from './icons'
 
 const NAV: Record<Route, { label: string; description: string; Icon: typeof IconOverview }> = {
@@ -38,6 +39,11 @@ const NAV: Record<Route, { label: string; description: string; Icon: typeof Icon
     label: 'Mercados',
     description: 'Qué contratos perpetuos tienen liquidez y condiciones para operar ahora.',
     Icon: IconMarkets,
+  },
+  screener: {
+    label: 'Screener',
+    description: 'Filtra el tablero X-Perp por rendimiento, técnicos y tus propios indicadores.',
+    Icon: IconFilter,
   },
   rendimiento: {
     label: 'Rendimiento',

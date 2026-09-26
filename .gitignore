@@ -34,3 +34,4 @@ dist-ssr
 
 # Candle cache for scripts/audit-strategies.mjs
 .candles
+.candles-screener

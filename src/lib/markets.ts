@@ -11,9 +11,13 @@ import { num } from './format'
  * Nothing here predicts direction.
  */
 
+export type AssetCategory = 'cripto' | 'accion' | 'materia'
+
 export interface Market {
   instId: string
   symbol: string
+  /** From OKX's `instCategory`: the X-Perp board mixes coins, equities and commodities. */
+  category: AssetCategory
   last: number
   change24h: number
   /** 24h traded value in USD. */
@@ -108,6 +112,11 @@ export function useMarkets(tradedInstIds: string[] = []) {
         return {
           instId: i.instId,
           symbol: i.instId.split('-')[0],
+          category: (i.instCategory === '3'
+            ? 'accion'
+            : i.instCategory === '4'
+              ? 'materia'
+              : 'cripto') as AssetCategory,
           last,
           change24h: open > 0 ? (last - open) / open : 0,
           // volCcy24h is in the base currency for linear contracts.

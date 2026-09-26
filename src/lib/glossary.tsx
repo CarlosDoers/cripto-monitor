@@ -230,6 +230,13 @@ export const HELP = {
       coste de la horquilla (35 %) y cuánto se mueve (30 %). No predice hacia dónde irá el precio.
     </p>
   ),
+  breadth: (
+    <p>
+      Cuántos contratos suben y cuántos bajan en 24 h. Si BTC sube pero la mayoría baja, la subida
+      es de unos pocos; si casi todo se mueve junto, es el mercado entero el que va en esa
+      dirección.
+    </p>
+  ),
   spread: (
     <p>
       Diferencia entre el mejor precio de compra y el de venta, en puntos básicos (1 pb = 0,01 %).

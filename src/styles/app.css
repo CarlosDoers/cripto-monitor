@@ -3077,3 +3077,255 @@ table.data td.num {
 .diverging-row.is-thin {
   opacity: 0.45;
 }
+
+/* ---------- Mercados · mapa de calor ---------- */
+
+.treemap {
+  position: relative;
+  width: 100%;
+  overflow: hidden;
+}
+
+/* Tiles are separated by a 2px surface gap, the rule every bar segment in the
+   app follows, never by a border. */
+.treemap-tile {
+  position: absolute;
+  box-sizing: border-box;
+  border: 1px solid var(--surface-1);
+  outline: 1px solid var(--surface-1);
+  padding: 6px 8px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 1px;
+  overflow: hidden;
+  text-align: center;
+  color: var(--ink-primary);
+  cursor: default;
+}
+
+.treemap-symbol {
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+.treemap-symbol--big {
+  font-size: 15px;
+}
+
+.treemap-change {
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 11px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.treemap-price {
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 10.5px;
+  color: var(--ink-secondary);
+  white-space: nowrap;
+}
+
+.treemap-legend {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-top: 10px;
+  font-size: 11px;
+  color: var(--ink-muted);
+}
+
+.treemap-scale {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+}
+
+/* <span>: needs display:block or the bar never draws. */
+.treemap-scale-bar {
+  display: block;
+  width: 120px;
+  height: 8px;
+  background: linear-gradient(
+    to right,
+    color-mix(in srgb, var(--critical) 80%, var(--surface-2)),
+    var(--surface-2),
+    color-mix(in srgb, var(--good) 80%, var(--surface-2))
+  );
+}
+
+/* ---------- Mercados · tus contratos ---------- */
+
+/* Flat tiles on one-pixel rules, like the KPI strip. Each tile draws its own
+   right and bottom rule: a grid painted as the gap colour filled the empty
+   cell of an incomplete last row with a solid grey block. */
+.market-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+  border-top: 1px solid var(--border);
+  border-left: 1px solid var(--border);
+}
+
+.market-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 14px 16px;
+  min-width: 0;
+  border-right: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+}
+
+.market-card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.market-card-symbol {
+  font-family: var(--mono);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink-primary);
+}
+
+.market-card-change {
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.market-card-price {
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 18px;
+  font-weight: 500;
+  color: var(--ink-primary);
+}
+
+.market-card-range {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 2px;
+}
+
+/* Both <span>: without display:block the track and the dot never draw. */
+.market-card-range-track {
+  display: block;
+  position: relative;
+  height: 4px;
+  background: var(--surface-2);
+}
+
+.market-card-range-dot {
+  display: block;
+  position: absolute;
+  top: -3px;
+  width: 2px;
+  height: 10px;
+  margin-left: -1px;
+  background: var(--ink-primary);
+}
+
+.market-card-range-labels {
+  display: flex;
+  justify-content: space-between;
+  gap: 6px;
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 10px;
+  color: var(--ink-muted);
+}
+
+.market-card-range-labels > :nth-child(2) {
+  font-family: inherit;
+  letter-spacing: 0.04em;
+}
+
+.breadth-bar {
+  display: flex;
+  height: 6px;
+  gap: 2px;
+  margin-top: 6px;
+}
+
+/* <span> segments, sized by flex-grow; blockified by the flex parent. */
+.breadth-bar > span {
+  display: block;
+  min-width: 2px;
+}
+
+.market-method {
+  padding: 14px 18px 16px;
+  border-top: 1px solid var(--border);
+}
+
+.market-method summary {
+  cursor: pointer;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ink-secondary);
+}
+
+.market-method[open] summary {
+  margin-bottom: 10px;
+}
+
+.treemap-tile.is-focus {
+  box-shadow: inset 0 0 0 2px var(--ink-primary);
+}
+
+.treemap-detail {
+  margin-top: 10px;
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 12.5px;
+  color: var(--ink-primary);
+}
+
+.treemap-detail .sub {
+  font-family: var(--font);
+}
+
+/* Two tiles per row on a phone: one per row made eight contracts a long
+   scroll. The middle range label is the first thing that does not fit. */
+@media (max-width: 720px) {
+  .market-cards {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .market-card {
+    padding: 12px;
+  }
+
+  .market-card-price {
+    font-size: 15px;
+  }
+
+  .market-card-range-labels > :nth-child(2) {
+    display: none;
+  }
+}
+
+.treemap-scale > span {
+  white-space: nowrap;
+}
+
+@media (max-width: 720px) {
+  .treemap-scale-bar {
+    width: 64px;
+  }
+}

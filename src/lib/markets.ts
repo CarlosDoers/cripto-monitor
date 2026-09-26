@@ -24,6 +24,8 @@ export interface Market {
   spreadBps: number
   /** 24h high-low range as a share of price. */
   rangePct: number
+  high24h: number
+  low24h: number
   /**
    * Premium over the spot index, as a fraction. Positive means the contract
    * trades above spot, so a long pays that away as the two converge and a short
@@ -113,6 +115,8 @@ export function useMarkets(tradedInstIds: string[] = []) {
           openInterestUsd: num(byOi.get(i.instId)?.oiUsd),
           spreadBps: bid > 0 && ask > 0 && mid > 0 ? ((ask - bid) / mid) * 10_000 : NaN,
           rangePct: last > 0 ? ((num(t?.high24h) - num(t?.low24h)) / last) * 100 : 0,
+          high24h: num(t?.high24h),
+          low24h: num(t?.low24h),
           basis,
           maxLeverage: num(i.lever),
           traded: traded.has(i.instId),

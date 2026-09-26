@@ -61,6 +61,44 @@ export interface Overlay {
   context?: boolean
 }
 
+/**
+ * Drawings that are not a series: a horizontal segment between two bars with a
+ * label (a break of structure), or a price zone (an order block, a gap). Bar
+ * indices are into the full candle array, like signals, so the chart can clip
+ * them to its own window. Context only — never folded into the price scale.
+ */
+export interface ChartSegment {
+  key: string
+  i1: number
+  i2: number
+  price: number
+  colour: string
+  dashed?: boolean
+  label?: string
+  /** Print the label under the line instead of over it. */
+  labelBelow?: boolean
+}
+
+export interface ChartZone {
+  key: string
+  i1: number
+  /** Omitted: the zone runs to the right edge, still live. */
+  i2?: number
+  top: number
+  bottom: number
+  colour: string
+  opacity: number
+  label?: string
+  outlined?: boolean
+}
+
+export interface ChartAnnotations {
+  segments: ChartSegment[]
+  zones: ChartZone[]
+  /** What each colour and stroke means, for the chart's legend. */
+  legend: { key: string; label: string; colour: string; kind: 'line' | 'dashed' | 'zone' }[]
+}
+
 export interface StrategyResult {
   signals: StrategySignal[]
   active: StrategySignal | null

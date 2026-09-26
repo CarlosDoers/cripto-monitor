@@ -27,12 +27,15 @@ import { chartStart } from '../lib/chartWindow'
 import { findLevels } from '../lib/indicators/levels'
 import { findTrendlines, lineAt } from '../lib/indicators/trendlines'
 import { FAST, movingAverages, SEED_FACTOR, SLOW } from '../lib/indicators/movingAverages'
+import { analyseSmc } from '../lib/indicators/smc'
+import { smcAnnotations, smcReading } from '../lib/smcView'
 import { IconAlert, IconActivity } from '../components/icons'
 import {
   Badge,
   Card,
   EmptyState,
   ErrorNotice,
+  Help,
   Skeleton,
   Stat,
   TableSkeleton,
@@ -332,6 +335,11 @@ export function Signals() {
   // Off by default: six levels and two trendlines already fill the chart, and
   // an average is the easiest line there to over-read as a signal.
   const [showMas, setShowMas] = useState(false)
+  // Smart Money Concepts and its gaps, off by default like the averages: the
+  // chart already carries levels and trendlines, and SMC alone draws a dozen
+  // labelled lines.
+  const [showSmc, setShowSmc] = useState(false)
+  const [showGaps, setShowGaps] = useState(false)
   const r = s.result
 
   /**
@@ -344,6 +352,17 @@ export function Signals() {
     () => (analysis && showMas ? movingAverages(s.candles) : null),
     [analysis, showMas, s.candles],
   )
+  /**
+   * Over every fetched candle, not the window: the 50-bar swing needs history
+   * to have found its pivots, and ATR(200) to have settled. The chart then
+   * draws only what falls inside its window.
+   */
+  const smc = useMemo(
+    () => (analysis && showSmc ? analyseSmc(s.candles) : null),
+    [analysis, showSmc, s.candles],
+  )
+  const smcNow = useMemo(() => (smc ? smcReading(smc, s.candles) : null), [smc, s.candles])
+
   const chartResult = useMemo(
     () => (mas ? { ...r, overlays: [...r.overlays, ...mas.overlays] } : r),
     [r, mas],
@@ -380,6 +399,11 @@ export function Signals() {
         : [],
     [s.candles, start, showTrends],
   )
+  const smcDrawing = useMemo(
+    () => (smc ? smcAnnotations(smc, s.candles, start, { gaps: showGaps }) : undefined),
+    [smc, s.candles, start, showGaps],
+  )
+
   const currentTf = TIMEFRAMES.find((t) => t.key === timeframe)
   const lastPrice = s.candles.at(-1)?.close ?? 0
 
@@ -713,6 +737,26 @@ export function Signals() {
                   Medias
                 </button>
               )}
+              {analysis && (
+                <button
+                  type="button"
+                  aria-pressed={showSmc}
+                  onClick={() => setShowSmc((v) => !v)}
+                  title="Smart Money Concepts (LuxAlgo): rupturas de estructura (BOS), cambios de carácter (CHoCH), order blocks, máximos y mínimos iguales."
+                >
+                  SMC
+                </button>
+              )}
+              {analysis && showSmc && (
+                <button
+                  type="button"
+                  aria-pressed={showGaps}
+                  onClick={() => setShowGaps((v) => !v)}
+                  title="Huecos de valor razonable (FVG) que el precio aún no ha rellenado."
+                >
+                  FVG
+                </button>
+              )}
             </div>
             <span className={`regime regime--${s.regime}`}>
             <span className="regime-dot" />
@@ -730,6 +774,7 @@ export function Signals() {
             result={chartResult}
             levels={levels}
             trendlines={trendlines}
+            annotations={smcDrawing}
             visible={visible}
             height={analysis ? 420 : 360}
           />
@@ -778,6 +823,62 @@ export function Signals() {
                   ? `La EMA ${SLOW} necesita ${SLOW * SEED_FACTOR} velas para ser fiable y hay ${s.candles.length} en ${currentTf?.label}; se muestra solo la EMA ${FAST}.`
                   : `Las medias necesitan ${FAST * SEED_FACTOR} velas (EMA ${FAST}) y ${SLOW * SEED_FACTOR} (EMA ${SLOW}) para ser fiables, y hay ${s.candles.length} en ${currentTf?.label}.`}{' '}
                 Prueba una temporalidad más corta.
+              </span>
+            )}
+          </p>
+        )}
+        {/* The structure in words: what the two trends are and since when,
+            where price sits in the range, and the nearest order blocks. */}
+        {!s.isLoading && smcNow && (
+          <p className="sub chart-context">
+            <span>
+              Estructura principal{' '}
+              <strong>
+                {smcNow.swing.trend === 1 ? 'alcista' : smcNow.swing.trend === -1 ? 'bajista' : 'sin definir'}
+              </strong>
+              {smcNow.swing.kind && smcNow.swing.time
+                ? ` · ${smcNow.swing.kind} en ${price(smcNow.swing.price ?? 0)} el ${dateTime(smcNow.swing.time)}`
+                : ''}
+              <Help label="Smart Money Concepts">{HELP.smc}</Help>
+            </span>
+            <span>
+              Interna{' '}
+              <strong>
+                {smcNow.internal.trend === 1 ? 'alcista' : smcNow.internal.trend === -1 ? 'bajista' : 'sin definir'}
+              </strong>
+              {smcNow.internal.kind && smcNow.internal.time
+                ? ` · ${smcNow.internal.kind} el ${dateTime(smcNow.internal.time)}`
+                : ''}
+            </span>
+            {smcNow.rangePosition !== null && (
+              <span>
+                Precio en zona{' '}
+                <strong>
+                  {Math.abs(smcNow.rangePosition - 0.5) <= 0.025
+                    ? 'de equilibrio'
+                    : smcNow.rangePosition > 0.5
+                      ? 'premium'
+                      : 'de descuento'}
+                </strong>{' '}
+                ({share(Math.min(1, Math.max(0, smcNow.rangePosition)), 0)} del rango {price(smcNow.bottom)}–
+                {price(smcNow.top)})
+              </span>
+            )}
+            {smcNow.obBelow && (
+              <span>
+                OB por debajo <strong>{price(smcNow.obBelow.bottom)}–{price(smcNow.obBelow.top)}</strong> (
+                {pct(smcNow.obBelow.top / lastPrice - 1)})
+              </span>
+            )}
+            {smcNow.obAbove && (
+              <span>
+                OB por encima <strong>{price(smcNow.obAbove.bottom)}–{price(smcNow.obAbove.top)}</strong> (
+                {pct(smcNow.obAbove.bottom / lastPrice - 1)})
+              </span>
+            )}
+            {showGaps && (
+              <span>
+                FVG sin rellenar: {smcNow.gapsUp} alcistas · {smcNow.gapsDown} bajistas
               </span>
             )}
           </p>

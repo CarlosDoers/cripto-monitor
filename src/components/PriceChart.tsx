@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useSize } from '../lib/useSize'
 import { dateTime, price as fmtPrice, plural, ratio } from '../lib/format'
-import type { Candle, StrategyResult } from '../lib/indicators/types'
+import type { Candle, ChartAnnotations, StrategyResult } from '../lib/indicators/types'
 import type { Level } from '../lib/indicators/levels'
 import { chartStart } from '../lib/chartWindow'
 import { lineAt, type Trendline } from '../lib/indicators/trendlines'
@@ -34,6 +34,7 @@ export function PriceChart({
   result,
   levels,
   trendlines,
+  annotations,
   visible = 160,
   height = 340,
 }: {
@@ -52,6 +53,12 @@ export function PriceChart({
    * (`npm run trendlines`) — so they are drawn in ink, never in a strategy colour.
    */
   trendlines?: Trendline[]
+  /**
+   * Segments and zones from an indicator that is not a series — Smart Money
+   * Concepts' breaks of structure, order blocks and gaps. Clipped to the plot
+   * and left out of the scale, like every other context layer.
+   */
+  annotations?: ChartAnnotations
   visible?: number
   height?: number
 }) {
@@ -305,6 +312,46 @@ export function PriceChart({
           />
         ))}
 
+        {/* Zones sit under the candles: an order block or a gap is an area
+            price trades into, not a line over it. */}
+        {annotations && (
+          <g clipPath="url(#plot-area)">
+            {annotations.zones
+              .filter((z) => z.i2 === undefined || z.i2 >= start)
+              .map((z) => {
+                const x1 = x(Math.max(z.i1, start) - start) - slot / 2
+                const x2 = z.i2 === undefined ? plotRight : x(z.i2 - start) + slot / 2
+                const yTop = y(Math.max(z.top, z.bottom))
+                const yBottom = y(Math.min(z.top, z.bottom))
+                return (
+                  <g key={z.key}>
+                    <rect
+                      x={x1}
+                      y={yTop}
+                      width={Math.max(1, x2 - x1)}
+                      height={Math.max(1, yBottom - yTop)}
+                      fill={z.colour}
+                      opacity={z.opacity}
+                      stroke={z.outlined ? z.colour : undefined}
+                      strokeOpacity={z.outlined ? 0.8 : undefined}
+                    />
+                    {z.label && yBottom - yTop >= 9 && (
+                      <text
+                        x={x1 + 3}
+                        y={yTop + Math.min(10, yBottom - yTop - 1)}
+                        fontSize={9}
+                        fontWeight={600}
+                        fill={z.colour}
+                      >
+                        {z.label}
+                      </text>
+                    )}
+                  </g>
+                )
+              })}
+          </g>
+        )}
+
         {/* Each trade as the two boxes TradingView's position tool draws: from
             entry to target in green, from entry to stop in red, spanning the
             bars it was open. Dashed and dotted rails carried the same prices
@@ -389,6 +436,55 @@ export function PriceChart({
             </g>
           )
         })}
+
+        {/* Segments over the candles, each labelled at its midpoint the way the
+            original indicator prints BOS / CHoCH. The halo keeps the label
+            legible where it crosses a wick. */}
+        {annotations && (
+          <g clipPath="url(#plot-area)">
+            {annotations.segments
+              .filter((sg) => sg.i2 >= start)
+              .map((sg) => {
+                const x1 = x(Math.max(sg.i1, start) - start)
+                const x2 = x(sg.i2 - start)
+                const yy = y(sg.price)
+                return (
+                  <g key={sg.key}>
+                    <line
+                      x1={x1}
+                      x2={x2}
+                      y1={yy}
+                      y2={yy}
+                      stroke={sg.colour}
+                      strokeWidth={1}
+                      strokeDasharray={sg.dashed ? '4 3' : undefined}
+                    />
+                    {sg.label && (
+                      <text
+                        // Centred on the segment, but pulled back inside the
+                        // plot: a segment that reaches an edge printed half
+                        // its label off-screen ("Máx. débi", "oCH").
+                        x={Math.min(
+                          Math.max((x1 + x2) / 2, PAD.left + sg.label.length * 2.9),
+                          plotRight - sg.label.length * 2.9,
+                        )}
+                        y={sg.labelBelow ? yy + 10 : yy - 3}
+                        textAnchor="middle"
+                        fontSize={9}
+                        fontWeight={600}
+                        fill={sg.colour}
+                        stroke="var(--surface-1)"
+                        strokeWidth={2.5}
+                        paintOrder="stroke"
+                      >
+                        {sg.label}
+                      </text>
+                    )}
+                  </g>
+                )
+              })}
+          </g>
+        )}
 
         {visibleSignals.map((s) => {
           const i = s.index - start
@@ -529,7 +625,27 @@ export function PriceChart({
             Líneas de tendencia
           </li>
         )}
-        {(visibleLevels.length > 0 || visibleTrends.length > 0) && (
+        {annotations?.legend.map((l) => (
+          <li key={l.key} className="legend-item">
+            <svg width="18" height="10" aria-hidden="true">
+              {l.kind === 'zone' ? (
+                <rect width="18" height="10" fill={l.colour} opacity={0.35} />
+              ) : (
+                <line
+                  x1="0"
+                  y1="5"
+                  x2="18"
+                  y2="5"
+                  stroke={l.colour}
+                  strokeWidth={1.5}
+                  strokeDasharray={l.kind === 'dashed' ? '4 3' : undefined}
+                />
+              )}
+            </svg>
+            {l.label}
+          </li>
+        ))}
+        {(visibleLevels.length > 0 || visibleTrends.length > 0 || (annotations?.legend.length ?? 0) > 0) && (
           <li className="legend-item sub">contexto, no señal</li>
         )}
         {/* The signal anatomy only means something when there are signals —

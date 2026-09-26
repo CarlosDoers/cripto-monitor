@@ -230,6 +230,28 @@ export const HELP = {
       coste de la horquilla (35 %) y cuánto se mueve (30 %). No predice hacia dónde irá el precio.
     </p>
   ),
+  smc: (
+    <>
+      <p>
+        Lectura de la estructura del mercado, adaptada del indicador Smart Money Concepts de
+        LuxAlgo. <strong>BOS</strong> (ruptura de estructura): el precio cierra más allá del último
+        giro en la dirección de la tendencia. <strong>CHoCH</strong> (cambio de carácter): lo hace en
+        contra, y la tendencia cambia.
+      </p>
+      <p>
+        La estructura <strong>principal</strong> usa giros de 50 velas; la <strong>interna</strong>,
+        de 5. Un <strong>OB</strong> (order block) es la vela desde la que salió el movimiento que
+        rompió la estructura; un <strong>FVG</strong>, un hueco que tres velas dejaron sin cotizar.
+        Premium y descuento dicen si el precio está en la mitad alta o baja del último rango.
+      </p>
+      <p>
+        Medido como señal sobre años de datos: volver al order block pierde en todas las
+        temporalidades, y entrar en las rupturas internas en 4 h gana (+0,20 R), pero coincide en la
+        mitad de sus operaciones con la estrategia Ruptura, que gana más. Aquí sirve para leer la
+        estructura, no como señal de entrada.
+      </p>
+    </>
+  ),
   breadth: (
     <p>
       Cuántos contratos suben y cuántos bajan en 24 h. Si BTC sube pero la mayoría baja, la subida

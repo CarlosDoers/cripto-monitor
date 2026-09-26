@@ -15,7 +15,8 @@
     "levels:sweep": "node --experimental-strip-types --import ./scripts/_hook.mjs scripts/levels-sweep.mjs",
     "try": "node --experimental-strip-types --import ./scripts/_hook.mjs scripts/try-strategy.mjs",
     "trendlines": "node --experimental-strip-types --import ./scripts/_hook.mjs scripts/trendlines-research.mjs",
-    "ma": "node --experimental-strip-types --import ./scripts/_hook.mjs scripts/ma-research.mjs"
+    "ma": "node --experimental-strip-types --import ./scripts/_hook.mjs scripts/ma-research.mjs",
+    "smc": "node --experimental-strip-types --import ./scripts/_hook.mjs scripts/smc-research.mjs"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.101.4",

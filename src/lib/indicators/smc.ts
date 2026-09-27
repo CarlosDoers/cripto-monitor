@@ -101,6 +101,16 @@ export interface SmcOrderBlock {
    * original keeps; one pushed out of that list is never marked.
    */
   mitigatedAt?: number
+  /**
+   * The first bar that traded back into the block from outside it — the
+   * "mitigated" state of the Enhanced fork (niquedegraaff's gist of the v5
+   * script): the previous bar stayed clear of the block and this one reached
+   * into it. An untouched block is the "fresh" one SMC traders wait on; after
+   * the first touch the fork stops extending it and greys it out. It is an
+   * addition, not a change: the block still disappears exactly when the v6
+   * original removes it.
+   */
+  touchedAt?: number
 }
 
 export interface SmcGap {
@@ -348,6 +358,16 @@ export function analyseSmc(candles: Candle[], settings: SmcSettings = SMC_SETTIN
     // ── deleteOrderBlocks ──────────────────────────────────────────────────
     const bearSrc = settings.orderBlockMitigation === 'close' ? close[i] : high[i]
     const bullSrc = settings.orderBlockMitigation === 'close' ? close[i] : low[i]
+    // First touch, checked before removal as the fork does, so a bar that
+    // stabs straight through a block is both its touch and its end.
+    for (const b of [...internalOBs, ...swingOBs]) {
+      if (b.touchedAt !== undefined || i <= b.createdAt) continue
+      const top = Math.max(b.barHigh, b.barLow)
+      const bottom = Math.min(b.barHigh, b.barLow)
+      const touched =
+        b.bias === 1 ? low[i - 1] > top && low[i] <= top : high[i - 1] < bottom && high[i] >= bottom
+      if (touched) b.touchedAt = i
+    }
     const alive = (b: SmcOrderBlock) => {
       const gone = (b.bias === -1 && bearSrc > b.barHigh) || (b.bias === 1 && bullSrc < b.barLow)
       if (gone && b.mitigatedAt === undefined) b.mitigatedAt = i

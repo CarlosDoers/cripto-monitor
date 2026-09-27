@@ -867,13 +867,13 @@ export function Signals() {
             {smcNow.obBelow && (
               <span>
                 OB por debajo <strong>{price(smcNow.obBelow.bottom)}–{price(smcNow.obBelow.top)}</strong> (
-                {pct(smcNow.obBelow.top / lastPrice - 1)})
+                {pct(smcNow.obBelow.top / lastPrice - 1)}, {smcNow.obBelow.fresh ? 'sin tocar' : 'ya tocado'})
               </span>
             )}
             {smcNow.obAbove && (
               <span>
                 OB por encima <strong>{price(smcNow.obAbove.bottom)}–{price(smcNow.obAbove.top)}</strong> (
-                {pct(smcNow.obAbove.bottom / lastPrice - 1)})
+                {pct(smcNow.obAbove.bottom / lastPrice - 1)}, {smcNow.obAbove.fresh ? 'sin tocar' : 'ya tocado'})
               </span>
             )}
             {showGaps && (

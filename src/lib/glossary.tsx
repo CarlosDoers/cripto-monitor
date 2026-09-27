@@ -245,8 +245,10 @@ export const HELP = {
         Premium y descuento dicen si el precio está en la mitad alta o baja del último rango.
       </p>
       <p>
-        Medido como señal sobre años de datos: volver al order block pierde en todas las
-        temporalidades, y entrar en las rupturas internas en 4 h gana (+0,20 R), pero coincide en la
+        Un OB en gris es uno al que el precio ya ha vuelto: el que sigue en color, sin tocar, es el
+        que los traders de SMC esperan. Pero volver es lo normal: entre el 83 y el 94 % de los OB se
+        tocan tarde o temprano. Medido como señal sobre años de datos: volver al order block pierde
+        en todas las temporalidades (también con las reglas de la versión «Enhanced»), y entrar en las rupturas internas en 4 h gana (+0,20 R), pero coincide en la
         mitad de sus operaciones con la estrategia Ruptura, que gana más. Aquí sirve para leer la
         estructura, no como señal de entrada.
       </p>

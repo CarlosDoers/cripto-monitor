@@ -21,6 +21,7 @@ const BULL = 'var(--good)'
 const BEAR = 'var(--critical)'
 const OB_BULL = 'var(--series-1)'
 const OB_BEAR = 'var(--series-5)'
+const OB_TOUCHED = 'var(--ink-faint)'
 
 /** The original draws the first five of each list. */
 const ORDER_BLOCKS_SHOWN = 5
@@ -88,14 +89,19 @@ export function smcAnnotations(
     })
   }
 
+  // A block price has already traded back into is greyed and stops at that
+  // bar — the Enhanced fork's "mitigated" look — so the fresh ones, the ones
+  // SMC traders actually wait on, are the only coloured boxes left running.
   for (const b of r.internalOrderBlocks.slice(0, ORDER_BLOCKS_SHOWN)) {
+    const touched = b.touchedAt !== undefined
     zones.push({
       key: `ob-${b.index}-${b.createdAt}-${b.bias}`,
       i1: b.index,
+      i2: b.touchedAt,
       top: b.barHigh,
       bottom: b.barLow,
-      colour: b.bias > 0 ? OB_BULL : OB_BEAR,
-      opacity: 0.2,
+      colour: touched ? OB_TOUCHED : b.bias > 0 ? OB_BULL : OB_BEAR,
+      opacity: touched ? 0.18 : 0.2,
       label: 'OB',
     })
   }
@@ -119,6 +125,7 @@ export function smcAnnotations(
     { key: 'internal', label: 'Interna', colour: 'var(--ink-secondary)', kind: 'dashed' },
     { key: 'ob-bull', label: 'OB alcista', colour: OB_BULL, kind: 'zone' },
     { key: 'ob-bear', label: 'OB bajista', colour: OB_BEAR, kind: 'zone' },
+    { key: 'ob-touched', label: 'OB ya tocado', colour: OB_TOUCHED, kind: 'zone' },
   ]
   if (gaps) {
     legend.push({ key: 'fvg-bull', label: 'FVG alcista', colour: BULL, kind: 'zone' })
@@ -136,8 +143,8 @@ export interface SmcReading {
   top: number
   bottom: number
   /** Nearest live internal order block above and below price, as zones. */
-  obAbove?: { top: number; bottom: number }
-  obBelow?: { top: number; bottom: number }
+  obAbove?: { top: number; bottom: number; fresh: boolean }
+  obBelow?: { top: number; bottom: number; fresh: boolean }
   gapsUp: number
   gapsDown: number
 }
@@ -151,6 +158,7 @@ export function smcReading(r: SmcResult, candles: Candle[]): SmcReading {
   const { top, bottom } = r.trailing
   const span = top - bottom
   const zonesOf = r.internalOrderBlocks.map((b) => ({
+    fresh: b.touchedAt === undefined,
     top: Math.max(b.barHigh, b.barLow),
     bottom: Math.min(b.barHigh, b.barLow),
   }))

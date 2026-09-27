@@ -1,5 +1,6 @@
 import { analyseSmc, SMC_SETTINGS, type Scale, type SmcSettings, type SmcStructure } from './smc'
 import { feeInR, summarise, type Candle, type StrategyResult, type StrategySignal } from './types'
+import { atr } from './ta'
 
 /**
  * Smart Money Concepts traded the way its users trade it — four candidates,
@@ -211,6 +212,115 @@ export function analyseSmcObRetest(candles: Candle[]): StrategyResult {
     if (e) {
       if (setup && setup.long !== (e.bias === 1)) setup = null
       const block = blockAt.get(`${i}:${e.bias}`)
+      if (block && !pos) {
+        const long = e.bias === 1
+        const entry = long ? block.top : block.bottom
+        const stop = long ? block.bottom : block.top
+        const target = e.impulseExtreme
+        const valid = long ? stop < entry && target > entry : stop > entry && target < entry
+        setup = valid ? { long, entry, stop, target, from: i, kind: e.kind } : null
+      }
+    }
+  }
+
+  return summarise(signals, [], WARMUP, pos?.signal ?? null)
+}
+
+/**
+ * The order-block retest under the Enhanced fork's rules (niquedegraaff's gist
+ * of LuxAlgo's v5 script), measured against `analyseSmcObRetest` so the two
+ * differ only where the fork does:
+ *
+ * - **Which candle is the block.** Between the swing and the break, the most
+ *   extreme candle that is *not* a volatility spike (range under 2 × ATR(200))
+ *   — the v6 swaps such a candle's high and low instead — and never the swing
+ *   candle itself. Ties go to the older candle, as the fork's loop does.
+ * - **What ends it.** A *close* beyond the far edge, not a wick: the stop is
+ *   taken at that close, which can cost more than 1 R.
+ *
+ * Entry (a limit at the near edge on the first return), target (the impulse
+ * extreme) and one trade at a time are unchanged.
+ */
+export function analyseSmcObRetestEnhanced(candles: Candle[]): StrategyResult {
+  const r = analyseSmc(candles)
+  const high = candles.map((c) => c.high)
+  const low = candles.map((c) => c.low)
+  const a200 = atr(high, low, candles.map((c) => c.close), 200)
+
+  const blockFor = (e: SmcStructure) => {
+    let pick = -1
+    for (let k = e.index - 1; k > e.pivotIndex; k--) {
+      if (!(high[k] - low[k] < 2 * a200[k])) continue
+      if (pick < 0) pick = k
+      else if (e.bias === 1 ? low[k] <= low[pick] : high[k] >= high[pick]) pick = k
+    }
+    return pick < 0 ? null : { top: high[pick], bottom: low[pick] }
+  }
+
+  const breaks = new Map<number, SmcStructure>()
+  for (const e of r.structures) if (e.scale === 'internal') breaks.set(e.index, e)
+
+  type Setup = { long: boolean; entry: number; stop: number; target: number; from: number; kind: string }
+  let setup: Setup | null = null
+  let pos: Position | null = null
+  const signals: StrategySignal[] = []
+
+  // A close beyond the far edge ends the trade at that close.
+  const closedThrough = (p: Position, c: Candle) =>
+    p.signal.side === 'long' ? c.close < p.stop : c.close > p.stop
+
+  for (let i = WARMUP; i < candles.length; i++) {
+    const c = candles[i]
+
+    if (pos && pos.signal.index < i) {
+      if (closedThrough(pos, c)) {
+        close(pos, i, c.close, candles)
+        pos = null
+      } else if (pos.target !== undefined) {
+        const hit = pos.signal.side === 'long' ? c.high >= pos.target : c.low <= pos.target
+        if (hit) {
+          close(pos, i, pos.target, candles)
+          pos = null
+        }
+      }
+    }
+
+    if (!pos && setup && i > setup.from) {
+      const s = setup
+      const reachedTarget = s.long ? c.high >= s.target : c.low <= s.target
+      const touched = s.long ? c.low <= s.entry : c.high >= s.entry
+      if (reachedTarget) {
+        setup = null
+      } else if (touched) {
+        const entry = s.long ? Math.min(c.open, s.entry) : Math.max(c.open, s.entry)
+        if (s.long ? entry > s.stop : entry < s.stop) {
+          const signal: StrategySignal = {
+            index: i,
+            time: c.time,
+            side: s.long ? 'long' : 'short',
+            entry,
+            stop: s.stop,
+            target: s.target,
+            outcome: 'open',
+            feeR: feeInR(entry, s.stop, FEE),
+            riskReward: Math.abs(s.target - entry) / Math.abs(entry - s.stop),
+            note: `retorno a OB (Enhanced) tras ${s.kind}`,
+          }
+          signals.push(signal)
+          pos = { signal, stop: s.stop, risk: Math.abs(entry - s.stop), target: s.target }
+          if (closedThrough(pos, c)) {
+            close(pos, i, c.close, candles)
+            pos = null
+          }
+        }
+        setup = null
+      }
+    }
+
+    const e = breaks.get(i)
+    if (e) {
+      if (setup && setup.long !== (e.bias === 1)) setup = null
+      const block = blockFor(e)
       if (block && !pos) {
         const long = e.bias === 1
         const entry = long ? block.top : block.bottom

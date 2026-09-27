@@ -17,7 +17,8 @@
     "trendlines": "node --experimental-strip-types --import ./scripts/_hook.mjs scripts/trendlines-research.mjs",
     "ma": "node --experimental-strip-types --import ./scripts/_hook.mjs scripts/ma-research.mjs",
     "smc": "node --experimental-strip-types --import ./scripts/_hook.mjs scripts/smc-research.mjs",
-    "screener": "node --experimental-strip-types --import ./scripts/_hook.mjs scripts/screener-research.mjs"
+    "screener": "node --experimental-strip-types --import ./scripts/_hook.mjs scripts/screener-research.mjs",
+    "lookahead": "node --experimental-strip-types --import ./scripts/_hook.mjs scripts/lookahead-check.mjs"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.101.4",

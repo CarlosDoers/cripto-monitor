@@ -17,7 +17,8 @@ npm run trendlines       # diagonal support/resistance vs. a random parallel lin
 npm run ma               # EMA 50/200 as support/resistance vs. a randomly shifted copy
 npm run smc              # Smart Money Concepts as a signal: distribution, years, sides, neighbourhood
 npm run screener         # does any Screener preset pick next week's winners? (needs dev up once)
-npm run try -- <módulo>  # measure a candidate strategy that is not registered yet
+npm run try -- <módulo>  # measure a candidate strategy that is not registered yet (--trials N: variants tried)
+npm run lookahead        # does any signal look ahead or repaint; does the browser's history agree with the cache
 ./scripts/push-env.sh    # push .env.local vars to the linked Vercel project
 vercel --prod            # deploy (manual; a git push does NOT deploy)
 ```
@@ -127,6 +128,7 @@ Two hooks compose the raw queries into what views actually need:
   **The Salud badge reads *Revisar* on any entry of the notice**, not only the alarms — with free margin exhausted it used to say *Saludable* right under "Requiere atención". The positions card sorts by notional (its subtitle says "las 6 mayores de N" when it cuts), shows **notional in dollars with the contract count as its unit**, the distance to liquidation next to the price, and the same `ProtectionBadge` as Posiciones, so a position the notice calls unprotected is marked in its own row. `liquidationDistance()`, `LIQ_DANGER`/`LIQ_WATCH` and `positionSize()` live in `guards.ts` so both views colour and size a position identically; `pos` is signed on a one-way account, and Posiciones printed it raw.
 
   Three smaller rules from the same pass. **Dust stays out of Distribución and Activos Principales** below 0,5 % of the portfolio, relative like `locked`, and the subtitle states how many balances and how many dollars were left out — five of eight rows used to be coins worth one to four dollars printing "0,0 %". Cartera folds them into one expandable row. **Contract prices go through `price()`, never `usd()`**: `usd()` converts to euros and rounds to two decimals, so the Resumen's entry price disagreed with Posiciones' in euro mode. **"Esperanza por operación"** is now in both views: Rendimiento's headline replaced a bare "Operaciones: 75" that repeated the line above it.
+- `src/lib/risk.ts` and `RiskCard` — Rendimiento's **¿Cuánto puede caer?** Rendimiento had no drawdown at all. `drawdowns()` measures peak-to-trough on the realised curve **in dollars** (deposits arrived along the way, so a percentage would jump at each one) with each episode's dates, recovery and trade count; `simulate()` resamples the period's own trades with replacement 5 000 times (a seeded PRNG, so the figures do not move between refetches) for the typical and one-in-twenty worst drop, the losing streak that counts as normal, and the chance a same-sized batch ends negative. Ideas and definitions from QuantStats (`montecarlo_drawdown`, `drawdown_details`, Apache-2.0); the code is this app's. Two things the first run on this account showed and the card now handles: **ties are the norm, not a corner case** — the worst drop was a single ZEC loss of −329,23 US$, and every run that draws it among winners reproduces it to the cent, so the rank counts ties as half and "caen más" means strictly more; and when one trade is the whole drop, the reading says so, because then the risk is position size rather than streaks. A probability of zero prints as "< 0,02 %" — 5 000 runs cannot resolve less.
 - `src/lib/performance.ts` — every trading statistic, plus the period filter. Rendimiento follows three rules from its review: **every grouped breakdown fades and hides its win rate under `MIN_SAMPLE`** (`DivergingRow.thin`) — "Cortos · 4 ops · 100 %" printed at full strength beside 71 longs; **per-trade costs are signed**, like the Detalle total, because funding a short collects can outweigh its fee and `Math.abs` turned that income into a cost; and the trade size carries `sizeUnit` (contracts, or coins on margin). The calendar ignores the period filter and says so in its subtitle. Amounts in a spot pair's own quote currency go through `quoteAmount()`: fiat gets two decimals ("21,885 EUR" read like twenty-one thousand), and money without a known cost is not coloured red — it is not a loss. `computePerformance()` is a pure function; test ideas belong there.
 - `src/lib/signals.ts` — candles plus the indicator, for the Señales view.
 
@@ -159,7 +161,8 @@ It prints two lists. **DESVIACIONES** fails the run: a declared figure that does
 `npm run try -- src/lib/indicators/myIdea.ts` measures a candidate that is not
 in `registry.ts` yet and says whether it clears the bar: n ≥ 30, at or above
 `MIN_TRADABLE_R` net **in the aggregate and in both halves**, and at least
-0.05 R above a random entry with the same geometry. It writes nothing — a
+0.05 R above a random entry with the same geometry, and — since 2026-09 — a
+Deflated Sharpe Ratio of at least 95 % after `--trials N` variants (below). It writes nothing — a
 candidate that passes still gets registered by hand with the figures it printed,
 and then `npm run audit` checks that what was typed matches what was measured.
 The two scripts answer different questions: `try` asks whether an idea is worth
@@ -170,6 +173,57 @@ output rather than a `StrategyResult` — `analyseTraps` does, and is adapted in
 `registry.ts` — produces zero resolved signals, which reads exactly like an idea
 that never fires. The harness says which of the two it is instead of printing a
 row of dashes.
+
+**Surviving the search.** `src/lib/indicators/deflated.ts` holds Bailey & López
+de Prado's Probabilistic and Deflated Sharpe Ratio, written from the papers (the
+Python libraries are AGPL) and checked against a simulation: the best of 100
+worthless strategies over 200 trades reaches a per-trade Sharpe of 0,1788 by
+luck, and the formula says 0,1794; a worthless strategy clears PSR ≥ 95 % 5,7 %
+of the time. `try --trials N` raises the bar to what the best of N worthless
+variants reaches, so a pass after eight attempts has to be earned eight times
+over; `propose-strategy` passes every measurement it made as N. The `aguanta`
+column is the largest N the edge survives.
+
+`npm run audit` ends with the same figure for what ships (informative, not a
+failure — the sweeps behind each strategy did not record every variant): the
+reversal's daily survives **58** variants, the opening range **over 100 000**
+(4 176 trades; it was found among 648 configurations, so it clears with room),
+and the Donchian's 4 h only **14**. Channels, stops, trails and timeframes were
+all swept to reach that Donchian, so part of its +0.33 R may be the search; its
+preset note and the Guía now say so, and it already ships as `weak`. The SMC
+internal break on 4 h survives 7 against the five ways SMC was traded, which
+backs the decision not to register it. Both approximations are stated in the
+file: the variance of Sharpe across trials is the null's, 1/(n−1), and same-day
+trades on different instruments are not independent, so every figure is an
+upper bound.
+
+**Nothing looks ahead, and the browser agrees with the cache.** `npm run
+lookahead` ports Freqtrade's *lookahead-analysis* and *recursive-analysis* (the
+method; their code is GPL):
+
+- Each sampled signal is recomputed on the candles up to its own bar: none of
+  the three strategies, on any timeframe, needed a later bar to find a signal,
+  and none produced a signal that a later run withdrew. The same holds for 437
+  SMC structure breaks, which is the first measured backing for "nothing
+  repaints" in `smc.ts`.
+- On the ~1 200 bars the app fetches, every recent signal matches the one the
+  audit finds on years of history. The reversal's stop differs in the seventh
+  digit (1884,1456 against 1884,1458 on ETH): an ATR stop is an RMA and carries
+  its seed. That is why the comparison allows 0,01 % on the stop and reports
+  the drift (≤ 0,00002 %) rather than demanding identity.
+- The EMA table confirms `SEED_FACTOR`: at 3× its length an EMA is within 0,09 %
+  of the deep value, at 1.5× it is 0,8–0,9 % off.
+- **The Screener's main SMC structure is the one unstable reading.** On BTC, ETH
+  and SOL, 200 daily bars against 1 000 at 25 dates each: RSI, averages, ATR,
+  trend and the internal structure agree every time; the swing structure agrees
+  59 %, is missing 36 % (it falls back to the internal and says so) and points
+  the **opposite way 5 %** — without the older pivots, a break of a lesser level
+  reads as a change of character. The X-Perps have no more history to fetch
+  (listed 2026-03-30), so the fix is disclosure: the Estructura SMC filter
+  carries a "?" (`HELP.screenerStructure`) with these numbers and points to the
+  4 h chart, which has six times the bars over the same half year. The reversal
+  state disagrees 2 times in 75, because whether a trade is open depends on
+  older signals.
 
 The `propose-strategy` skill in `.claude/skills/` drives that loop from a
 description in plain language. Its important half is not the code generation but

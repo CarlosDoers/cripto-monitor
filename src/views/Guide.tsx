@@ -70,7 +70,8 @@ const FINDINGS: { verdict: Verdict; what: string; detail: ReactNode }[] = [
     detail: (
       <>
         La estrategia más sólida de la app: <strong>+0,61 R</strong> por señal, positiva en BTC, ETH y
-        SOL por separado, en todos los años y en largos y cortos.
+        SOL por separado, en todos los años y en largos y cortos. Seguiría siendo real aunque fuera la
+        mejor de 58 variantes probadas.
       </>
     ),
   },
@@ -80,7 +81,9 @@ const FINDINGS: { verdict: Verdict; what: string; detail: ReactNode }[] = [
     detail: (
       <>
         <strong>+0,33 R</strong> por señal, pero vive de pocas operaciones grandes: sin sus diez mejores
-        de 899 queda en +0,07. Espera rachas largas de pérdidas.
+        de 899 queda en +0,07. Y es la que peor aguanta la búsqueda que la encontró: seguiría siendo
+        real solo si se hubieran probado menos de 14 variantes, y se probaron más. Espera rachas
+        largas de pérdidas y úsala con tamaño pequeño.
       </>
     ),
   },
@@ -89,8 +92,20 @@ const FINDINGS: { verdict: Verdict; what: string; detail: ReactNode }[] = [
     what: 'Apertura de Nueva York en 15 m, días laborables',
     detail: (
       <>
-        <strong>+0,25 R</strong> por señal. Su ventaja se ha ido estrechando año a año, y cada entrada
-        es una orden stop: el deslizamiento importa.
+        <strong>+0,25 R</strong> por señal, sobre más de 4.000 operaciones: aguantaría haber sido la
+        mejor de cien mil variantes. Su ventaja se ha ido estrechando año a año, y cada entrada es una
+        orden stop: el deslizamiento importa.
+      </>
+    ),
+  },
+  {
+    verdict: 'si',
+    what: 'Ninguna señal mira el futuro ni se borra después',
+    detail: (
+      <>
+        Cada señal de las estrategias y cada ruptura del SMC se ha recalculado con solo las velas de
+        su momento: todas aparecen igual y ninguna desaparece. Y lo que calcula la app con las ~1.200
+        velas que descarga coincide con lo medido sobre años de historia.
       </>
     ),
   },
@@ -144,8 +159,9 @@ const FINDINGS: { verdict: Verdict; what: string; detail: ReactNode }[] = [
     what: 'Rupturas de estructura SMC en 4 h',
     detail: (
       <>
-        Ganan (+0,20 R), pero coinciden en la mitad de sus operaciones con la estrategia Ruptura, que
-        gana más. Si quieres operar rupturas, usa esa.
+        Ganan (+0,20 R), pero coinciden en la mitad de sus operaciones con la estrategia Ruptura, y
+        solo aguantarían 7 variantes probadas: del SMC se probaron cinco formas de operarlo. No es
+        suficiente para ofrecerla como estrategia.
       </>
     ),
   },

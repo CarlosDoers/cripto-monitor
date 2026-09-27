@@ -3598,3 +3598,25 @@ table.data td.num {
 .guide > ol {
   max-width: 96ch;
 }
+
+/* Rendimiento · ¿Cuánto puede caer? */
+.perf-stats--flush {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: 0;
+}
+
+.risk-reading {
+  margin-top: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: 96ch;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--ink-secondary);
+}
+
+.risk-reading strong {
+  color: var(--ink-primary);
+}

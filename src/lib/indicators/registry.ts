@@ -242,7 +242,7 @@ export const STRATEGIES: StrategyDef[] = [
       {
         key: 'fast',
         label: 'Canal 20',
-        note: 'Canal de 20 velas, stop de 2 ATR y trailing de 8, solo en 4 h: +0,33 R por señal, y aguanta las dos mitades del histórico (+0,43 / +0,25). Como todo seguidor de tendencia vive de pocas operaciones grandes: sin sus cinco mejores baja a +0,17 R, y sin las diez a +0,07. En diario no se ofrece: su media de +0,67 R es casi entera una sola operación de SOL en 2023 (+68 R), y sin ella se queda en +0,17 con la primera mitad en negativo.',
+        note: 'Canal de 20 velas, stop de 2 ATR y trailing de 8, solo en 4 h: +0,33 R por señal, y aguanta las dos mitades del histórico (+0,43 / +0,25). Como todo seguidor de tendencia vive de pocas operaciones grandes: sin sus cinco mejores baja a +0,17 R, y sin las diez a +0,07. Y su ventaja aguantaría como mucho 14 variantes probadas (Sharpe deflactado): para llegar a esta configuración se probaron canales, stops y trailings, así que parte de ella puede ser fruto de la búsqueda. En diario no se ofrece: su media de +0,67 R es casi entera una sola operación de SOL en 2023 (+68 R), y sin ella se queda en +0,17 con la primera mitad en negativo.',
       },
     ],
     run: (candles) => analyseDonchian(candles, DONCHIAN_SETTINGS),

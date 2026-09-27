@@ -18,6 +18,7 @@ import {
   signedUsd,
 } from '../lib/format'
 import { PnlCurve } from '../components/PnlCurve'
+import { RiskCard } from '../components/RiskCard'
 import { SpotResults } from '../components/SpotResults'
 import { TradingCalendar } from '../components/TradingCalendar'
 import { HourlyBars } from '../components/HourlyBars'
@@ -226,6 +227,9 @@ export function Performance() {
   const [period, setPeriod] = useState<PeriodKey>('30d')
   const p = usePerformance(period)
   const dimmed = p.isFetching && !p.isLoading
+  // Stable identity for the simulation's memo: same trades, same array.
+  const pnls = useMemo(() => p.trades.map((t) => t.pnl), [p.trades])
+  const symbols = useMemo(() => p.trades.map((t) => t.symbol), [p.trades])
 
   if (p.error) {
     return <ErrorNotice title="No se pudo cargar el rendimiento" message={p.error.message} />
@@ -355,6 +359,20 @@ export function Performance() {
             </span>
           </li>
         </ul>
+      </Card>
+
+      {/* The road, not just the destination: how far the result fell before
+          recovering, against what the same trades produce by chance. */}
+      <Card
+        title="¿Cuánto puede caer?"
+        subtitle="Caídas desde el máximo de tu resultado realizado, frente a lo que tus operaciones producen por azar"
+        dimmed={dimmed}
+      >
+        {p.isLoading ? (
+          <Skeleton height={200} />
+        ) : (
+          <RiskCard curve={p.equityCurve} pnls={pnls} symbols={symbols} longestLossStreak={Math.abs(p.longestLossStreak)} />
+        )}
       </Card>
 
       <Card

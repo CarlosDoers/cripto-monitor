@@ -1,6 +1,6 @@
 ---
 name: propose-strategy
-description: Turn a described trading strategy into a measured candidate for the Señales view. Use when the user describes a setup in words ("opening range breakout", "RSI2 pullback", a Pine script, a YouTube video's rules) and wants to know whether it makes money on this account's instruments. Writes a StrategyResult module and measures it with scripts/try-strategy.mjs; never registers anything that has not cleared the bar.
+description: Turn a described trading strategy into a measured candidate for the Estrategias view. Use when the user describes a setup in words ("opening range breakout", "RSI2 pullback", a Pine script, a YouTube video's rules) and wants to know whether it makes money on this account's instruments. Writes a StrategyResult module and measures it with scripts/try-strategy.mjs; never registers anything that has not cleared the bar.
 ---
 
 # Proposing a strategy
@@ -50,14 +50,24 @@ So:
 
 4. **Measure it**: `npm run try -- src/lib/indicators/<name>.ts`
 
+   **Count every measurement as a trial and pass the count.** The first run is
+   `--trials 1`. Each rule change and each neighbourhood cell you measure is
+   another variant, and the final verdict is the run with `--trials N` where N
+   is everything you measured. The harness then asks the edge to beat what the
+   best of N worthless variants reaches by luck (Deflated Sharpe Ratio), and
+   the `aguanta` column says how many it could survive. Reporting the pass at
+   `--trials 1` after trying eight things is the false positive this skill
+   exists to prevent.
+
 5. **If it passes, check the neighbourhood.** Vary one parameter at a time
    around the winning values and measure each. A flat neighbourhood — every
    nearby cell also positive — is what separates a real edge from a lucky
    parameter. If only the exact cell works and its neighbours are negative,
    **that is a failure**, and you report it as one.
 
-6. **Report.** Headline number, both halves, edge over the random control, and
-   what you assumed. Only then offer to register it.
+6. **Report.** Headline number, both halves, edge over the random control, the
+   number of variants tried and whether it survives them, and what you assumed.
+   Only then offer to register it.
 
 ## Writing the module: the traps this repo has already hit
 
@@ -87,7 +97,10 @@ Only after `npm run try` prints `PASA`:
    second half, `sampleSize` and `winRate` from the native timeframe. Set
    `nativeTimeframe` if it is not the daily. Never type a number you did not
    measure; the audit compares them and exits non-zero on drift.
-2. `npm run audit` — must come back with no deviations.
-3. `npm run build` — the typecheck gate.
-4. Drive the real app (`npm run dev`, then the Señales view) in both themes and
+2. `npm run audit` — must come back with no deviations. Its last table shows
+   how many variants the new edge survives; say it next to how many you tried.
+3. `npm run lookahead` — must report no signal that looks ahead or repaints,
+   and none that differs between the browser's ~1 200 bars and the cache.
+4. `npm run build` — the typecheck gate.
+5. Drive the real app (`npm run dev`, then the Estrategias view) in both themes and
    at 390 px. Several bugs in this codebase were only ever visible on screen.

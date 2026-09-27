@@ -49,15 +49,20 @@ function Select<T extends string | number>({
   value,
   onChange,
   options,
+  help,
 }: {
   label: string
   value: T
   onChange: (v: T) => void
   options: [T, string][]
+  help?: ReactNode
 }) {
   return (
     <label className="screen-field">
-      <span className="screen-field-label">{label}</span>
+      <span className="screen-field-label">
+        {label}
+        {help && <Help label={label}>{help}</Help>}
+      </span>
       <select
         className="select"
         value={String(value)}
@@ -439,6 +444,7 @@ export function Screener() {
             />
             <Select
               label="Estructura SMC"
+              help={HELP.screenerStructure}
               value={filters.structure}
               onChange={(v) => set('structure', v)}
               options={[

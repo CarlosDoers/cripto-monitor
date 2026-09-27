@@ -3,6 +3,7 @@
 //
 //   npm run try -- src/lib/indicators/myIdea.ts
 //   npm run try -- src/lib/indicators/myIdea.ts --export analyseMyIdea
+//   npm run try -- src/lib/indicators/myIdea.ts --trials 12
 //
 // Needs ./.candles populated by `npm run candles`.
 //
@@ -19,14 +20,24 @@
 //      The 55-bar Donchian scored +1.43 R in-sample and −0.02 R out.
 //   4. Beats a random entry with the same geometry. A wide stop against a near
 //      target hits 73 % with random entries; hit rate on its own is worthless.
+//   5. Survives the search. `--trials N` says how many variants were tried
+//      before this one (parameters, rules, timeframes — count honestly); the
+//      Deflated Sharpe Ratio raises the bar to what the best of N worthless
+//      variants reaches by luck, and the edge must still clear 95 %. Without
+//      the flag N is 1 and this is a plain significance test. The column
+//      "aguanta" says how many variants it could have been the best of.
 import { readFileSync, readdirSync, existsSync } from 'node:fs'
 import { pathToFileURL } from 'node:url'
 import { MIN_TRADABLE_R } from '../src/lib/indicators/registry.ts'
+import { deflate, DSR_LEVEL } from '../src/lib/indicators/deflated.ts'
 
 const args = process.argv.slice(2)
-const modulePath = args.find((a) => !a.startsWith('--'))
+// The first bare argument that is not a flag's value.
+const modulePath = args.find((a, i) => !a.startsWith('--') && !['--export', '--trials'].includes(args[i - 1]))
 const exportFlag = args.indexOf('--export')
 const wantedExport = exportFlag >= 0 ? args[exportFlag + 1] : null
+const trialsFlag = args.indexOf('--trials')
+const trials = trialsFlag >= 0 ? Math.max(1, Number(args[trialsFlag + 1]) || 1) : 1
 
 if (!modulePath) {
   console.error('uso: npm run try -- <ruta al módulo> [--export nombre]')
@@ -170,20 +181,22 @@ function contractProblem() {
 
 const netR = (s) => (s.length ? s.reduce((a, x) => a + x.resultR - x.feeR, 0) / s.length : 0)
 const hitRate = (s) => (s.length ? s.filter((x) => x.resultR > 0).length / s.length : 0)
+const variants = (n) => `${n} ${n === 1 ? 'variante' : 'variantes'}`
 const f = (x, d = 2) => x.toFixed(d).padStart(6)
 const sg = (r) => `${r >= 0 ? '+' : ''}${r.toFixed(3)}`
 
 // ── measure ─────────────────────────────────────────────────────────────────
 console.log(`CANDIDATA · ${modulePath} → ${runName}()`)
 console.log(`Listón: n≥${MIN_SIGNALS}, ${MIN_TRADABLE_R} R neto en el agregado Y en las dos mitades,`)
-console.log(`        y al menos ${MIN_EDGE_OVER_RANDOM} R por encima de una entrada al azar.\n`)
+console.log(`        al menos ${MIN_EDGE_OVER_RANDOM} R por encima de una entrada al azar,`)
+console.log(`        y ${DSR_LEVEL * 100} % de probabilidad de ventaja real tras ${trials} ${trials === 1 ? 'variante probada' : 'variantes probadas'} (--trials).\n`)
 const problem = contractProblem()
 if (problem) {
   console.log(`=== NO SE PUEDE MEDIR ===\n  ${problem}`)
   process.exit(2)
 }
 
-console.log('  TF     n   acierto     NETO      in     out    azar  ventaja')
+console.log('  TF     n   acierto     NETO      in     out    azar  ventaja   DSR   aguanta')
 
 const passing = []
 for (const bar of BARS) {
@@ -201,17 +214,19 @@ for (const bar of BARS) {
   const outR = netR(out)
   const randR = control ? netR(control) : 0
   const edge = measured - randR
+  const d = deflate(all.map((x) => x.resultR - x.feeR), trials)
 
   const reasons = []
   if (all.length < MIN_SIGNALS) reasons.push(`n=${all.length}`)
   if (measured < MIN_TRADABLE_R) reasons.push(`agregado ${measured.toFixed(2)}`)
   if (Math.min(inR, outR) < MIN_TRADABLE_R) reasons.push(`mitad floja ${Math.min(inR, outR).toFixed(2)}`)
   if (edge < MIN_EDGE_OVER_RANDOM) reasons.push(`ventaja sobre azar ${edge.toFixed(2)}`)
+  if (!(d.dsr >= DSR_LEVEL)) reasons.push(`no sobrevive a ${variants(trials)} (DSR ${(d.dsr * 100).toFixed(0)} %)`)
 
-  if (!reasons.length) passing.push({ bar, measured, inR, outR, n: all.length, wr: hitRate(all) })
+  if (!reasons.length) passing.push({ bar, measured, inR, outR, n: all.length, wr: hitRate(all), survives: d.survives })
 
   console.log(
-    `  ${bar.padEnd(4)} ${String(all.length).padStart(4)}  ${f(hitRate(all) * 100, 1)}%  ${f(measured)} R  ${f(inR)}  ${f(outR)}  ${f(randR)}  ${f(edge)}` +
+    `  ${bar.padEnd(4)} ${String(all.length).padStart(4)}  ${f(hitRate(all) * 100, 1)}%  ${f(measured)} R  ${f(inR)}  ${f(outR)}  ${f(randR)}  ${f(edge)}  ${f(d.dsr * 100, 0)}%  ${String(d.survives).padStart(7)}` +
       (reasons.length ? `   ✗ ${reasons.join(', ')}` : '   ✓'),
   )
 }
@@ -228,7 +243,7 @@ if (!passing.length) {
   console.log('=== PASA ===')
   for (const p of passing) {
     console.log(`  ${p.bar}: ${sg(p.measured)} R neto sobre ${p.n} señales, acierto ${(p.wr * 100).toFixed(1)} %`)
-    console.log(`      in ${sg(p.inR)} / out ${sg(p.outR)}`)
+    console.log(`      in ${sg(p.inR)} / out ${sg(p.outR)} · aguantaría hasta ${variants(p.survives)} probadas`)
   }
   console.log('\n  Para registrarla, copia estas cifras a registry.ts — byTimeframe con lo')
   console.log('  medido en cada TF, outOfSample con la segunda mitad, sampleSize y winRate')

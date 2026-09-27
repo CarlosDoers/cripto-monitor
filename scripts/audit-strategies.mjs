@@ -22,6 +22,7 @@ import {
   STRATEGIES,
   timeframeVerdict,
 } from '../src/lib/indicators/registry.ts'
+import { deflate, DSR_LEVEL } from '../src/lib/indicators/deflated.ts'
 
 const DIR = './.candles'
 const series = {}
@@ -136,6 +137,32 @@ for (const strategy of STRATEGIES) {
     }
     if (Math.abs(wr - profile.winRate) > 0.03) {
       problems.push(`${name} · acierto: medido ${(wr * 100).toFixed(1)}% vs declarado ${(profile.winRate * 100).toFixed(1)}%`)
+    }
+  }
+}
+
+// Would the shipped edges survive the searches that found them? Informative,
+// not a failure: the audit's job is that the labels are true, and the sweeps
+// behind each strategy did not keep a count of every variant tried. What it
+// can say is how many variants each edge could have been the best of and
+// still clear 95 % — the reader compares that with how hard it was searched
+// for (the opening range: 648 configurations).
+console.log('\n\n=== ¿SOBREVIVE A LA BÚSQUEDA? (Sharpe deflactado, Bailey y López de Prado) ===')
+console.log(`  Probabilidad de que la ventaja sea real con una sola variante probada (PSR), y cuántas`)
+console.log(`  variantes podría haber sido la mejor sin bajar del ${DSR_LEVEL * 100} %. Cotas altas: operaciones`)
+console.log('  en distintos instrumentos el mismo día no son independientes.\n')
+console.log('  estrategia            TF       n   Sharpe/op    PSR   aguanta hasta')
+for (const strategy of STRATEGIES) {
+  for (const p of strategy.presets) {
+    const profile = profileOf(strategy, p.key)
+    for (const bar of BARS) {
+      if (timeframeVerdict(profile, bar) === 'blocked') continue
+      const sigs = collect((c) => strategy.run(c, p.key), bar)
+      if (sigs.length < 20) continue
+      const d = deflate(sigs.map((x) => x.resultR - x.feeR))
+      console.log(
+        `  ${`${strategy.key}/${p.key}`.padEnd(20)}  ${bar.padEnd(4)} ${String(sigs.length).padStart(5)}  ${f(d.sharpe, 3)}    ${f(d.psr * 100, 1)}%   ${d.survives ? `${d.survives.toLocaleString('es-ES')} variantes` : 'ninguna'}`,
+      )
     }
   }
 }

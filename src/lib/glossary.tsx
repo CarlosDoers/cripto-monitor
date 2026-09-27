@@ -99,6 +99,31 @@ export const HELP = {
   ),
 
   // ---- Rendimiento ----
+  drawdown: (
+    <>
+      <p>
+        Cuánto bajó tu resultado acumulado desde su máximo anterior hasta el punto más bajo, antes de
+        volver a subir. Es lo que tu cuenta tiene que aguantar sin que cambies de plan.
+      </p>
+      <p>
+        Se mide sobre lo realizado, en dólares: los depósitos que llegaron por el camino harían saltar
+        un porcentaje cada vez que entra dinero.
+      </p>
+    </>
+  ),
+  monteCarlo: (
+    <>
+      <p>
+        Se toman tus operaciones del periodo y se reordenan al azar miles de veces, repitiendo unas y
+        saltando otras, para ver qué caídas y qué rachas produce tu forma de operar solo por suerte.
+      </p>
+      <p>
+        Si tu caída real es peor que casi todas las simuladas, algo cambió: el mercado o tu forma de
+        operar. Supone que cada operación es independiente y que el futuro se parece al pasado; es una
+        descripción de lo ocurrido, no una promesa.
+      </p>
+    </>
+  ),
   totalCosts: (
     <p>
       Comisiones de compra y venta más la financiación de los perpetuos. Si la financiación que
@@ -229,6 +254,22 @@ export const HELP = {
       Nota de 0 a 100 de lo fácil y barato que es operar el contrato ahora: liquidez (35 %),
       coste de la horquilla (35 %) y cuánto se mueve (30 %). No predice hacia dónde irá el precio.
     </p>
+  ),
+  screenerStructure: (
+    <>
+      <p>
+        El Screener solo tiene unas 200 velas diarias por contrato: los X-Perp cotizan desde marzo
+        de 2026, así que no hay más. Con tan poca historia, la estructura principal (giros de 50
+        velas) a menudo aún no existe, y entonces se muestra la interna, indicándolo.
+      </p>
+      <p>
+        Medido sobre BTC, ETH y SOL, que sí tienen años de historia: con 200 velas la dirección
+        principal coincide con la que da una historia cinco veces más larga en el 59 % de los casos,
+        falta en el 36 % y apunta al lado contrario en el 5 %. La estructura interna coincide
+        siempre. Si vas a decidir por la principal, mírala en Análisis en 4 h: con el mismo medio año
+        de vida hay seis veces más velas.
+      </p>
+    </>
   ),
   smc: (
     <>

@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { useMarkets, type Market } from '../lib/markets'
+import { MIN_LIQUID_VOLUME, useMarkets, type Market } from '../lib/markets'
 import { useClosedPositions, usePositions } from '../lib/queries'
 import { pct, plural, price, ratio, usdCompact } from '../lib/format'
 import { EconomicCalendar } from '../components/EconomicCalendar'
@@ -35,12 +35,6 @@ const GRADE_LABEL: Record<Market['grade'], string> = {
 const MAP_SIZE = 30
 /** Rows per movers list. */
 const MOVERS = 6
-/**
- * Minimum 24 h volume to count as a mover. "The liquid half" of the board
- * reached down to contracts trading 80 k$ a day, which is where a 20 % move
- * costs a few trades and says nothing.
- */
-const MOVER_MIN_VOLUME = 1_000_000
 /** Table rows before "show the rest". */
 const TABLE_PAGE = 25
 
@@ -112,7 +106,7 @@ export function Markets() {
    * score already marks down.
    */
   const movers = useMemo(() => {
-    const liquid = byVolume.filter((m) => m.volumeUsd >= MOVER_MIN_VOLUME)
+    const liquid = byVolume.filter((m) => m.volumeUsd >= MIN_LIQUID_VOLUME)
     const sorted = [...liquid].sort((a, b) => b.change24h - a.change24h)
     return {
       pool: liquid.length,

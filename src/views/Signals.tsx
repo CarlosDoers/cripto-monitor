@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { TIMEFRAMES, useSignals, type Timeframe } from '../lib/signals'
+import { useRouteParam } from '../lib/router'
 import {
   appliesTo,
   blockReason,
@@ -62,7 +63,13 @@ const ANALYSIS_VISIBLE = 200
 /** Offered even with no position in them. */
 const FALLBACK = ['BTC-USDT', 'ETH-USDT', 'SOL-USDT']
 
-function LiveSignal({ signal, last }: { signal: StrategySignal; last: number }) {
+/**
+ * `detectedAt` is when the signal candle *closed* — the moment the signal
+ * existed. `signal.time` is when that candle opened, a whole bar earlier: a
+ * daily signal read "hace 5 d" here while the Resumen, counting closed bars,
+ * said four.
+ */
+function LiveSignal({ signal, last, detectedAt }: { signal: StrategySignal; last: number; detectedAt: number }) {
   const long = signal.side === 'long'
   const goal = signal.target
   const progress = goal
@@ -83,7 +90,7 @@ function LiveSignal({ signal, last }: { signal: StrategySignal; last: number }) 
           </Badge>
           <span className="live-pill">En Curso</span>
         </div>
-        <span className="muted">detectada {timeAgo(signal.time)}</span>
+        <span className="muted">detectada {timeAgo(detectedAt)}</span>
       </div>
 
       <ul className="signal-levels">
@@ -302,18 +309,24 @@ export function Signals({ section }: { section: 'analysis' | 'strategies' }) {
   const futures = useInstruments('FUTURES')
   const swaps = useInstruments('SWAP')
 
+  // A link can open this view on a given contract (`#/estrategias?inst=…`):
+  // the Resumen's opportunities do, so the chart shows the signal they name.
+  const linked = useRouteParam('inst')
   const options = useMemo(() => {
     const listed = new Map([...(futures.data ?? []), ...(swaps.data ?? [])].map((i) => [i.instId, i]))
     const open = (positions.data ?? []).map((p) => p.instId)
     const traded = (closed.data?.positions ?? []).map((p) => p.instId)
     const extras = ['BTC-USDT-SWAP', 'ETH-USDT-SWAP', 'SOL-USDT-SWAP'].filter((i) => listed.has(i))
-    return [...new Set([...open, ...traded, ...extras, ...FALLBACK])].filter((id) => {
+    return [...new Set([...(linked ? [linked] : []), ...open, ...traded, ...extras, ...FALLBACK])].filter((id) => {
       const inst = listed.get(id)
       return !inst || inst.state === 'live'
     })
-  }, [positions.data, closed.data, futures.data, swaps.data])
+  }, [linked, positions.data, closed.data, futures.data, swaps.data])
 
-  const [instId, setInstId] = useState('')
+  const [instId, setInstId] = useState(linked ?? '')
+  useEffect(() => {
+    if (linked) setInstId(linked)
+  }, [linked])
   const selected = instId || options[0] || 'BTC-USDT'
 
   const s = useSignals(selected, timeframe, analysis ? null : strategyKey, preset.key)
@@ -688,7 +701,14 @@ export function Signals({ section }: { section: 'analysis' | 'strategies' }) {
       {/* Active Signal Card */}
       {!analysis && r.active && !s.isLoading && (
         <Card title="Operación abierta ahora" subtitle="Posición en curso según niveles calculados" glow>
-          <LiveSignal signal={r.active!} last={lastPrice} />
+          <LiveSignal
+            signal={r.active!}
+            last={lastPrice}
+            detectedAt={
+              s.candles[r.active!.index + 1]?.time ??
+              r.active!.time + (s.candles.length > 1 ? s.candles[1].time - s.candles[0].time : 0)
+            }
+          />
         </Card>
       )}
 

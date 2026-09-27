@@ -2,6 +2,7 @@ import { useMemo } from 'react'
 import { useCandleArchive, useCandleHistory } from './queries'
 import { efficiencyRatio, regimeOf, strategyByKey } from './indicators/registry'
 import { summarise, type Candle } from './indicators/types'
+import type { Candle as OkxCandle } from './types'
 
 /**
  * Just the labels. Whether a timeframe is worth offering is derived per strategy
@@ -24,6 +25,29 @@ export type Timeframe = (typeof TIMEFRAMES)[number]['key']
 /** No strategy runs in the Análisis tab: it is candles, levels and trendlines. */
 const NO_STRATEGY = summarise([], [], 0, null)
 
+/**
+ * OKX's rows as the analysis reads them: confirmed candles only, deduplicated
+ * on timestamp (the archive and the fresh pages overlap), oldest first. Shared
+ * with the Resumen's opportunities so both run a strategy on identical input.
+ */
+export function toCandles(rows: OkxCandle[]): Candle[] {
+  const seen = new Set<string>()
+  return rows
+    .map((row) => ({
+      time: Number(row[0]),
+      open: Number(row[1]),
+      high: Number(row[2]),
+      low: Number(row[3]),
+      close: Number(row[4]),
+      vol: Number(row[5]),
+      confirmed: row[8] === '1',
+    }))
+    // The still-forming candle would make signals appear and disappear.
+    .filter((c) => c.confirmed && Number.isFinite(c.close))
+    .filter((c) => !seen.has(String(c.time)) && seen.add(String(c.time)))
+    .sort((a, b) => a.time - b.time)
+}
+
 /** `strategyKey` null is the Análisis tab: candles only, no strategy run. */
 export function useSignals(
   instId: string,
@@ -37,25 +61,8 @@ export function useSignals(
   // ever return. The two overlap; the merge below dedupes on timestamp.
   const archive = useCandleArchive(instId, bar, strategy?.archiveBars ?? 0)
 
-  const candles = useMemo<Candle[]>(
-    () => {
-      const rows = [...(archive.data ?? []), ...(query.data ?? [])]
-      const seen = new Set<string>()
-      return rows
-        .map((row) => ({
-          time: Number(row[0]),
-          open: Number(row[1]),
-          high: Number(row[2]),
-          low: Number(row[3]),
-          close: Number(row[4]),
-          vol: Number(row[5]),
-          confirmed: row[8] === '1',
-        }))
-        // The still-forming candle would make signals appear and disappear.
-        .filter((c) => c.confirmed && Number.isFinite(c.close))
-        .filter((c) => !seen.has(String(c.time)) && seen.add(String(c.time)))
-        .sort((a, b) => a.time - b.time)
-    },
+  const candles = useMemo(
+    () => toCandles([...(archive.data ?? []), ...(query.data ?? [])]),
     [archive.data, query.data],
   )
 

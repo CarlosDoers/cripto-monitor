@@ -38,10 +38,36 @@ function subscribe(callback: () => void) {
   return () => window.removeEventListener('hashchange', callback)
 }
 
-function currentRoute(): Route {
+/** `#/estrategias?inst=X` → `['estrategias', 'inst=X']`. */
+function splitHash(): [string, string] {
   const hash = window.location.hash.replace(/^#\/?/, '')
-  if ((ROUTES as readonly string[]).includes(hash)) return hash as Route
-  return ALIASES[hash] ?? 'resumen'
+  const q = hash.indexOf('?')
+  return q < 0 ? [hash, ''] : [hash.slice(0, q), hash.slice(q + 1)]
+}
+
+function currentRoute(): Route {
+  const [path] = splitHash()
+  if ((ROUTES as readonly string[]).includes(path)) return path as Route
+  return ALIASES[path] ?? 'resumen'
+}
+
+/**
+ * One query parameter of the current hash, so a link can open a view already
+ * pointed at something — the Resumen's opportunities open Estrategias on their
+ * own contract. A string, so `useSyncExternalStore` compares it by value.
+ */
+export function useRouteParam(name: string): string | null {
+  return useSyncExternalStore(
+    subscribe,
+    () => new URLSearchParams(splitHash()[1]).get(name),
+    () => null,
+  )
+}
+
+/** A link to a view with parameters: `routeHref('estrategias', { inst })`. */
+export function routeHref(route: Route, params: Record<string, string> = {}): string {
+  const query = new URLSearchParams(params).toString()
+  return `#/${route}${query ? `?${query}` : ''}`
 }
 
 export function useRoute(): [Route, (route: Route) => void] {

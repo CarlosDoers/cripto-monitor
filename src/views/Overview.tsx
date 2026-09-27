@@ -29,6 +29,7 @@ import { AllocationBar } from '../components/AllocationBar'
 import { DUST, HoldingsTable } from '../components/HoldingsTable'
 import { ProtectionBadge } from '../components/PositionGuard'
 import { PnlCurve } from '../components/PnlCurve'
+import { Opportunities } from '../components/Opportunities'
 import { guardsFor, hasStop, isShort, LIQ_DANGER, LIQ_WATCH, liquidationDistance, positionSize } from '../lib/guards'
 import { fuelUsed, liquidationRoom, NEARLY_DRY } from '../lib/bots'
 import { IconAlert, IconShield } from '../components/icons'
@@ -330,6 +331,10 @@ export function Overview() {
           }
         />
       </div>
+
+      {/* What to look at next, right under how the account stands: the live
+          signals of the strongest measured strategy. */}
+      <Opportunities />
 
       <div className="grid-2">
         <Card

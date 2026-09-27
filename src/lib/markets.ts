@@ -11,6 +11,14 @@ import { num } from './format'
  * Nothing here predicts direction.
  */
 
+/**
+ * Minimum 24 h volume for a contract to be worth naming as a move or an
+ * opportunity. "The liquid half" of the board reached down to contracts
+ * trading 80 k$ a day, which is where a 20 % move costs a few trades and says
+ * nothing — and where the spread eats a signal's edge.
+ */
+export const MIN_LIQUID_VOLUME = 1_000_000
+
 export type AssetCategory = 'cripto' | 'accion' | 'materia'
 
 export interface Market {

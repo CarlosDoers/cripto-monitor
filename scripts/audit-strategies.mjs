@@ -23,6 +23,7 @@ import {
   timeframeVerdict,
 } from '../src/lib/indicators/registry.ts'
 import { deflate, DSR_LEVEL } from '../src/lib/indicators/deflated.ts'
+import { feeInR } from '../src/lib/indicators/types.ts'
 
 const DIR = './.candles'
 const series = {}
@@ -163,6 +164,59 @@ for (const strategy of STRATEGIES) {
       console.log(
         `  ${`${strategy.key}/${p.key}`.padEnd(20)}  ${bar.padEnd(4)} ${String(sigs.length).padStart(5)}  ${f(d.sharpe, 3)}    ${f(d.psr * 100, 1)}%   ${d.survives ? `${d.survives.toLocaleString('es-ES')} variantes` : 'ninguna'}`,
       )
+    }
+  }
+}
+
+// Late entry. A strategy that declares `lateEntry` is saying its signals stay
+// worth taking for `maxAge` bars — the Resumen shows signals of any age up to
+// that. Measured here the way the panel uses it: enter at the close of bar k
+// with the signal's own stop and target, only while neither has been hit, and
+// net of the fee on the new, narrower-or-wider risk.
+const FEE = 0.001
+for (const strategy of STRATEGIES) {
+  for (const p of strategy.presets) {
+    const profile = profileOf(strategy, p.key)
+    const late = profile.lateEntry
+    if (!late) continue
+    const name = `${strategy.key}/${p.key}`
+    const native = profile.nativeTimeframe ?? '1D'
+    const byAge = {}
+    for (const cs of Object.values(series[native] ?? {})) {
+      if (cs.length < 250) continue
+      const halfTime = cs[Math.floor(cs.length / 2)].time
+      for (const s of strategy.run(cs, p.key).signals) {
+        if (s.outcome === 'open' || s.target === undefined) continue
+        const long = s.side === 'long'
+        for (let k = 1; k <= late.maxAge; k++) {
+          const i = s.index + k
+          if (s.closedIndex === undefined || i >= s.closedIndex) break
+          const entry = cs[i].close
+          const risk = long ? entry - s.stop : s.stop - entry
+          const reward = long ? s.target - entry : entry - s.target
+          if (!(risk > 0) || !(reward > 0)) break
+          const r = (s.outcome === 'win' ? reward / risk : -1) - feeInR(entry, s.stop, FEE)
+          ;(byAge[k] ??= []).push({ r, first: s.time < halfTime })
+        }
+      }
+    }
+    console.log(`\n\n=== ENTRADA TARDÍA · ${name} (${native}) ===`)
+    console.log('  Entrar k velas después de la señal, con su stop y su objetivo, si aún no se tocaron.\n')
+    console.log('   k     n     NETO      in     out')
+    let floor = Infinity
+    for (let k = 1; k <= late.maxAge; k++) {
+      const all = byAge[k] ?? []
+      const r = netExp(all.map((x) => ({ resultR: x.r, feeR: 0 })))
+      const ins = netExp(all.filter((x) => x.first).map((x) => ({ resultR: x.r, feeR: 0 })))
+      const out = netExp(all.filter((x) => !x.first).map((x) => ({ resultR: x.r, feeR: 0 })))
+      floor = Math.min(floor, r)
+      const bad = all.length < 20 || Math.min(r, ins, out) < MIN_TRADABLE_R
+      if (bad) problems.push(`${name} · entrada tardía k=${k}: ${r.toFixed(2)} R (in ${ins.toFixed(2)} / out ${out.toFixed(2)}, n=${all.length}) bajo el umbral`)
+      console.log(`  ${String(k).padStart(2)}  ${String(all.length).padStart(4)}  ${f(r)} R  ${f(ins)}  ${f(out)}${bad ? '  ⚠' : ''}`)
+    }
+    console.log(`  peor edad: ${f(floor)} R declarado ${f(late.floor)} R`)
+    if (Math.abs(floor - late.floor) > TOL) {
+      problems.push(`${name} · entrada tardía: peor edad medida ${floor.toFixed(2)} R vs declarada ${late.floor}`)
     }
   }
 }

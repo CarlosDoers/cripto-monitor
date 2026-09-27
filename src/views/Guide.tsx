@@ -247,7 +247,9 @@ export function Guide() {
         <ul>
           <li>
             <strong>Resumen</strong>: ¿cómo voy? Lo que has ganado desde que empezaste, lo que tienes en
-            marcha y cualquier aviso de riesgo. Si solo miras una sección, que sea esta.
+            marcha, cualquier aviso de riesgo y las <em>oportunidades ahora</em>: los X-Perp donde la
+            Reversión tiene una señal viva que todavía merece la pena. Si solo miras una sección, que sea
+            esta.
           </li>
           <li>
             <strong>En curso</strong>: lo que tienes abierto ahora (posiciones, bots, órdenes
@@ -307,8 +309,9 @@ export function Guide() {
             movimiento general o de unos pocos.
           </li>
           <li>
-            <strong>Screener → atajo «Reversión»</strong>: en qué contratos está vigilando o ha dado señal
-            la estrategia más sólida. Ábrelos en Estrategias.
+            <strong>Oportunidades ahora</strong>, en el Resumen: las señales vivas de la Reversión,
+            ordenadas por el recorrido que les queda. Ábrelas en Estrategias para ver el gráfico, y decide
+            tú el tamaño: aproximadamente la mitad acaban en el stop.
           </li>
           <li>
             <strong>Análisis</strong> del contrato que te interese, con el SMC activado, antes de decidir

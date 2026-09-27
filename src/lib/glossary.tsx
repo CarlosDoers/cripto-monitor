@@ -255,6 +255,26 @@ export const HELP = {
       coste de la horquilla (35 %) y cuánto se mueve (30 %). No predice hacia dónde irá el precio.
     </p>
   ),
+  opportunities: (
+    <>
+      <p>
+        Los X-Perp de cripto con más de 1 M$ al día donde la Reversión diaria, la estrategia más
+        sólida que se ha medido, tiene ahora una señal viva: disparó en los últimos 7 días y el precio
+        aún no ha tocado ni su stop ni su objetivo.
+      </p>
+      <p>
+        Entrar tarde se ha medido: con el mismo stop y objetivo de la señal, hacerlo entre 1 y 7 días
+        después sigue siendo rentable en todas las edades y en las dos mitades del histórico. Se
+        ordenan por la recompensa que queda por cada unidad de riesgo al precio de ahora: cuanto más
+        recorrido le queda, mejor ha salido de media, y con menos de 1:1 es donde menos se gana.
+      </p>
+      <p>
+        Medido en BTC, ETH y SOL; en otras monedas es la misma regla sin la misma evidencia. Ninguna
+        señal es segura: aproximadamente la mitad acaban en el stop. Lo que la hace rentable es que
+        las que ganan pagan más de lo que cuestan las que pierden.
+      </p>
+    </>
+  ),
   screenerStructure: (
     <>
       <p>

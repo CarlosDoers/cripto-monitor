@@ -708,13 +708,20 @@ const DAILY = 60 * 60 * 1000
  * daily closes at midnight Hong Kong time, 16:00 UTC, which is not what anyone
  * means by "today". 200 bars reaches past the X-Perp listing date anyway.
  */
-export function useDailyBoard(instIds: string[]) {
+/**
+ * `bar` is `1Dutc` for the Screener, whose returns are calendar days, and `1D`
+ * for the Resumen's opportunities, which must see the very candles the
+ * Estrategias view and the audit run the reversal on — OKX's plain daily
+ * closes at midnight Hong Kong time, and a signal on one grid is not a signal
+ * on the other. 300 is one page, and more than any X-Perp has lived.
+ */
+export function useDailyBoard(instIds: string[], bar: '1Dutc' | '1D' = '1Dutc') {
   return useQueries({
     queries: instIds.map((instId) => ({
-      queryKey: ['daily-board', instId],
+      queryKey: ['daily-board', instId, bar],
       queryFn: async () => {
         const rows = await paced(() =>
-          okx<Candle>('/api/v5/market/candles', { instId, bar: '1Dutc', limit: 200 }),
+          okx<Candle>('/api/v5/market/candles', { instId, bar, limit: bar === '1D' ? 300 : 200 }),
         )
         return rows.sort((a, b) => Number(a[0]) - Number(b[0]))
       },

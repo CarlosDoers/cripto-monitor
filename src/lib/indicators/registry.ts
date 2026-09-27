@@ -83,6 +83,18 @@ export interface StrategyBacktest {
    * Nothing negative ships, so there is no third value.
    */
   confidence: 'reasonable' | 'weak'
+  /**
+   * Whether a live signal is still worth taking after the bar it fired on, and
+   * for how long. Only fixed-target strategies can declare it: the stop and
+   * target are set at the signal, so entering k bars late is a well-defined
+   * trade — same stop, same target, the close of bar k as entry — and only
+   * signals that had not yet hit either by then count, which is exactly what
+   * someone opening the app would see. `floor` is the worst net R measured at
+   * any age from 1 to `maxAge` bars; `npm run audit` re-measures it and fails
+   * when it drifts or when any age, or either half, falls under
+   * `MIN_TRADABLE_R`. The Resumen's *Oportunidades ahora* reads this.
+   */
+  lateEntry?: { maxAge: number; floor: number }
 }
 
 /**
@@ -229,6 +241,7 @@ export const STRATEGIES: StrategyDef[] = [
       sampleSize: 141,
       winRate: 0.504,
       confidence: 'reasonable',
+      lateEntry: { maxAge: 7, floor: 0.34 },
     },
   },
   {

@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { assignColors, OTHER_COLOR } from '../lib/colors'
 import { useCandles } from '../lib/queries'
-import { num, pct, price, qty, share, usd } from '../lib/format'
+import { num, pct, plural, price, qty, share, usd } from '../lib/format'
 import type { Holding } from '../lib/types'
 import { Sparkline } from './Sparkline'
 import { Delta, EmptyState, SearchInput, TableWrap } from './ui'
@@ -24,19 +24,31 @@ function HoldingSpark({ ccy, color }: { ccy: string; color: string }) {
 
 type SortBy = 'value' | 'balance' | 'change'
 
+/**
+ * Below this share of the portfolio a balance is dust. Cartera listed thirteen
+ * of them — coins worth cents to a few dollars, from airdrops and leftovers —
+ * each printing "0,0 %", and the five that matter were lost among them.
+ * Relative, like the Resumen's cut, so it means the same on any account size.
+ */
+export const DUST = 0.005
+
 export function HoldingsTable({
   holdings,
   limit,
   showSparkline = false,
   showSearch = false,
+  foldDust = false,
 }: {
   holdings: Holding[]
   limit?: number
   showSparkline?: boolean
   showSearch?: boolean
+  /** Fold balances under `DUST` into one expandable row instead of listing them. */
+  foldDust?: boolean
 }) {
   const [search, setSearch] = useState('')
   const [sortBy, setSortBy] = useState<SortBy>('value')
+  const [showDust, setShowDust] = useState(false)
 
   // Derived from the full list, not the sliced one, so the colours match the
   // allocation chart whether or not this table is truncated.
@@ -58,6 +70,12 @@ export function HoldingsTable({
     return limit ? list.slice(0, limit) : list
   }, [holdings, search, sortBy, limit])
 
+  // A search always shows what it finds, dust or not.
+  const folding = foldDust && !showDust && !search.trim()
+  const dust = folding ? processed.filter((h) => h.weight < DUST) : []
+  const rows = folding ? processed.filter((h) => h.weight >= DUST) : processed
+  const dustUsd = dust.reduce((sum, h) => sum + h.usd, 0)
+
   if (holdings.length === 0) {
     return <EmptyState title="No hay activos" hint="Tu cuenta de OKX no tiene saldo registrado." />
   }
@@ -69,7 +87,7 @@ export function HoldingsTable({
           <SearchInput
             value={search}
             onChange={setSearch}
-            placeholder="Buscar por símbolo (ej. BTC, SOL, USDT)..."
+            placeholder="Buscar moneda…"
             className="table-search"
           />
           <div className="seg-control">
@@ -78,14 +96,14 @@ export function HoldingsTable({
               aria-pressed={sortBy === 'value'}
               onClick={() => setSortBy('value')}
             >
-              Mayor Valor
+              Valor
             </button>
             <button
               type="button"
               aria-pressed={sortBy === 'change'}
               onClick={() => setSortBy('change')}
             >
-              Variación 24h
+              Cambio 24 h
             </button>
             <button
               type="button"
@@ -104,15 +122,15 @@ export function HoldingsTable({
             <tr>
               <th>Activo</th>
               <th className="num">Cantidad</th>
-              <th className="num">Precio Actual</th>
+              <th className="num">Precio</th>
               <th className="num">Var. 24 h</th>
-              {showSparkline && <th>Tendencia 48 h</th>}
-              <th className="num">Valor Estimado</th>
-              <th className="num">Peso Cartera</th>
+              {showSparkline && <th>Últimas 48 h</th>}
+              <th className="num">Valor</th>
+              <th className="num">Peso</th>
             </tr>
           </thead>
           <tbody>
-            {processed.map((h) => {
+            {rows.map((h) => {
               const color = colors.get(h.ccy) ?? OTHER_COLOR
               return (
                 <tr key={h.ccy}>
@@ -162,6 +180,22 @@ export function HoldingsTable({
                 </tr>
               )
             })}
+            {dust.length > 0 && (
+              <tr className="dust-row">
+                <td>
+                  <button type="button" className="card-link" onClick={() => setShowDust(true)}>
+                    {plural(dust.length, 'saldo residual', 'saldos residuales')} · ver →
+                  </button>
+                </td>
+                <td className="num" colSpan={showSparkline ? 4 : 3}>
+                  <span className="sub">cada uno bajo el 0,5 % de la cartera</span>
+                </td>
+                <td className="num">
+                  <strong>{usd(dustUsd)}</strong>
+                </td>
+                <td className="num">{share(dust.reduce((sum, h) => sum + h.weight, 0))}</td>
+              </tr>
+            )}
           </tbody>
         </table>
 

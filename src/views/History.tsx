@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { useBills, useFills, useInstruments } from '../lib/queries'
 import { useMovements, type MovementStatus } from '../lib/transfers'
+import { useAccountResult } from '../lib/result'
 import type { Fill, Instrument } from '../lib/types'
 import { colorOf } from '../lib/colors'
 import { usePortfolio } from '../lib/portfolio'
@@ -31,6 +32,8 @@ import {
   TableWrap,
 } from '../components/ui'
 import { HELP } from '../lib/glossary'
+import { OrderHistory } from './Orders'
+import { StoppedBots } from './Bots'
 
 const INST_TYPES = [
   { key: 'SPOT', label: 'Spot' },
@@ -90,12 +93,43 @@ function Fills({ instType }: { instType: string }) {
   const derivative = instType === 'SWAP' || instType === 'FUTURES'
   const [search, setSearch] = useState('')
 
+  /**
+   * One row per order, not per fill. A single XLM sell on 27/8 was filled in
+   * twenty-odd pieces of "10 XLM" and took a screen of rows to say one thing.
+   * Price is size-weighted; fee and PnL are summed.
+   */
+  const orders = useMemo(() => {
+    const byOrder = new Map<string, { first: Fill; fills: Fill[] }>()
+    for (const f of data ?? []) {
+      const g = byOrder.get(f.ordId)
+      if (g) g.fills.push(f)
+      else byOrder.set(f.ordId, { first: f, fills: [f] })
+    }
+    return [...byOrder.values()].map(({ first, fills }) => {
+      const size = fills.reduce((s, f) => s + num(f.fillSz), 0)
+      const px = size > 0 ? fills.reduce((s, f) => s + num(f.fillPx) * num(f.fillSz), 0) / size : num(first.fillPx)
+      const notionals = fills.map((f) => notionalOf(f, contracts.get(f.instId)))
+      return {
+        key: first.ordId || `${first.tradeId}`,
+        ts: Math.max(...fills.map((f) => num(f.ts))),
+        instId: first.instId,
+        side: first.side,
+        px,
+        size,
+        notional: notionals.some((n) => n === undefined) ? undefined : notionals.reduce<number>((acc, n) => acc + (n ?? 0), 0),
+        fee: fills.reduce((s, f) => s + num(f.fee), 0),
+        feeCcy: first.feeCcy,
+        pnl: fills.reduce((s, f) => s + num(f.fillPnl), 0),
+        count: fills.length,
+      }
+    }).sort((a, b) => b.ts - a.ts)
+  }, [data, contracts])
+
   const filtered = useMemo(() => {
-    const fills = data ?? []
-    if (!search.trim()) return fills
+    if (!search.trim()) return orders
     const q = search.toLowerCase().trim()
-    return fills.filter((f) => f.instId.toLowerCase().includes(q))
-  }, [data, search])
+    return orders.filter((o) => o.instId.toLowerCase().includes(q))
+  }, [orders, search])
 
   const fills = data ?? []
 
@@ -117,7 +151,7 @@ function Fills({ instType }: { instType: string }) {
         <SearchInput
           value={search}
           onChange={setSearch}
-          placeholder="Buscar por activo (ej. BTC-USDT)..."
+          placeholder="Buscar: BTC, ZEC…"
           className="table-search"
         />
       </div>
@@ -126,63 +160,57 @@ function Fills({ instType }: { instType: string }) {
         <table className="data">
           <thead>
             <tr>
-              <th>Fecha y Hora</th>
+              <th>Fecha</th>
               <th>Instrumento</th>
               <th>Lado</th>
-              <th className="num">Precio Ejecución</th>
+              <th className="num">Precio medio</th>
               <th className="num">Cantidad</th>
-              <th className="num">Volumen Total</th>
+              <th className="num">Volumen</th>
               <th className="num">Comisión</th>
-              <th className="num">PnL Realizado</th>
+              {derivative && <th className="num">Resultado</th>}
             </tr>
           </thead>
           <tbody>
-            {filtered.map((f) => {
-              const fillPx = num(f.fillPx)
-              const fillSz = num(f.fillSz)
-              const fee = num(f.fee)
-              const pnl = num(f.fillPnl)
-              return (
-                <tr key={`${f.tradeId}-${f.ordId}`}>
-                  <td className="sub">{dateTime(f.ts)}</td>
-                  <td>
-                    <span className="ccy">{f.instId}</span>
-                  </td>
-                  <td>
-                    <Badge variant={f.side === 'sell' ? 'sell' : 'buy'}>
-                      {f.side === 'sell' ? 'Venta ▼' : 'Compra ▲'}
-                    </Badge>
-                  </td>
-                  <td className="num">{price(fillPx)}</td>
-                  <td className="num">
-                    {qty(fillSz)}
+            {filtered.map((o) => (
+              <tr key={o.key}>
+                <td className="sub">{dateTime(o.ts)}</td>
+                <td>
+                  <span className="ccy">{o.instId}</span>
+                  {o.count > 1 && <span className="sub"> · {o.count} ejecuciones</span>}
+                </td>
+                <td>
+                  <Badge variant={o.side === 'sell' ? 'sell' : 'buy'}>
+                    {o.side === 'sell' ? 'Venta ▼' : 'Compra ▲'}
+                  </Badge>
+                </td>
+                <td className="num">{price(o.px)}</td>
+                <td className="num">
+                  <span>
+                    {qty(o.size)}
                     {derivative && <span className="sub"> contr.</span>}
-                  </td>
+                  </span>
+                </td>
+                <td className="num">{o.notional !== undefined ? usd(o.notional) : '—'}</td>
+                <td className="num">
+                  {o.fee !== 0 ? (
+                    <span>
+                      {qty(Math.abs(o.fee))} <span className="sub">{o.feeCcy}</span>
+                    </span>
+                  ) : (
+                    '—'
+                  )}
+                </td>
+                {derivative && (
                   <td className="num">
-                    {(() => {
-                      const notional = notionalOf(f, contracts.get(f.instId))
-                      return notional !== undefined ? usd(notional) : '—'
-                    })()}
-                  </td>
-                  <td className="num">
-                    {fee !== 0 ? (
-                      <>
-                        {qty(Math.abs(fee))} <span className="sub">{f.feeCcy}</span>
-                      </>
-                    ) : (
-                      '—'
-                    )}
-                  </td>
-                  <td className="num">
-                    {pnl !== 0 ? (
-                      <DeltaValue value={pnl}>{signedUsd(pnl)}</DeltaValue>
+                    {o.pnl !== 0 ? (
+                      <DeltaValue value={o.pnl}>{signedUsd(o.pnl)}</DeltaValue>
                     ) : (
                       <span className="muted">—</span>
                     )}
                   </td>
-                </tr>
-              )
-            })}
+                )}
+              </tr>
+            ))}
           </tbody>
         </table>
 
@@ -233,11 +261,11 @@ function Movements() {
           <thead>
             <tr>
               <th>Fecha y Hora</th>
-              <th>Tipo Movimiento</th>
+              <th>Tipo</th>
               <th>Activo</th>
               <th>Instrumento</th>
               <th className="num">Variación</th>
-              <th className="num">Saldo Resultante</th>
+              <th className="num">Saldo después</th>
               <th className="num">PnL</th>
             </tr>
           </thead>
@@ -384,22 +412,13 @@ function Transfers() {
  * why the two are shown apart and never added.
  */
 function Provenance() {
-  const flows = useMovements()
+  const { flows, net, netEur, result, resultEur, partial, noFlows, ...account } = useAccountResult()
   const perf = usePerformance('all')
   const portfolio = usePortfolio()
-
-  const net = flows.deposited - flows.withdrawn
-  const netEur = flows.depositedEur - flows.withdrawnEur
-  // Net worth is a balance, so today's rate is the right one for it; what was
-  // put in keeps the rate of the day it arrived. In euros the result therefore
-  // includes what the dollar did in between, which is what a euro holder made.
-  const result = portfolio.netWorth - net
-  const resultEur = convert(portfolio.netWorth) - netEur
-  const loading = flows.isLoading || perf.isLoading || portfolio.isLoading
-  const partial = flows.unpriced > 0 || flows.incomplete !== null
+  const loading = account.isLoading || perf.isLoading
 
   // Nothing to separate when no money has moved in or out.
-  if (!loading && !flows.error && flows.deposits + flows.withdrawals === 0) return null
+  if (noFlows) return null
 
   return (
     <div className="kpi-row">
@@ -428,7 +447,7 @@ function Provenance() {
         foot={<span>{plural(flows.withdrawals, 'movimiento', 'movimientos')}</span>}
       />
       <Stat
-        label="Aportación Neta"
+        label="Aportación neta"
         help={HELP.netContribution}
         loading={loading}
         value={<DeltaValue value={shownAmount(net, netEur)}>{signedUsdOrEur(net, netEur)}</DeltaValue>}
@@ -441,7 +460,7 @@ function Provenance() {
         }
       />
       <Stat
-        label="Resultado Total"
+        label="Resultado total"
         help={HELP.totalResult}
         loading={loading}
         value={
@@ -450,14 +469,14 @@ function Provenance() {
         foot={<span>patrimonio menos lo aportado</span>}
       />
       <Stat
-        label="Generado Operando"
+        label="Generado operando"
         help={HELP.tradingResult}
         loading={loading}
         value={<DeltaValue value={perf.netPnl}>{signedUsd(perf.netPnl)}</DeltaValue>}
         foot={<span>{perf.count} posiciones cerradas · neto de costes</span>}
       />
       <Stat
-        label="Costes de Operar"
+        label="Costes de operar"
         help={HELP.totalCosts}
         loading={loading}
         value={<DeltaValue value={perf.totalCosts}>{signedUsd(perf.totalCosts)}</DeltaValue>}
@@ -474,9 +493,27 @@ function Provenance() {
  */
 const PAGE = 100
 
+type HistoryTab = 'ordenes' | 'ejecuciones' | 'bots' | 'depositos' | 'movimientos'
+
+const TABS: { key: HistoryTab; label: string }[] = [
+  { key: 'ordenes', label: 'Órdenes' },
+  { key: 'ejecuciones', label: 'Ejecuciones' },
+  { key: 'bots', label: 'Bots detenidos' },
+  { key: 'depositos', label: 'Depósitos y retiradas' },
+  { key: 'movimientos', label: 'Movimientos' },
+]
+
+/**
+ * Everything that has already happened, one kind at a time. Stacked, the five
+ * lists made an 8 000-pixel page; as tabs each is one tap away and the page
+ * opens on the orders, the record most people come here for. The account's
+ * own balance sheet — what went in, what it made — stays on top.
+ */
 export function History() {
-  const [instType, setInstType] = useState<string>('SPOT')
-  // Same query keys as the tables below, so these read the cache, not the API.
+  const [tab, setTab] = useState<HistoryTab>('ordenes')
+  // Futures first: it is where this account trades, and spot opened on a list
+  // of months-old coin sales.
+  const [instType, setInstType] = useState<string>('FUTURES')
   const fills = useFills(instType)
   const bills = useBills()
 
@@ -484,50 +521,74 @@ export function History() {
     <>
       <Provenance />
 
-      <Card
-        title="Ejecuciones y Fills"
-        subtitle={
-          (fills.data?.length ?? 0) >= PAGE
-            ? `Las ${PAGE} más recientes · OKX conserva 3 meses`
-            : 'Operaciones completadas en los últimos 3 meses'
-        }
-        flush
-        action={
-          <div className="seg-control">
-            {INST_TYPES.map((t) => (
-              <button
-                key={t.key}
-                type="button"
-                aria-pressed={instType === t.key}
-                onClick={() => setInstType(t.key)}
-              >
-                {t.label}
-              </button>
-            ))}
-          </div>
-        }
-      >
-        <Fills instType={instType} />
-      </Card>
+      <div className="tabs history-tabs" role="tablist" aria-label="Qué ver del historial">
+        {TABS.map((t) => (
+          <button
+            key={t.key}
+            type="button"
+            role="tab"
+            className="tab"
+            aria-selected={tab === t.key}
+            onClick={() => setTab(t.key)}
+          >
+            <span className="tab-label">{t.label}</span>
+          </button>
+        ))}
+      </div>
 
-      <Card
-        title="Depósitos y Retiradas"
-        subtitle="Dinero que entra y sale de OKX — no es rendimiento, aunque mueva el patrimonio"
-        flush
-      >
-        <Transfers />
-      </Card>
+      {tab === 'ordenes' && <OrderHistory />}
 
-      <Card
-        title="Movimientos de la Cuenta"
-        subtitle={`Transferencias, comisiones, tasas de funding e intereses${
-          (bills.data?.length ?? 0) >= PAGE ? ` · los ${PAGE} más recientes` : ''
-        }`}
-        flush
-      >
-        <Movements />
-      </Card>
+      {tab === 'ejecuciones' && (
+        <Card
+          title="Ejecuciones"
+          subtitle={
+            (fills.data?.length ?? 0) >= PAGE
+              ? `Agrupadas por orden · las ${PAGE} ejecuciones más recientes · OKX conserva 3 meses`
+              : 'Agrupadas por orden · últimos 3 meses'
+          }
+          flush
+          action={
+            <div className="seg-control">
+              {INST_TYPES.map((t) => (
+                <button
+                  key={t.key}
+                  type="button"
+                  aria-pressed={instType === t.key}
+                  onClick={() => setInstType(t.key)}
+                >
+                  {t.label}
+                </button>
+              ))}
+            </div>
+          }
+        >
+          <Fills instType={instType} />
+        </Card>
+      )}
+
+      {tab === 'bots' && <StoppedBots />}
+
+      {tab === 'depositos' && (
+        <Card
+          title="Depósitos y retiradas"
+          subtitle="Dinero que entra y sale de OKX: no es rendimiento, aunque mueva el patrimonio"
+          flush
+        >
+          <Transfers />
+        </Card>
+      )}
+
+      {tab === 'movimientos' && (
+        <Card
+          title="Movimientos de la cuenta"
+          subtitle={`Transferencias, comisiones, financiación e intereses${
+            (bills.data?.length ?? 0) >= PAGE ? ` · los ${PAGE} más recientes` : ''
+          }`}
+          flush
+        >
+          <Movements />
+        </Card>
+      )}
     </>
   )
 }
-

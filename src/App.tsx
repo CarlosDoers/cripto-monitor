@@ -13,10 +13,9 @@ import { Signals } from './views/Signals'
 import { Markets } from './views/Markets'
 import { Screener } from './views/Screener'
 import { Portfolio } from './views/Portfolio'
-import { Positions } from './views/Positions'
-import { Bots } from './views/Bots'
-import { Orders } from './views/Orders'
+import { Active } from './views/Active'
 import { History } from './views/History'
+import { Guide } from './views/Guide'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -76,15 +75,15 @@ function Views() {
   return (
     <Layout route={route} navigate={navigate}>
       {route === 'resumen' && <Overview />}
-      {route === 'senales' && <Signals />}
+      {route === 'encurso' && <Active />}
+      {route === 'cartera' && <Portfolio />}
+      {route === 'rendimiento' && <Performance />}
+      {route === 'historial' && <History />}
       {route === 'mercados' && <Markets />}
       {route === 'screener' && <Screener />}
-      {route === 'rendimiento' && <Performance />}
-      {route === 'cartera' && <Portfolio />}
-      {route === 'posiciones' && <Positions />}
-      {route === 'bots' && <Bots />}
-      {route === 'ordenes' && <Orders />}
-      {route === 'historial' && <History />}
+      {route === 'analisis' && <Signals section="analysis" />}
+      {route === 'estrategias' && <Signals section="strategies" />}
+      {route === 'guia' && <Guide />}
     </Layout>
   )
 }

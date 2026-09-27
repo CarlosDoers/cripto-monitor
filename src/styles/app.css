@@ -3430,3 +3430,171 @@ table.data td.num {
     flex: 0 0 auto;
   }
 }
+
+/* ---------- Guía ---------- */
+
+.guide h3 {
+  margin: 14px 0 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink-primary);
+}
+
+.guide ul,
+.guide ol {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-left: 18px;
+}
+
+.guide li {
+  line-height: 1.55;
+}
+
+.findings {
+  list-style: none;
+  padding-left: 0 !important;
+  gap: 0 !important;
+}
+
+.finding {
+  display: grid;
+  grid-template-columns: 110px 1fr;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.finding-verdict {
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  padding-top: 3px;
+}
+
+.finding--si .finding-verdict {
+  color: var(--good);
+}
+
+.finding--no .finding-verdict {
+  color: var(--critical);
+}
+
+.finding--ojo .finding-verdict {
+  color: var(--warning);
+}
+
+.glossary {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 0 24px;
+}
+
+.glossary-entry {
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.glossary-entry dt {
+  font-weight: 600;
+  color: var(--ink-primary);
+  margin-bottom: 4px;
+}
+
+.glossary-entry dd {
+  margin: 0;
+  font-size: 13px;
+  color: var(--ink-secondary);
+}
+
+.glossary-entry dd p + p {
+  margin-top: 6px;
+}
+
+.idle p + p {
+  margin-top: 10px;
+}
+
+@media (max-width: 720px) {
+  .finding {
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
+}
+
+/* The Resumen's opening sentence: the answer before the figures. */
+.summary {
+  padding: 18px 24px;
+  border-bottom: 1px solid var(--border);
+}
+
+.summary p {
+  margin: 0;
+  max-width: 78ch;
+  font-size: 15px;
+  line-height: 1.6;
+  color: var(--ink-secondary);
+}
+
+.summary strong {
+  font-family: var(--mono);
+  font-weight: 600;
+  color: var(--ink-primary);
+}
+
+.summary .delta--up strong,
+.summary .delta--down strong {
+  color: inherit;
+}
+
+@media (max-width: 720px) {
+  .summary {
+    padding: 14px 16px;
+  }
+
+  .summary p {
+    font-size: 14px;
+  }
+}
+
+/* Sidebar groups: "Tu cuenta" / "El mercado" / "Ayuda". A rule between
+   groups, like every other block boundary. */
+.nav-group + .nav-group {
+  border-top: 1px solid var(--border);
+  margin-top: 6px;
+}
+
+/* Compact tab strips (Historial, Guía): short labels, no tagline, so the
+   strategy tabs' 232 px minimum would leave most of the strip empty. */
+.history-tabs .tab,
+.guide-toc .tab {
+  min-width: 0;
+  white-space: nowrap;
+  padding: 10px 18px;
+}
+
+.dust-row td {
+  color: var(--ink-faint);
+}
+
+.dust-row button.card-link {
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  font: inherit;
+}
+
+/* A link inside running text is a word in the sentence, not a block. */
+.prose .card-link,
+.summary .card-link {
+  display: inline;
+}
+
+.guide > p,
+.guide > ul,
+.guide > ol {
+  max-width: 96ch;
+}

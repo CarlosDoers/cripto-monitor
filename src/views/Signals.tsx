@@ -56,12 +56,6 @@ const MIN_BARS = 30
  */
 const ANALYSIS = 'analisis'
 
-const ANALYSIS_TAB = {
-  key: ANALYSIS,
-  label: 'Análisis',
-  tagline: 'Soportes, resistencias y líneas de tendencia',
-}
-
 /** Bars on screen in Análisis: a little more room than a strategy's 160. */
 const ANALYSIS_VISIBLE = 200
 
@@ -284,8 +278,14 @@ function FeeReality({ avgFeeR, loading }: { avgFeeR: number; loading: boolean })
   )
 }
 
-export function Signals() {
-  const [strategyKey, setStrategyKey] = useState(ANALYSIS)
+/**
+ * Two sections share this view. *Análisis* is the chart read by hand — levels,
+ * trendlines, SMC, averages — on any timeframe, with no strategy. *Estrategias*
+ * is the three measured strategies. They used to be tabs of one "Señales"
+ * section whose first tab gave no signal at all, which was the confusing part.
+ */
+export function Signals({ section }: { section: 'analysis' | 'strategies' }) {
+  const [strategyKey, setStrategyKey] = useState(section === 'analysis' ? ANALYSIS : STRATEGIES[0].key)
   const [timeframe, setTimeframe] = useState<Timeframe>('1D')
   const [presetKey, setPresetKey] = useState(STRATEGIES[0].presets[0].key)
   const [filterOutcome, setFilterOutcome] = useState<'all' | 'win' | 'loss' | 'open'>('all')
@@ -503,8 +503,9 @@ export function Signals() {
       {/* Strategy selection tabs. The strip scrolls below ~720 px and a third
           strategy pushed the last tab off-screen, so the active one was
           invisible and none of the visible tabs looked selected. */}
-      <div className="tabs" role="tablist" aria-label="Estrategias e Indicadores">
-        {[ANALYSIS_TAB, ...STRATEGIES].map((item) => (
+      {section === 'strategies' && (
+      <div className="tabs" role="tablist" aria-label="Estrategias">
+        {STRATEGIES.map((item) => (
           <button
             key={item.key}
             ref={strategyKey === item.key ? selectedTab : null}
@@ -521,6 +522,7 @@ export function Signals() {
           </button>
         ))}
       </div>
+      )}
 
       {/* Control / Filter Bar */}
       <div className="filter-row">
@@ -685,7 +687,7 @@ export function Signals() {
 
       {/* Active Signal Card */}
       {!analysis && r.active && !s.isLoading && (
-        <Card title="Señal Abierta Activa" subtitle="Posición en curso según niveles calculados" glow>
+        <Card title="Operación abierta ahora" subtitle="Posición en curso según niveles calculados" glow>
           <LiveSignal signal={r.active!} last={lastPrice} />
         </Card>
       )}
@@ -915,14 +917,14 @@ export function Signals() {
         {/* Strategy KPI Row */}
         <div className="kpi-row">
           <Stat
-            label="Señales Detectadas"
+            label="Señales detectadas"
             help={HELP.signalsDetected}
             loading={s.isLoading}
             value={String(r.signals.length)}
             foot={<span>{r.open > 0 ? `${r.open} sin resolver` : 'todas resueltas'}</span>}
           />
           <Stat
-            label="Tasa de Aciertos"
+            label="Tasa de aciertos"
             help={HELP.signalWinRate}
             loading={s.isLoading}
             value={r.wins + r.losses > 0 ? share(r.winRate, 1) : '—'}
@@ -933,14 +935,14 @@ export function Signals() {
             }
           />
           <Stat
-            label="Ganancia Media (Win)"
+            label="Ganancia media"
             help={HELP.r}
             loading={s.isLoading}
             value={`${ratio(r.avgWinR)} R`}
             foot={<span>Por señal ganadora</span>}
           />
           <Stat
-            label="Esperanza Neta"
+            label="Esperanza neta"
             help={HELP.expectancyR}
             hero
             glow
@@ -961,7 +963,7 @@ export function Signals() {
 
         {/* Strategy Details Grid */}
         <div className="grid-2">
-          <Card title="Mecánica de la Estrategia">
+          <Card title="Cómo funciona">
             <div className="prose">
               <p>{strategy.description}</p>
               <div className="tip-box">
@@ -970,7 +972,7 @@ export function Signals() {
             </div>
           </Card>
 
-          <Card title="Validación y Backtest Estadístico">
+          <Card title="¿Funciona? Lo que dicen años de datos">
             <div className="prose">
               <p>
                 Barrido sobre hasta 10 instrumentos, puntuado por esperanza en R neta de comisiones
@@ -1069,7 +1071,7 @@ export function Signals() {
 
         {/* Signal History Table */}
         <Card
-          title="Historial Reciente de Señales"
+          title="Últimas señales"
           subtitle={
             filtered.length > 20
               ? `Las 20 más recientes de ${filtered.length}`
@@ -1121,7 +1123,7 @@ export function Signals() {
                   <tr>
                     <th>Fecha</th>
                     <th>Dirección</th>
-                    <th className="num">Precio Entrada</th>
+                    <th className="num">Entrada</th>
                     <th className="num">{strategy.regime === 'ranging' ? 'Objetivo (TP)' : 'Precio Salida'}</th>
                     <th className="num">Stop Loss</th>
                     <th className="num">Resultado</th>

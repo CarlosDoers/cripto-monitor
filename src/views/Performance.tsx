@@ -144,8 +144,8 @@ function TradesTable({ trades }: { trades: Trade[] }) {
               <th>Instrumento</th>
               <th>Dirección</th>
               <th className="num">Tamaño</th>
-              <th className="num">Precio Entrada</th>
-              <th className="num">Precio Salida</th>
+              <th className="num">Entrada</th>
+              <th className="num">Salida</th>
               <th className="num">Duración</th>
               <th className="num">
                 Costes

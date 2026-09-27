@@ -6,18 +6,32 @@ import { useSyncExternalStore, useCallback } from 'react'
  */
 
 export const ROUTES = [
+  // Tu cuenta
   'resumen',
-  'senales',
+  'encurso',
+  'cartera',
+  'rendimiento',
+  'historial',
+  // El mercado
   'mercados',
   'screener',
-  'rendimiento',
-  'cartera',
-  'posiciones',
-  'bots',
-  'ordenes',
-  'historial',
+  'analisis',
+  'estrategias',
+  // Ayuda
+  'guia',
 ] as const
 export type Route = (typeof ROUTES)[number]
+
+/**
+ * Old addresses, from before the sections were merged. A bookmark or a link in
+ * a note must still land somewhere sensible rather than on the Resumen.
+ */
+const ALIASES: Record<string, Route> = {
+  senales: 'estrategias',
+  posiciones: 'encurso',
+  bots: 'encurso',
+  ordenes: 'historial',
+}
 
 function subscribe(callback: () => void) {
   window.addEventListener('hashchange', callback)
@@ -26,7 +40,8 @@ function subscribe(callback: () => void) {
 
 function currentRoute(): Route {
   const hash = window.location.hash.replace(/^#\/?/, '')
-  return (ROUTES as readonly string[]).includes(hash) ? (hash as Route) : 'resumen'
+  if ((ROUTES as readonly string[]).includes(hash)) return hash as Route
+  return ALIASES[hash] ?? 'resumen'
 }
 
 export function useRoute(): [Route, (route: Route) => void] {

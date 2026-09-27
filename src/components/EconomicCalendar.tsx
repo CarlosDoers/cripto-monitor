@@ -47,7 +47,7 @@ export function EconomicCalendar() {
 
   return (
     <Card
-      title="Datos Macro Recientes"
+      title="Datos macro recientes"
       subtitle="Publicaciones de alta importancia ya conocidas"
       flush
       dimmed={isFetching && !isLoading}

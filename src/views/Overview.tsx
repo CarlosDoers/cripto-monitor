@@ -9,9 +9,24 @@ import {
   usePositions,
   useValuation,
 } from '../lib/queries'
-import { num, pct, plural, price, qty, ratio, share, signedUsd, usd, usdCompact } from '../lib/format'
+import {
+  num,
+  pct,
+  plural,
+  price,
+  qty,
+  ratio,
+  share,
+  shownAmount,
+  signedUsd,
+  signedUsdOrEur,
+  timeAgo,
+  usd,
+  usdCompact,
+} from '../lib/format'
+import { useAccountResult } from '../lib/result'
 import { AllocationBar } from '../components/AllocationBar'
-import { HoldingsTable } from '../components/HoldingsTable'
+import { DUST, HoldingsTable } from '../components/HoldingsTable'
 import { ProtectionBadge } from '../components/PositionGuard'
 import { PnlCurve } from '../components/PnlCurve'
 import { guardsFor, hasStop, isShort, LIQ_DANGER, LIQ_WATCH, liquidationDistance, positionSize } from '../lib/guards'
@@ -46,6 +61,8 @@ export function Overview() {
   const positions = usePositions()
   const valuation = useValuation()
   const perf = usePerformance('30d')
+  const allTime = usePerformance('all')
+  const account$ = useAccountResult()
   const dcaBots = useDcaBots()
   const gridBots = useGridBots()
   const algos = useAlgoOrders()
@@ -116,19 +133,19 @@ export function Overview() {
   const alarm = atRisk || unprotected.length > 0 || dryBots.length > 0
   const attention: { key: string; text: string; href: string; link: string }[] = [
     ...(atRisk
-      ? [{ key: 'margin', href: '#/posiciones', link: 'Ver posiciones', text: `Margen ajustado (${share(marginRatio, 0)}): se acerca al nivel de liquidación.` }]
+      ? [{ key: 'margin', href: '#/encurso', link: 'Ver en curso', text: `Margen ajustado (${share(marginRatio, 0)}): se acerca al nivel de liquidación.` }]
       : []),
     ...(unprotected.length
-      ? [{ key: 'stop', href: '#/posiciones', link: 'Ver posiciones', text: `${plural(unprotected.length, 'posición sin stop', 'posiciones sin stop')} (${unprotected.map((p) => p.instId).join(', ')}): su pérdida solo tiene como límite la liquidación.` }]
+      ? [{ key: 'stop', href: '#/encurso', link: 'Ver en curso', text: `${plural(unprotected.length, 'posición sin stop', 'posiciones sin stop')} (${unprotected.map((p) => p.instId).join(', ')}): su pérdida solo tiene como límite la liquidación.` }]
       : []),
     ...dryBots.map((r) => ({
       key: `bot-${r.bot.algoId}`,
-      href: '#/bots',
-      link: 'Ver bots',
+      href: '#/encurso',
+      link: 'Ver en curso',
       text: `${r.bot.instId} ha gastado ${num(r.position?.fillSafetyOrds)} de ${r.bot.maxSafetyOrds} órdenes de seguridad${r.room !== null ? ` y la liquidación está a un ${share(r.room, 0)} del precio medio` : ''}: si el precio sigue en contra ya no le queda con qué promediar.`,
     })),
     ...(locked && openPositions.length > 0
-      ? [{ key: 'free', href: '#/posiciones', link: 'Ver posiciones', text: `Margen libre ${usd(portfolio.freeMargin)}: no queda con qué reforzar una posición que se tuerza.` }]
+      ? [{ key: 'free', href: '#/encurso', link: 'Ver en curso', text: `Margen libre ${usd(portfolio.freeMargin)}: no queda con qué reforzar una posición que se tuerza.` }]
       : []),
   ]
 
@@ -139,7 +156,6 @@ export function Overview() {
    * rather than a dollar floor, like `locked`, and the omission is stated with
    * its total so nothing disappears silently — Cartera still lists everything.
    */
-  const DUST = 0.005
   const mainHoldings = portfolio.holdings.filter((h) => h.weight >= DUST)
   const dust = portfolio.holdings.filter((h) => h.weight < DUST && h.usd > 0)
   const dustUsd = dust.reduce((sum, h) => sum + h.usd, 0)
@@ -163,6 +179,8 @@ export function Overview() {
   // the positions move as much money as the whole patrimonio.
   const leverage = portfolio.netWorth > 0 ? notional / portfolio.netWorth : 0
 
+  const lastTrade = allTime.trades.at(-1)
+
   const tradingBal = num(valDetails?.trading)
   const fundingBal = num(valDetails?.funding)
   const earnBal = num(valDetails?.earn)
@@ -178,6 +196,16 @@ export function Overview() {
 
   return (
     <>
+      <Summary
+        loading={account$.isLoading || perf.isLoading || positions.isLoading}
+        result={account$.noFlows ? null : { usd: account$.result, eur: account$.resultEur, partial: account$.partial }}
+        month={{ pnl: perf.netPnl, count: perf.count }}
+        last={lastTrade}
+        open={{ positions: openPositions.length, unrealised, bots: botCount, botPnl }}
+        free={portfolio.freeMargin}
+        warnings={attention.length}
+      />
+
       {attention.length > 0 && (
         <div className={`notice ${alarm ? 'notice--error' : 'notice--warning'}`}>
           <IconAlert />
@@ -196,10 +224,12 @@ export function Overview() {
       )}
 
       {/* One dense strip instead of a hero card plus a KPI row: the old layout
-          printed the net worth twice, once in each. */}
+          printed the net worth twice, once in each. Win rate and profit factor
+          moved to Rendimiento: they describe how the trading went, and this
+          strip answers how the account is doing. */}
       <div className="kpi-row">
         <Stat
-          label="Patrimonio Total"
+          label="Patrimonio total"
           help={HELP.netWorth}
           hero
           loading={portfolio.isLoading}
@@ -212,14 +242,41 @@ export function Overview() {
           }
         />
         <Stat
-          label="PnL No Realizado"
-          help={HELP.unrealisedPnl}
-          loading={positions.isLoading}
-          value={<DeltaValue value={unrealised}>{signedUsd(unrealised)}</DeltaValue>}
+          label="Resultado total"
+          help={HELP.totalResult}
+          loading={account$.isLoading}
+          value={
+            account$.noFlows ? (
+              '—'
+            ) : (
+              <DeltaValue value={shownAmount(account$.result, account$.resultEur)}>
+                {signedUsdOrEur(account$.result, account$.resultEur)}
+              </DeltaValue>
+            )
+          }
+          badge={account$.partial ? <Badge variant="warn">parcial</Badge> : undefined}
           foot={
             <span>
-              {openPositions.length}{' '}
-              {openPositions.length === 1 ? 'posición abierta' : 'posiciones abiertas'}
+              {account$.noFlows ? 'sin depósitos con los que comparar' : 'patrimonio menos lo que has aportado'}
+            </span>
+          }
+        />
+        <Stat
+          label="Ganancia abierta"
+          help={HELP.unrealisedPnl}
+          loading={positions.isLoading}
+          value={
+            openPositions.length > 0 ? (
+              <DeltaValue value={unrealised}>{signedUsd(unrealised)}</DeltaValue>
+            ) : (
+              '—'
+            )
+          }
+          foot={
+            <span>
+              {openPositions.length > 0
+                ? plural(openPositions.length, 'posición abierta', 'posiciones abiertas')
+                : 'nada abierto ahora'}
             </span>
           }
           badge={
@@ -231,43 +288,26 @@ export function Overview() {
           }
         />
         <Stat
-          label="PnL Realizado (30d)"
+          label="Cerrado en 30 días"
           help={HELP.realisedPnl30}
           loading={perf.isLoading}
-          value={<DeltaValue value={perf.netPnl}>{signedUsd(perf.netPnl)}</DeltaValue>}
-          foot={<span>{perf.count} operaciones cerradas</span>}
-        />
-        <Stat
-          label="Tasa de Aciertos"
-          help={HELP.winRate}
-          loading={perf.isLoading}
-          value={perf.count > 0 ? share(perf.winRate, 1) : '—'}
-          foot={
-            <span>
-              {perf.count > 0 ? `${perf.wins} ganadas · ${perf.losses} perdidas · 30 d` : '30 días'}
-            </span>
-          }
-        />
-        <Stat
-          label="Factor de Beneficio"
-          help={HELP.profitFactor}
-          loading={perf.isLoading}
           value={
-            perf.count > 0 && Number.isFinite(perf.profitFactor) ? ratio(perf.profitFactor) : '—'
+            perf.count > 0 ? <DeltaValue value={perf.netPnl}>{signedUsd(perf.netPnl)}</DeltaValue> : '—'
           }
           foot={
             <span>
               {perf.count > 0
-                ? `media ${signedUsd(perf.avgWin)} / ${signedUsd(-perf.avgLoss)}`
-                : '30 días'}
+                ? `${plural(perf.count, 'operación', 'operaciones')} · ${perf.wins} con ganancia`
+                : lastTrade
+                  ? `la última cerró ${timeAgo(lastTrade.closedAt)}`
+                  : 'ninguna operación cerrada'}
             </span>
           }
         />
-        {/* Took the slot the 30-day costs had. The strip holds six and no more,
-            so a new figure up here means one moves out — costs still live in
-            Rendimiento as "Costes totales". */}
+        {/* The bots are what the user wants to see on opening the app. Their
+            value is a slice of the patrimonio, never an addition to it. */}
         <Stat
-          label="En Bots"
+          label="En bots"
           help={HELP.bots}
           loading={dcaBots.isLoading || gridBots.isLoading}
           value={botCount > 0 ? usd(botValue) : '—'}
@@ -285,7 +325,7 @@ export function Overview() {
                 patrimonio
               </span>
             ) : (
-              <span>Ningún bot en marcha</span>
+              <span>ningún bot en marcha</span>
             )
           }
         />
@@ -293,7 +333,7 @@ export function Overview() {
 
       <div className="grid-2">
         <Card
-          title="Curva de Resultado"
+          title="Curva de resultado"
           subtitle={perf.isLoading ? 'Últimos 30 días' : `Últimos 30 días · ${signedUsd(perf.netPnl)}`}
           dimmed={perf.isFetching && !perf.isLoading}
         >
@@ -305,7 +345,7 @@ export function Overview() {
         </Card>
 
         <Card
-          title="Salud de la Cuenta"
+          title="Salud de la cuenta"
           action={
             // Any live warning turns it to Revisar, not only the alarms: with
             // free margin exhausted it used to read "Saludable" right under a
@@ -313,12 +353,12 @@ export function Overview() {
             <Badge variant={attention.length > 0 ? 'warn' : marginRatio > 0 || botCount > 0 ? 'buy' : 'neutral'}>
               <IconShield />
               {atRisk
-                ? 'Riesgo Alto'
+                ? 'Riesgo alto'
                 : attention.length > 0
                   ? 'Revisar'
                   : marginRatio > 0 || botCount > 0
                     ? 'Saludable'
-                    : 'Sin Riesgo'}
+                    : 'Sin riesgo'}
             </Badge>
           }
         >
@@ -340,8 +380,8 @@ export function Overview() {
             </li>
             <li>
               <span>
-                Margen libre
-                <Help label="Margen libre">{HELP.freeMargin}</Help>
+                Dinero disponible
+                <Help label="Dinero disponible">{HELP.freeMargin}</Help>
               </span>
               <strong>
                 {portfolio.isLoading ? '—' : usd(portfolio.freeMargin)}
@@ -359,8 +399,8 @@ export function Overview() {
             </li>
             <li>
               <span>
-                Exposición nocional
-                <Help label="Exposición nocional">{HELP.notional}</Help>
+                Tamaño total (nocional)
+                <Help label="Tamaño total">{HELP.notional}</Help>
               </span>
               <strong>
                 {notional > 0 ? usdCompact(notional) : '—'}
@@ -409,15 +449,15 @@ export function Overview() {
       </div>
 
       <Card
-        title="Distribución de la Cartera"
-        subtitle={`Desglose porcentual por activo en USD${dustNote}`}
+        title="Distribución de la cartera"
+        subtitle={`¿En qué está tu dinero?${dustNote}`}
         dimmed={portfolio.isFetching && !portfolio.isLoading}
       >
         {portfolio.isLoading ? <Skeleton height={32} /> : <AllocationBar holdings={mainHoldings} />}
       </Card>
 
       <Card
-        title="Activos Principales"
+        title="Activos principales"
         subtitle={`Top 8 por valor en la cuenta${dustNote}${
           portfolio.change24h !== undefined && Math.abs(spotMove) >= 0.01
             ? ` · en 24 h sus precios mueven ${signedUsd(spotMove)} (${pct(portfolio.change24h)})`
@@ -441,7 +481,7 @@ export function Overview() {
       {/* Open Positions Card */}
       {openPositions.length > 0 && (
         <Card
-          title="Posiciones Abiertas en Tiempo Real"
+          title="Posiciones abiertas"
           subtitle={
             [
               marginRatio > 0 ? `Ratio de margen ${share(marginRatio, 0)}` : null,
@@ -455,8 +495,8 @@ export function Overview() {
           flush
           dimmed={positions.isFetching && !positions.isLoading}
           action={
-            <a className="card-link" href="#/posiciones">
-              Gestionar posiciones →
+            <a className="card-link" href="#/encurso">
+              Ver todo lo abierto →
             </a>
           }
         >
@@ -467,23 +507,23 @@ export function Overview() {
                   <th>Instrumento</th>
                   <th>Lado</th>
                   <th className="num">
-                    Nocional
-                    <Help label="Nocional">{HELP.notional}</Help>
+                    Tamaño
+                    <Help label="Tamaño">{HELP.notional}</Help>
                   </th>
                   <th className="num">Entrada</th>
                   <th className="num">
                     Marca
-                    <Help label="Precio Marca">{HELP.markPrice}</Help>
+                    <Help label="Precio marca">{HELP.markPrice}</Help>
                   </th>
                   <th className="num">
                     Liquidación
-                    <Help label="Precio Liq.">{HELP.liqPrice}</Help>
+                    <Help label="Precio de liquidación">{HELP.liqPrice}</Help>
                   </th>
                   <th>
                     Protección
                     <Help label="Protección">{HELP.protection}</Help>
                   </th>
-                  <th className="num">PnL No Realizado</th>
+                  <th className="num">Ganancia abierta</th>
                 </tr>
               </thead>
               <tbody>
@@ -567,3 +607,74 @@ export function Overview() {
   )
 }
 
+
+type Last = { symbol: string; closedAt: number }
+
+/**
+ * The answer to "¿cómo voy?" in one paragraph, before any figure. The KPI strip
+ * holds the same numbers, but five numbers in a row still have to be read and
+ * combined; a sentence has already done that. Each clause changes with the
+ * state instead of printing zeros: with nothing open it says what money is
+ * free, with no trade this month it says when the last one closed.
+ */
+function Summary({
+  loading,
+  result,
+  month,
+  last,
+  open,
+  free,
+  warnings,
+}: {
+  loading: boolean
+  result: { usd: number; eur: number; partial: boolean } | null
+  month: { pnl: number; count: number }
+  last: Last | undefined
+  open: { positions: number; unrealised: number; bots: number; botPnl: number }
+  free: number
+  warnings: number
+}) {
+  if (loading) return <div className="summary"><Skeleton height={20} /></div>
+
+  const shown = result ? shownAmount(result.usd, result.eur) : 0
+  const openParts = [
+    open.positions > 0 &&
+      `${plural(open.positions, 'posición abierta', 'posiciones abiertas')} (${signedUsd(open.unrealised)})`,
+    open.bots > 0 && `${plural(open.bots, 'bot en marcha', 'bots en marcha')} (${signedUsd(open.botPnl)})`,
+  ].filter(Boolean)
+
+  return (
+    <div className="summary">
+      <p>
+        {result && (
+          <>
+            {shown >= 0 ? 'Has ganado ' : 'Llevas una pérdida de '}
+            <DeltaValue value={shown}>
+              <strong>{signedUsdOrEur(Math.abs(result.usd), Math.abs(result.eur)).replace(/^\+/, '')}</strong>
+            </DeltaValue>{' '}
+            desde que empezaste{result.partial ? ' (cifra parcial: falta algún depósito por valorar)' : ''}.{' '}
+          </>
+        )}
+        {month.count > 0 ? (
+          <>
+            En los últimos 30 días,{' '}
+            <DeltaValue value={month.pnl}>
+              <strong>{signedUsd(month.pnl)}</strong>
+            </DeltaValue>{' '}
+            en {plural(month.count, 'operación cerrada', 'operaciones cerradas')}.{' '}
+          </>
+        ) : last ? (
+          <>No has cerrado nada en 30 días; la última operación fue {last.symbol}, {timeAgo(last.closedAt)}. </>
+        ) : null}
+        {openParts.length > 0 ? (
+          <>Ahora tienes {openParts.join(' y ')}.</>
+        ) : (
+          <>
+            Ahora no tienes nada abierto: <strong>{usd(free)}</strong> están disponibles.
+          </>
+        )}
+        {warnings > 0 && <> Hay {plural(warnings, 'aviso', 'avisos')} que revisar justo debajo.</>}
+      </p>
+    </div>
+  )
+}

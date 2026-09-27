@@ -9,79 +9,101 @@ import {
   IconHistory,
   IconMore,
   IconMoon,
-  IconOrders,
   IconOverview,
   IconPerformance,
   IconSignal,
   IconMarkets,
   IconPositions,
-  IconBots,
   IconRefresh,
   IconSun,
   IconWallet,
   IconShield,
   IconSparkles,
   IconFilter,
+  IconTarget,
+  IconBook,
 } from './icons'
 
-const NAV: Record<Route, { label: string; description: string; Icon: typeof IconOverview }> = {
+type NavGroup = 'cuenta' | 'mercado' | 'ayuda'
+
+/**
+ * Each section says, in its description, the question it answers — that is
+ * the whole contract of the page, and it is shown under the title.
+ */
+const NAV: Record<Route, { label: string; description: string; group: NavGroup; Icon: typeof IconOverview }> = {
   resumen: {
     label: 'Resumen',
-    description: 'La salud de la cuenta, riesgo y oportunidades en una sola vista.',
+    description: '¿Cómo voy? Lo que has ganado, lo que tienes en marcha y lo que requiere atención.',
+    group: 'cuenta',
     Icon: IconOverview,
   },
-  senales: {
-    label: 'Señales',
-    description: 'Contexto de mercado, niveles operativos y fiabilidad de la estrategia.',
-    Icon: IconSignal,
+  encurso: {
+    label: 'En curso',
+    description: '¿Qué tengo abierto ahora? Posiciones, bots y órdenes pendientes, con su riesgo.',
+    group: 'cuenta',
+    Icon: IconPositions,
+  },
+  cartera: {
+    label: 'Cartera',
+    description: '¿Qué tengo? Cada moneda, cuánto vale y cuánto está disponible.',
+    group: 'cuenta',
+    Icon: IconWallet,
+  },
+  rendimiento: {
+    label: 'Rendimiento',
+    description: '¿Qué funciona y qué no? Tus operaciones cerradas, analizadas.',
+    group: 'cuenta',
+    Icon: IconPerformance,
+  },
+  historial: {
+    label: 'Historial',
+    description: '¿Qué ha pasado? Órdenes, ejecuciones, bots, depósitos y movimientos.',
+    group: 'cuenta',
+    Icon: IconHistory,
   },
   mercados: {
     label: 'Mercados',
-    description: 'Qué contratos perpetuos tienen liquidez y condiciones para operar ahora.',
+    description: '¿Cómo está el mercado hoy? Qué sube, qué baja y dónde se mueve el dinero.',
+    group: 'mercado',
     Icon: IconMarkets,
   },
   screener: {
     label: 'Screener',
-    description: 'Filtra el tablero X-Perp por rendimiento, técnicos y tus propios indicadores.',
+    description: '¿Qué contratos cumplen lo que busco? Filtra todo el tablero de una vez.',
+    group: 'mercado',
     Icon: IconFilter,
   },
-  rendimiento: {
-    label: 'Rendimiento',
-    description: 'Qué está funcionando, qué cuesta dinero y dónde ajustar el proceso.',
-    Icon: IconPerformance,
+  analisis: {
+    label: 'Análisis',
+    description: '¿Dónde está el precio? Soportes, tendencias, estructura SMC y medias sobre el gráfico.',
+    group: 'mercado',
+    Icon: IconSignal,
   },
-  cartera: {
-    label: 'Cartera',
-    description: 'Distribución, exposición y evolución de todos tus activos.',
-    Icon: IconWallet,
+  estrategias: {
+    label: 'Estrategias',
+    description: '¿Hay alguna señal? Las tres estrategias medidas, con sus resultados reales.',
+    group: 'mercado',
+    Icon: IconTarget,
   },
-  posiciones: {
-    label: 'Posiciones',
-    description: 'Exposición abierta, margen, liquidación y PnL en tiempo real.',
-    Icon: IconPositions,
-  },
-  bots: {
-    label: 'Bots',
-    description: 'Qué está haciendo cada bot automático y cuánta munición le queda.',
-    Icon: IconBots,
-  },
-  ordenes: {
-    label: 'Órdenes',
-    description: 'Órdenes pendientes e historial de ejecución por mercado.',
-    Icon: IconOrders,
-  },
-  historial: {
-    label: 'Historial',
-    description: 'Ejecuciones, movimientos y costes recientes de la cuenta.',
-    Icon: IconHistory,
+  guia: {
+    label: 'Guía',
+    description: 'Cómo leer cada sección y qué se ha comprobado que funciona.',
+    group: 'ayuda',
+    Icon: IconBook,
   },
 }
+
+const GROUPS: { key: NavGroup; label: string }[] = [
+  { key: 'cuenta', label: 'Tu cuenta' },
+  { key: 'mercado', label: 'El mercado' },
+  { key: 'ayuda', label: 'Ayuda' },
+]
 
 /**
  * The four the bottom bar reaches in one tap. An editorial choice about what
  * gets used most, not a list of what exists.
  */
-const MOBILE_PRIMARY: Route[] = ['resumen', 'senales', 'rendimiento', 'cartera']
+const MOBILE_PRIMARY: Route[] = ['resumen', 'encurso', 'analisis', 'rendimiento']
 
 /**
  * Everything else, derived rather than listed — and it has to be.
@@ -163,24 +185,31 @@ export function Layout({
           </span>
         </button>
 
-        <p className="nav-label">Terminal de Control</p>
+        {/* Grouped by the question being asked: about the account, or about
+            the market. Ten sections in one flat list read as ten unrelated
+            things. */}
         <nav className="nav" aria-label="Secciones">
-          {ROUTES.map((key) => {
-            const { label, Icon } = NAV[key]
-            const isCurrent = route === key
-            return (
-              <button
-                key={key}
-                type="button"
-                className={`nav-item${isCurrent ? ' nav-item--active' : ''}`}
-                aria-current={isCurrent ? 'page' : undefined}
-                onClick={() => go(key)}
-              >
-                <Icon className="nav-icon" />
-                <span className="nav-text">{label}</span>
-              </button>
-            )
-          })}
+          {GROUPS.map((g) => (
+            <div key={g.key} className="nav-group">
+              <p className="nav-label">{g.label}</p>
+              {ROUTES.filter((key) => NAV[key].group === g.key).map((key) => {
+                const { label, Icon } = NAV[key]
+                const isCurrent = route === key
+                return (
+                  <button
+                    key={key}
+                    type="button"
+                    className={`nav-item${isCurrent ? ' nav-item--active' : ''}`}
+                    aria-current={isCurrent ? 'page' : undefined}
+                    onClick={() => go(key)}
+                  >
+                    <Icon className="nav-icon" />
+                    <span className="nav-text">{label}</span>
+                  </button>
+                )
+              })}
+            </div>
+          ))}
         </nav>
 
         <div className="sidebar-pulse">
@@ -188,8 +217,8 @@ export function Layout({
             <IconShield />
           </span>
           <div className="sidebar-pulse-text">
-            <p>Conexión Segura</p>
-            <span>HMAC SHA-256 · Solo Lectura</span>
+            <p>Solo lectura</p>
+            <span>La app no puede operar ni retirar</span>
           </div>
         </div>
 
@@ -295,8 +324,8 @@ export function Layout({
             <div className="mobile-menu-handle" aria-hidden="true" />
             <div className="mobile-menu-head">
               <div>
-                <p className="page-overline">Menú Adicional</p>
-                <h2>Otras Secciones</h2>
+                <p className="page-overline">Más secciones</p>
+                <h2>Todo lo demás</h2>
               </div>
               <button type="button" className="btn btn--icon" onClick={() => setMobileMenuOpen(false)} aria-label="Cerrar menú">
                 <IconMore />

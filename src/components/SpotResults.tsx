@@ -45,7 +45,7 @@ export function SpotResults() {
 
   if (!isLoading && spot.fillCount === 0) {
     return (
-      <Card title="Resultado en Spot" flush>
+      <Card title="Resultado en spot" flush>
         <EmptyState
           title="Sin operaciones de spot en el histórico"
           hint="Aquí aparecerá el resultado de los ciclos de compra y venta que se puedan emparejar."
@@ -61,7 +61,7 @@ export function SpotResults() {
     <>
       <div className="kpi-row">
         <Stat
-          label="Resultado en Spot"
+          label="Resultado en spot"
           help={HELP.spotResult}
           loading={isLoading}
           value={<DeltaValue value={spot.netUsd}>{signedUsd(spot.netUsd)}</DeltaValue>}
@@ -75,14 +75,14 @@ export function SpotResults() {
           }
         />
         <Stat
-          label="Sin Coste Conocido"
+          label="Sin coste conocido"
           help={HELP.uncovered}
           loading={isLoading}
           value={usd(spot.uncoveredUsd)}
           foot={<span>Monedas llegadas por depósito: se vendieron aquí, se compraron fuera</span>}
         />
         <Stat
-          label="Cobertura del Cálculo"
+          label="Cobertura del cálculo"
           help={HELP.coverage}
           loading={isLoading}
           value={share(spot.coverage, 0)}
@@ -93,7 +93,7 @@ export function SpotResults() {
           }
         />
         <Stat
-          label="Histórico Analizado"
+          label="Histórico analizado"
           loading={isLoading}
           value={String(spot.fillCount)}
           foot={
@@ -106,7 +106,7 @@ export function SpotResults() {
       </div>
 
       <Card
-        title="Spot por Par"
+        title="Spot por par"
         subtitle="Reconstruido por FIFO — OKX no da resultado por operación en spot"
         flush
         dimmed={isFetching && !isLoading}

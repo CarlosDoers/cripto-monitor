@@ -1,5 +1,5 @@
 import { useBotHistory, useDcaBots, useDcaPositions, useGridBots } from '../lib/queries'
-import { dateTime, num, pct, plural, price, share, signedUsd, usd } from '../lib/format'
+import { dateTime, duration, num, pct, plural, price, share, signedUsd, usd } from '../lib/format'
 import {
   Badge,
   Card,
@@ -15,10 +15,14 @@ import { IconAlert } from '../components/icons'
 import { fuelUsed, liquidationRoom, NEARLY_DRY } from '../lib/bots'
 import { HELP } from '../lib/glossary'
 
-export function Bots() {
+/**
+ * Running bots. Embedded in *En curso* it drops its figures strip and hides
+ * what has nothing to show; the stopped ones are history and live in the
+ * Historial as `StoppedBots`.
+ */
+export function Bots({ embedded = false }: { embedded?: boolean }) {
   const dca = useDcaBots()
   const grid = useGridBots()
-  const history = useBotHistory()
   const bots = dca.data ?? []
   const positions = useDcaPositions(bots)
   const grids = grid.data ?? []
@@ -41,8 +45,7 @@ export function Bots() {
   }
 
   const isLoading = dca.isLoading
-  const stoppedDca = history.data?.dca ?? []
-  const stoppedGrid = history.data?.grid ?? []
+  if (embedded && !isLoading && bots.length === 0 && grids.length === 0) return null
 
   return (
     <>
@@ -62,9 +65,10 @@ export function Bots() {
         </div>
       )}
 
+      {!embedded && (
       <div className="kpi-row">
         <Stat
-          label="PnL de los Bots"
+          label="Resultado de los bots"
           help={HELP.botPnl}
           hero
           glow
@@ -79,30 +83,32 @@ export function Bots() {
           }
         />
         <Stat
-          label="Capital Comprometido"
+          label="Capital comprometido"
           help={HELP.committed}
           loading={isLoading}
           value={usd(invested)}
           foot={<span>Reservado por los bots, no necesariamente desplegado</span>}
         />
         <Stat
-          label="Munición Gastada"
+          label="Órdenes de seguridad usadas"
           help={HELP.fuelUsed}
           loading={isLoading}
           value={share(tightest, 0)}
           foot={<span>Órdenes de seguridad usadas por el bot más apurado</span>}
         />
         <Stat
-          label="Financiación Acumulada"
+          label="Financiación acumulada"
           help={HELP.funding}
           loading={isLoading}
           value={<DeltaValue value={funding}>{signedUsd(funding)}</DeltaValue>}
           foot={<span>Ya descontada del PnL de al lado, no se resta otra vez</span>}
         />
       </div>
+      )}
 
+      {(!embedded || bots.length > 0) && (
       <Card
-        title="Bots DCA en Marcha"
+        title="Bots DCA en marcha"
         subtitle={
           isLoading
             ? undefined
@@ -126,7 +132,7 @@ export function Bots() {
                   <th>Instrumento</th>
                   <th>Dirección</th>
                   <th className="num">Comprometido</th>
-                  <th className="num">Precio Medio</th>
+                  <th className="num">Precio medio</th>
                   <th className="num">
                     Objetivo
                     <Help label="Objetivo">{HELP.botTarget}</Help>
@@ -214,9 +220,10 @@ export function Bots() {
           </TableWrap>
         )}
       </Card>
+      )}
 
       {grids.length > 0 && (
-        <Card title="Bots de Rejilla en Marcha" flush dimmed={grid.isFetching}>
+        <Card title="Bots de rejilla en marcha" flush dimmed={grid.isFetching}>
           <TableWrap>
             <table className="data">
               <thead>
@@ -253,60 +260,76 @@ export function Bots() {
         </Card>
       )}
 
-      <Card
-        title="Bots Detenidos"
-        subtitle="Lo que dejó cada bot al pararse"
-        flush
-        dimmed={history.isFetching && !history.isLoading}
-      >
-        {history.isLoading ? (
-          <TableSkeleton rows={2} cols={5} />
-        ) : stoppedDca.length + stoppedGrid.length === 0 ? (
-          <EmptyState title="Ningún bot detenido todavía" />
-        ) : (
-          <TableWrap>
-            <table className="data">
-              <thead>
-                <tr>
-                  <th>Instrumento</th>
-                  <th>Tipo</th>
-                  <th className="num">Invertido</th>
-                  <th className="num">Detenido</th>
-                  <th className="num">Resultado</th>
-                </tr>
-              </thead>
-              <tbody>
-                {stoppedDca.map((b) => (
-                  <tr key={b.algoId}>
-                    <td>
-                      <strong>{b.instId}</strong>
-                    </td>
-                    <td>DCA</td>
-                    <td className="num">{usd(num(b.investmentAmt))}</td>
-                    <td className="num">{dateTime(num(b.uTime))}</td>
-                    <td className="num">
-                      <DeltaValue value={num(b.totalPnl)}>{signedUsd(num(b.totalPnl))}</DeltaValue>
-                    </td>
-                  </tr>
-                ))}
-                {stoppedGrid.map((g) => (
-                  <tr key={g.algoId}>
-                    <td>
-                      <strong>{g.instId}</strong>
-                    </td>
-                    <td>Rejilla</td>
-                    <td className="num">{usd(num(g.investment))}</td>
-                    <td className="num">{dateTime(num(g.uTime))}</td>
-                    <td className="num">
-                      <DeltaValue value={num(g.totalPnl)}>{signedUsd(num(g.totalPnl))}</DeltaValue>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </TableWrap>
-        )}
-      </Card>
     </>
+  )
+}
+
+/**
+ * Bots already stopped, with what each left. The total leads because the
+ * question is "have the bots paid, overall", and a list of seven signed
+ * figures makes the reader add them up.
+ */
+export function StoppedBots() {
+  const history = useBotHistory()
+  const stoppedDca = history.data?.dca ?? []
+  const stoppedGrid = history.data?.grid ?? []
+  const all = [
+    ...stoppedDca.map((b) => ({ id: b.algoId, inst: b.instId, kind: 'DCA', invested: num(b.investmentAmt), pnl: num(b.totalPnl), from: num(b.cTime), to: num(b.uTime) })),
+    ...stoppedGrid.map((g) => ({ id: g.algoId, inst: g.instId, kind: 'Rejilla', invested: num(g.investment), pnl: num(g.totalPnl), from: num(g.cTime), to: num(g.uTime) })),
+  ].sort((a, b) => b.to - a.to)
+  const total = all.reduce((s, b) => s + b.pnl, 0)
+  const wins = all.filter((b) => b.pnl > 0).length
+
+  return (
+    <Card
+      title="Bots detenidos"
+      subtitle={
+        all.length
+          ? `${plural(all.length, 'bot', 'bots')} · ${wins} con beneficio · resultado conjunto ${signedUsd(total)}`
+          : 'Lo que dejó cada bot al pararse'
+      }
+      flush
+      dimmed={history.isFetching && !history.isLoading}
+    >
+      {history.isLoading ? (
+        <TableSkeleton rows={2} cols={6} />
+      ) : all.length === 0 ? (
+        <EmptyState title="Ningún bot detenido todavía" />
+      ) : (
+        <TableWrap>
+          <table className="data">
+            <thead>
+              <tr>
+                <th>Instrumento</th>
+                <th>Tipo</th>
+                <th className="num">Invertido</th>
+                <th className="num">Duración</th>
+                <th className="num">Detenido</th>
+                <th className="num">Resultado</th>
+              </tr>
+            </thead>
+            <tbody>
+              {all.map((b) => (
+                <tr key={b.id}>
+                  <td>
+                    <strong>{b.inst}</strong>
+                  </td>
+                  <td>{b.kind}</td>
+                  <td className="num">{usd(b.invested)}</td>
+                  <td className="num sub">{b.from > 0 && b.to > b.from ? duration(b.to - b.from) : '—'}</td>
+                  <td className="num">{dateTime(b.to)}</td>
+                  <td className="num">
+                    <span>
+                      <DeltaValue value={b.pnl}>{signedUsd(b.pnl)}</DeltaValue>
+                      {b.invested > 0 && <span className="sub"> ({pct(b.pnl / b.invested)})</span>}
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </TableWrap>
+      )}
+    </Card>
   )
 }

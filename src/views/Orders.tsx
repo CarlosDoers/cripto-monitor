@@ -119,14 +119,13 @@ function OrderRows({ orders, showPnl }: { orders: Order[]; showPnl?: boolean }) 
   )
 }
 
-export function Orders() {
-  const [instType, setInstType] = useState<string>('SPOT')
+/**
+ * Orders resting in the book. In *En curso* it disappears when there are none,
+ * like the positions and bots beside it.
+ */
+export function OpenOrders({ embedded = false }: { embedded?: boolean }) {
   const [searchOpen, setSearchOpen] = useState('')
-  const [searchHistory, setSearchHistory] = useState('')
-  const [stateFilter, setStateFilter] = useState<'all' | 'filled' | 'canceled'>('all')
-
   const open = useOpenOrders()
-  const history = useOrderHistory(instType)
 
   const openList = useMemo(() => {
     const list = open.data ?? []
@@ -135,21 +134,11 @@ export function Orders() {
     return list.filter((o) => o.instId.toLowerCase().includes(q))
   }, [open.data, searchOpen])
 
-  const historyList = useMemo(() => {
-    let list = history.data ?? []
-    if (searchHistory.trim()) {
-      const q = searchHistory.toLowerCase().trim()
-      list = list.filter((o) => o.instId.toLowerCase().includes(q))
-    }
-    if (stateFilter === 'filled') list = list.filter((o) => o.state === 'filled')
-    if (stateFilter === 'canceled') list = list.filter((o) => o.state.includes('cancel'))
-    return list
-  }, [history.data, searchHistory, stateFilter])
+  if (embedded && !open.isLoading && !open.error && (open.data?.length ?? 0) === 0) return null
 
   return (
-    <>
       <Card
-        title="Órdenes Abiertas Pendientes"
+        title="Órdenes pendientes"
         subtitle={open.isLoading ? undefined : `${openList.length} órdenes en el libro de órdenes`}
         flush
         dimmed={open.isFetching && !open.isLoading}
@@ -183,10 +172,10 @@ export function Orders() {
                   <th>Instrumento</th>
                   <th>Lado</th>
                   <th>Tipo</th>
-                  <th className="num">Precio Límite</th>
+                  <th className="num">Precio límite</th>
                   <th className="num">Tamaño</th>
                   <th className="num">Ejecutado</th>
-                  <th className="num">Precio Medio</th>
+                  <th className="num">Precio medio</th>
                   <th>Estado</th>
                   <th className="num">Creada</th>
                 </tr>
@@ -196,9 +185,35 @@ export function Orders() {
           </TableWrap>
         )}
       </Card>
+  )
+}
 
+/**
+ * Every order OKX still keeps, by market. Opens on futures, where this account
+ * trades; the PnL column only exists there, because OKX reports none per spot
+ * order and it printed a column of dashes.
+ */
+export function OrderHistory() {
+  const [instType, setInstType] = useState<string>('FUTURES')
+  const [searchHistory, setSearchHistory] = useState('')
+  const [stateFilter, setStateFilter] = useState<'all' | 'filled' | 'canceled'>('all')
+  const history = useOrderHistory(instType)
+  const derivative = instType === 'SWAP' || instType === 'FUTURES'
+
+  const historyList = useMemo(() => {
+    let list = history.data ?? []
+    if (searchHistory.trim()) {
+      const q = searchHistory.toLowerCase().trim()
+      list = list.filter((o) => o.instId.toLowerCase().includes(q))
+    }
+    if (stateFilter === 'filled') list = list.filter((o) => o.state === 'filled')
+    if (stateFilter === 'canceled') list = list.filter((o) => o.state.includes('cancel'))
+    return list
+  }, [history.data, searchHistory, stateFilter])
+
+  return (
       <Card
-        title="Historial de Órdenes"
+        title="Historial de órdenes"
         subtitle={
           // One page of 100, not the whole archive: on futures that is days.
           (history.data?.length ?? 0) >= 100
@@ -273,18 +288,16 @@ export function Orders() {
                   <th className="num">Precio</th>
                   <th className="num">Tamaño</th>
                   <th className="num">Ejecutado</th>
-                  <th className="num">Precio Medio</th>
-                  <th className="num">PnL</th>
+                  <th className="num">Precio medio</th>
+                  {derivative && <th className="num">PnL</th>}
                   <th>Estado</th>
                   <th className="num">Creada</th>
                 </tr>
               </thead>
-              <OrderRows orders={historyList} showPnl />
+              <OrderRows orders={historyList} showPnl={derivative} />
             </table>
           </TableWrap>
         )}
       </Card>
-    </>
   )
 }
-

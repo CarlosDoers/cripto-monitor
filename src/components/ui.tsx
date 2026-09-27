@@ -31,8 +31,11 @@ export function TableWrap({
       const cells = row.querySelectorAll('td')
       // A single spanning cell is an empty state, not a record.
       if (cells.length < 2) continue
-      cells.forEach((cell, i) => {
-        if (headers[i]) cell.setAttribute('data-label', headers[i])
+      // Follow colSpan, so a summary row's cells keep their own columns' names.
+      let col = 0
+      cells.forEach((cell) => {
+        if (headers[col]) cell.setAttribute('data-label', headers[col])
+        col += cell.colSpan || 1
       })
     }
   })

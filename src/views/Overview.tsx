@@ -33,6 +33,7 @@ import { Opportunities } from '../components/Opportunities'
 import { guardsFor, hasStop, isShort, LIQ_DANGER, LIQ_WATCH, liquidationDistance, positionSize } from '../lib/guards'
 import { fuelUsed, liquidationRoom, NEARLY_DRY } from '../lib/bots'
 import { useCarryExits } from '../lib/carry'
+import { NARROW, useMediaQuery } from '../lib/useMediaQuery'
 import { IconAlert, IconShield } from '../components/icons'
 import {
   Badge,
@@ -136,6 +137,7 @@ export function Overview() {
   // A short held against a coin the account owns is a funding hedge; when its
   // last week stopped paying, the Financiación rule says undo it.
   const carryExits = useCarryExits()
+  const narrow = useMediaQuery(NARROW)
   const attention: { key: string; text: string; href: string; link: string }[] = [
     ...(atRisk
       ? [{ key: 'margin', href: '#/encurso', link: 'Ver en curso', text: `Margen ajustado (${share(marginRatio, 0)}): se acerca al nivel de liquidación.` }]
@@ -204,6 +206,137 @@ export function Overview() {
       />
     )
   }
+
+  /**
+   * Open positions: last on a wide screen, where the whole page fits in two
+   * screens, and straight after the headline figures on a phone, where the
+   * Resumen runs to four and a half and this — the money at risk right now —
+   * sat at the very bottom.
+   */
+  const positionsCard = openPositions.length > 0 && (
+    <Card
+      title="Posiciones abiertas"
+      subtitle={
+        [
+          marginRatio > 0 ? `Ratio de margen ${share(marginRatio, 0)}` : null,
+          openPositions.length > SHOWN_POSITIONS
+            ? `las ${SHOWN_POSITIONS} mayores de ${openPositions.length}`
+            : plural(openPositions.length, 'abierta', 'abiertas'),
+        ]
+          .filter(Boolean)
+          .join(' · ')
+      }
+      flush
+      dimmed={positions.isFetching && !positions.isLoading}
+      action={
+        <a className="card-link" href="#/encurso">
+          Ver todo lo abierto →
+        </a>
+      }
+    >
+      <TableWrap>
+        <table className="data">
+          <thead>
+            <tr>
+              <th>Instrumento</th>
+              <th>Lado</th>
+              <th className="num">
+                Tamaño
+                <Help label="Tamaño">{HELP.notional}</Help>
+              </th>
+              <th className="num">Entrada</th>
+              <th className="num">
+                Marca
+                <Help label="Precio marca">{HELP.markPrice}</Help>
+              </th>
+              <th className="num">
+                Liquidación
+                <Help label="Precio de liquidación">{HELP.liqPrice}</Help>
+              </th>
+              <th>
+                Protección
+                <Help label="Protección">{HELP.protection}</Help>
+              </th>
+              <th className="num">Ganancia abierta</th>
+            </tr>
+          </thead>
+          <tbody>
+            {[...openPositions]
+              .sort((a, b) => num(b.notionalUsd) - num(a.notionalUsd))
+              .slice(0, SHOWN_POSITIONS)
+              .map((p) => {
+              const upl = num(p.upl)
+              const liq = num(p.liqPx)
+              const room = liquidationDistance(p)
+              const size = positionSize(p)
+              return (
+                <tr key={p.posId}>
+                  <td>
+                    <span className="ccy">{p.instId}</span>
+                    {p.lever && <span className="sub"> {p.lever}×</span>}
+                  </td>
+                  <td>
+                    <Badge variant={isShort(p) ? 'sell' : 'buy'}>
+                      {isShort(p) ? 'Corto' : 'Largo'}
+                    </Badge>
+                  </td>
+                  {/* Dollars first: a count of contracts says nothing until
+                      it is multiplied by a contract value that differs per
+                      instrument, so it rides along as the unit it is. */}
+                  {/* One child per cell: below 720 px a cell is a flex row
+                      that pushes its children to opposite edges. */}
+                  <td className="num">
+                    <span>
+                      {num(p.notionalUsd) > 0 ? usd(num(p.notionalUsd)) : '—'}
+                      <span className="sub">
+                        {' '}
+                        · {qty(size.amount)} {size.unit}
+                      </span>
+                    </span>
+                  </td>
+                  {/* Contract prices, not money: price() keeps the precision
+                      the instrument trades at and never converts to euros,
+                      so they match Posiciones to the digit. */}
+                  <td className="num">{num(p.avgPx) > 0 ? price(num(p.avgPx)) : '—'}</td>
+                  <td className="num">{num(p.markPx) > 0 ? price(num(p.markPx)) : '—'}</td>
+                  {/* The price alone does not say whether it is close; the
+                      distance does, in the thresholds Posiciones uses. */}
+                  <td className="num">
+                    <span>
+                      {liq > 0 ? price(liq) : '—'}
+                      {room !== null && (
+                        <>
+                          {' '}
+                          <span
+                            className={`badge badge--${room < LIQ_DANGER ? 'sell' : room < LIQ_WATCH ? 'warn' : 'neutral'}`}
+                          >
+                            a {share(room, 0)}
+                          </span>
+                        </>
+                      )}
+                    </span>
+                  </td>
+                  {/* The notice above names the positions without a stop;
+                      this is where the eye goes to find them. */}
+                  <td>
+                    <ProtectionBadge position={p} />
+                  </td>
+                  <td className="num">
+                    <DeltaValue value={upl}>
+                      {signedUsd(upl)}
+                      {num(p.uplRatio) !== 0 && (
+                        <span className="sub"> ({pct(num(p.uplRatio))})</span>
+                      )}
+                    </DeltaValue>
+                  </td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      </TableWrap>
+    </Card>
+  )
 
   return (
     <>
@@ -344,6 +477,8 @@ export function Overview() {
 
       {/* What to look at next, right under how the account stands: the live
           signals of the strongest measured strategy. */}
+      {narrow && positionsCard}
+
       <Opportunities />
 
       <div className="grid-2">
@@ -489,135 +624,11 @@ export function Overview() {
         {portfolio.isLoading ? (
           <TableSkeleton rows={5} cols={6} />
         ) : (
-          <HoldingsTable holdings={mainHoldings} limit={8} showSparkline />
+          <HoldingsTable holdings={mainHoldings} limit={8} showSparkline compactOnMobile />
         )}
       </Card>
 
-      {/* Open Positions Card */}
-      {openPositions.length > 0 && (
-        <Card
-          title="Posiciones abiertas"
-          subtitle={
-            [
-              marginRatio > 0 ? `Ratio de margen ${share(marginRatio, 0)}` : null,
-              openPositions.length > SHOWN_POSITIONS
-                ? `las ${SHOWN_POSITIONS} mayores de ${openPositions.length}`
-                : plural(openPositions.length, 'abierta', 'abiertas'),
-            ]
-              .filter(Boolean)
-              .join(' · ')
-          }
-          flush
-          dimmed={positions.isFetching && !positions.isLoading}
-          action={
-            <a className="card-link" href="#/encurso">
-              Ver todo lo abierto →
-            </a>
-          }
-        >
-          <TableWrap>
-            <table className="data">
-              <thead>
-                <tr>
-                  <th>Instrumento</th>
-                  <th>Lado</th>
-                  <th className="num">
-                    Tamaño
-                    <Help label="Tamaño">{HELP.notional}</Help>
-                  </th>
-                  <th className="num">Entrada</th>
-                  <th className="num">
-                    Marca
-                    <Help label="Precio marca">{HELP.markPrice}</Help>
-                  </th>
-                  <th className="num">
-                    Liquidación
-                    <Help label="Precio de liquidación">{HELP.liqPrice}</Help>
-                  </th>
-                  <th>
-                    Protección
-                    <Help label="Protección">{HELP.protection}</Help>
-                  </th>
-                  <th className="num">Ganancia abierta</th>
-                </tr>
-              </thead>
-              <tbody>
-                {[...openPositions]
-                  .sort((a, b) => num(b.notionalUsd) - num(a.notionalUsd))
-                  .slice(0, SHOWN_POSITIONS)
-                  .map((p) => {
-                  const upl = num(p.upl)
-                  const liq = num(p.liqPx)
-                  const room = liquidationDistance(p)
-                  const size = positionSize(p)
-                  return (
-                    <tr key={p.posId}>
-                      <td>
-                        <span className="ccy">{p.instId}</span>
-                        {p.lever && <span className="sub"> {p.lever}×</span>}
-                      </td>
-                      <td>
-                        <Badge variant={isShort(p) ? 'sell' : 'buy'}>
-                          {isShort(p) ? 'Corto' : 'Largo'}
-                        </Badge>
-                      </td>
-                      {/* Dollars first: a count of contracts says nothing until
-                          it is multiplied by a contract value that differs per
-                          instrument, so it rides along as the unit it is. */}
-                      {/* One child per cell: below 720 px a cell is a flex row
-                          that pushes its children to opposite edges. */}
-                      <td className="num">
-                        <span>
-                          {num(p.notionalUsd) > 0 ? usd(num(p.notionalUsd)) : '—'}
-                          <span className="sub">
-                            {' '}
-                            · {qty(size.amount)} {size.unit}
-                          </span>
-                        </span>
-                      </td>
-                      {/* Contract prices, not money: price() keeps the precision
-                          the instrument trades at and never converts to euros,
-                          so they match Posiciones to the digit. */}
-                      <td className="num">{num(p.avgPx) > 0 ? price(num(p.avgPx)) : '—'}</td>
-                      <td className="num">{num(p.markPx) > 0 ? price(num(p.markPx)) : '—'}</td>
-                      {/* The price alone does not say whether it is close; the
-                          distance does, in the thresholds Posiciones uses. */}
-                      <td className="num">
-                        <span>
-                          {liq > 0 ? price(liq) : '—'}
-                          {room !== null && (
-                            <>
-                              {' '}
-                              <span
-                                className={`badge badge--${room < LIQ_DANGER ? 'sell' : room < LIQ_WATCH ? 'warn' : 'neutral'}`}
-                              >
-                                a {share(room, 0)}
-                              </span>
-                            </>
-                          )}
-                        </span>
-                      </td>
-                      {/* The notice above names the positions without a stop;
-                          this is where the eye goes to find them. */}
-                      <td>
-                        <ProtectionBadge position={p} />
-                      </td>
-                      <td className="num">
-                        <DeltaValue value={upl}>
-                          {signedUsd(upl)}
-                          {num(p.uplRatio) !== 0 && (
-                            <span className="sub"> ({pct(num(p.uplRatio))})</span>
-                          )}
-                        </DeltaValue>
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </TableWrap>
-        </Card>
-      )}
+      {!narrow && positionsCard}
     </>
   )
 }

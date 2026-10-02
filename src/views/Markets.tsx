@@ -5,6 +5,7 @@ import { pct, plural, price, ratio, usdCompact } from '../lib/format'
 import { EconomicCalendar } from '../components/EconomicCalendar'
 import { MarketTreemap } from '../components/MarketTreemap'
 import { MarketCard } from '../components/MarketCard'
+import { useSize } from '../lib/useSize'
 import { DivergingBars } from '../components/PerfCharts'
 import {
   Badge,
@@ -43,6 +44,27 @@ function compactUsd(v: number): string {
   if (v >= 1e6) return `${ratio(v / 1e6, 1)} M$`
   if (v >= 1e3) return `${ratio(v / 1e3, 0)} k$`
   return usdCompact(v)
+}
+
+/**
+ * The tiles in rows of equal length. A fixed `auto-fill` grid put eight
+ * contracts as five and three, with two empty bordered cells; this picks the
+ * fewest rows the width allows and then spreads the tiles evenly across them
+ * (eight at five-a-row becomes four and four).
+ */
+function MarketCards({ markets }: { markets: Market[] }) {
+  const [ref, width] = useSize<HTMLDivElement>()
+  const minTile = width > 0 && width < 600 ? 160 : 210
+  const fit = Math.max(1, Math.floor((width || 1200) / minTile))
+  const rows = Math.ceil(markets.length / fit)
+  const cols = Math.max(1, Math.ceil(markets.length / rows))
+  return (
+    <div ref={ref} className="market-cards" style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}>
+      {markets.map((m) => (
+        <MarketCard key={m.instId} market={m} />
+      ))}
+    </div>
+  )
 }
 
 export function Markets() {
@@ -223,11 +245,7 @@ export function Markets() {
           subtitle="Los contratos que operas o has operado · 24 h y dónde está el precio dentro de su rango"
           dimmed={isFetching && !isLoading}
         >
-          <div className="market-cards">
-            {mine.map((m) => (
-              <MarketCard key={m.instId} market={m} />
-            ))}
-          </div>
+          <MarketCards markets={mine} />
         </Card>
       )}
 
@@ -339,8 +357,8 @@ export function Markets() {
                         <span className="grade-score">{m.score}</span>
                         {GRADE_LABEL[m.grade]}
                       </span>
-                      {m.reasons.length > 0 && (
-                        <span className="sub grade-reason"> {m.reasons[0]}</span>
+                      {m.warnings.length > 0 && (
+                        <span className="sub grade-reason"> {m.warnings[0]}</span>
                       )}
                     </td>
                     <td className="num">{price(m.last)}</td>

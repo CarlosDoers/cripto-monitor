@@ -2,7 +2,9 @@ import { EVIDENCE, useOpportunities, type Opportunity, type Watch } from '../lib
 import { plural, price, ratio, share } from '../lib/format'
 import { routeHref } from '../lib/router'
 import { HELP } from '../lib/glossary'
+import { useState } from 'react'
 import { Badge, Card, Help, Skeleton } from './ui'
+import { NARROW, useMediaQuery } from '../lib/useMediaQuery'
 
 const signedRatio = (x: number) => `${x >= 0 ? '+' : '−'}${ratio(Math.abs(x))}`
 
@@ -26,16 +28,43 @@ function Track({ o }: { o: Opportunity }) {
   )
 }
 
-function Tile({ o, rank }: { o: Opportunity; rank: number }) {
+/**
+ * One live signal. On a phone it starts folded to its headline — coin, side
+ * and the reward-to-risk left — because three full tiles stacked took most of
+ * a screen before the open positions; a tap opens the rest.
+ */
+function Tile({ o, rank, foldable }: { o: Opportunity; rank: number; foldable: boolean }) {
   const long = o.side === 'long'
+  const [open, setOpen] = useState(false)
+  const head = (
+    <>
+      <span className="opp-rank">{rank}</span>
+      <span className="opp-symbol">{o.symbol}</span>
+      <Badge variant={long ? 'buy' : 'sell'}>{long ? 'Largo' : 'Corto'}</Badge>
+      {o.held && <Badge variant="neutral">ya abierta</Badge>}
+    </>
+  )
+  if (foldable && !open) {
+    return (
+      <article className="opp opp--folded">
+        <button type="button" className="opp-fold" aria-expanded={false} onClick={() => setOpen(true)}>
+          <span className="opp-head">{head}</span>
+          <span className="opp-fold-ratio">1:{ratio(o.remaining)}</span>
+          <span className="opp-fold-chevron" aria-hidden="true">›</span>
+        </button>
+      </article>
+    )
+  }
   return (
     <article className="opp">
-      <header className="opp-head">
-        <span className="opp-rank">{rank}</span>
-        <span className="opp-symbol">{o.symbol}</span>
-        <Badge variant={long ? 'buy' : 'sell'}>{long ? 'Largo' : 'Corto'}</Badge>
-        {o.held && <Badge variant="neutral">ya abierta</Badge>}
-      </header>
+      {foldable ? (
+        <button type="button" className="opp-fold" aria-expanded onClick={() => setOpen(false)}>
+          <span className="opp-head">{head}</span>
+          <span className="opp-fold-chevron is-open" aria-hidden="true">›</span>
+        </button>
+      ) : (
+        <header className="opp-head">{head}</header>
+      )}
 
       <div className="opp-figure">
         <span className="opp-ratio">1:{ratio(o.remaining)}</span>
@@ -97,6 +126,7 @@ function WatchTile({ watching, span }: { watching: Watch[]; span: number }) {
  */
 export function Opportunities() {
   const o = useOpportunities()
+  const narrow = useMediaQuery(NARROW)
   const scanning = o.scanned < o.total
 
   return (
@@ -121,7 +151,7 @@ export function Opportunities() {
       ) : (
         <div className="opps">
           {o.top.map((x, i) => (
-            <Tile key={x.instId} o={x} rank={i + 1} />
+            <Tile key={x.instId} o={x} rank={i + 1} foldable={narrow} />
           ))}
           {/* Fewer than three live: the rest of the row goes to what may fire
               next, rather than to empty space. */}

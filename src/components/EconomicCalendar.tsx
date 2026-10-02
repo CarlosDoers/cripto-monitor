@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import { useEconomicCalendar } from '../lib/queries'
-import { num } from '../lib/format'
+import { localiseFigure, num } from '../lib/format'
 import { Badge, Card, EmptyState, TableSkeleton, TableWrap } from '../components/ui'
 import type { CalendarEvent } from '../lib/types'
 
@@ -81,11 +81,9 @@ export function EconomicCalendar() {
                       <strong>{e.event}</strong>
                     </td>
                     <td className="sub">{e.region}</td>
-                    <td className="num">
-                      <strong>{e.actual}</strong>
-                    </td>
-                    <td className="num">{e.forecast || '—'}</td>
-                    <td className="num sub">{e.previous || '—'}</td>
+                    <td className="num">{localiseFigure(e.actual)}</td>
+                    <td className="num">{e.forecast ? localiseFigure(e.forecast) : '—'}</td>
+                    <td className="num sub">{e.previous ? localiseFigure(e.previous) : '—'}</td>
                     <td className="num sub">{when(num(e.date))}</td>
                   </tr>
                 ))}
@@ -93,7 +91,7 @@ export function EconomicCalendar() {
             </table>
           </TableWrap>
           <p className="sub" style={{ padding: '10px 16px 14px' }}>
-            Real frente a previsto sin restar: las unidades vienen como texto («€21.3B», «28.2 %»)
+            Real frente a previsto sin restar: las unidades vienen como texto («€21,3B», «28,2 %»)
             y compararlas a ojo es más fiable que inventar un parseo. Mira hacia atrás porque la
             fuente no sirve el futuro cercano — sin cursor da las últimas semanas y con cursor salta
             a meses vista. Está aquí para que puedas explicarte un movimiento, no porque se haya

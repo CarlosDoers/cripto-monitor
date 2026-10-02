@@ -38,6 +38,7 @@ export function HoldingsTable({
   showSparkline = false,
   showSearch = false,
   foldDust = false,
+  compactOnMobile = false,
 }: {
   holdings: Holding[]
   limit?: number
@@ -45,6 +46,12 @@ export function HoldingsTable({
   showSearch?: boolean
   /** Fold balances under `DUST` into one expandable row instead of listing them. */
   foldDust?: boolean
+  /**
+   * On a phone, one line per coin — name, value, 24 h and weight — instead of
+   * a seven-line card each. For the Resumen, where the detail is one tap away
+   * in Cartera and three coins took a whole screen.
+   */
+  compactOnMobile?: boolean
 }) {
   const [search, setSearch] = useState('')
   const [sortBy, setSortBy] = useState<SortBy>('value')
@@ -116,7 +123,7 @@ export function HoldingsTable({
         </div>
       )}
 
-      <TableWrap>
+      <TableWrap className={compactOnMobile ? 'table-wrap--compact' : ''}>
         <table className="data">
           <thead>
             <tr>
@@ -146,9 +153,9 @@ export function HoldingsTable({
                       </span>
                     )}
                   </td>
-                  <td className="num">{qty(h.total)}</td>
-                  <td className="num">{h.price !== undefined ? price(h.price) : '—'}</td>
-                  <td className="num">
+                  <td className="num col-qty">{qty(h.total)}</td>
+                  <td className="num col-price">{h.price !== undefined ? price(h.price) : '—'}</td>
+                  <td className="num col-change">
                     {h.change24h !== undefined ? (
                       <Delta ratio={h.change24h} pill>{pct(h.change24h)}</Delta>
                     ) : (
@@ -156,14 +163,14 @@ export function HoldingsTable({
                     )}
                   </td>
                   {showSparkline && (
-                    <td>
+                    <td className="col-spark">
                       <HoldingSpark ccy={h.ccy} color={color} />
                     </td>
                   )}
-                  <td className="num">
+                  <td className="num col-value">
                     <strong>{usd(h.usd)}</strong>
                   </td>
-                  <td className="num">
+                  <td className="num col-weight">
                     <span className="rail">
                       <span className="rail-track">
                         <span

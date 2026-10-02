@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { moneyCompact, signedUsd, usd } from '../lib/format'
+import { moneyCompact, plural, share, signedUsd, usd } from '../lib/format'
 import type { Trade } from '../lib/performance'
 
 const WEEKDAYS = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom']
@@ -39,7 +39,7 @@ export function TradingCalendar({ trades }: { trades: Trade[] }) {
     return map
   }, [trades])
 
-  const { cells, label, monthPnl, monthTrades, maxAbs, canGoForward } = useMemo(() => {
+  const { cells, label, traded, monthPnl, monthTrades, maxAbs, canGoForward } = useMemo(() => {
     const now = new Date()
     const cursor = new Date(now.getFullYear(), now.getMonth() + offset, 1)
     const year = cursor.getFullYear()
@@ -75,6 +75,7 @@ export function TradingCalendar({ trades }: { trades: Trade[] }) {
         const raw = cursor.toLocaleDateString('es-ES', { month: 'long', year: 'numeric' })
         return raw.charAt(0).toUpperCase() + raw.slice(1)
       })(),
+      traded: inMonth.filter((c) => c.trades > 0),
       monthPnl: inMonth.reduce((s, c) => s + c.pnl, 0),
       monthTrades: inMonth.reduce((s, c) => s + c.trades, 0),
       maxAbs: Math.max(...inMonth.map((c) => Math.abs(c.pnl)), 1),
@@ -112,6 +113,7 @@ export function TradingCalendar({ trades }: { trades: Trade[] }) {
         </div>
       </div>
 
+      <div className="calendar-body">
       <div className="calendar-grid" role="grid">
         {WEEKDAYS.map((d) => (
           <span key={d} className="calendar-weekday" role="columnheader">
@@ -153,11 +155,81 @@ export function TradingCalendar({ trades }: { trades: Trade[] }) {
           )
         })}
       </div>
+      <MonthFigures traded={traded} />
+      </div>
 
       <p className="calendar-note">
         Calculado desde las posiciones de futuros cerradas que devuelve OKX, imputadas al día en
         que se <strong>cerraron</strong> (cuando se materializó el resultado).
       </p>
     </div>
+  )
+}
+
+const dayLabel = (d: Date) => d.toLocaleDateString('es-ES', { weekday: 'short', day: 'numeric' })
+
+/**
+ * The month in figures, beside the grid. On a wide screen the grid stops at
+ * 760 px — wider cells would only be emptier — and left half the card blank;
+ * this fills it with what the tiles cannot say at a glance, and doubles as the
+ * table twin of the colours. Below the grid on narrow screens.
+ */
+function MonthFigures({ traded }: { traded: DayCell[] }) {
+  if (traded.length === 0) return null
+  const wins = traded.filter((c) => c.pnl > 0)
+  const losses = traded.filter((c) => c.pnl < 0)
+  const best = traded.reduce((a, b) => (b.pnl > a.pnl ? b : a))
+  const worst = traded.reduce((a, b) => (b.pnl < a.pnl ? b : a))
+  const total = traded.reduce((s, c) => s + c.pnl, 0)
+  return (
+    <ul className="calendar-figures" aria-label="El mes en cifras">
+      <li>
+        <span>Días operados</span>
+        <strong>{traded.length}</strong>
+      </li>
+      <li>
+        <span>En positivo</span>
+        <strong>
+          {wins.length} <span className="sub">de {traded.length}</span>
+        </strong>
+      </li>
+      <li>
+        <span>En negativo</span>
+        <strong>{losses.length}</strong>
+      </li>
+      <li>
+        <span>Mejor día</span>
+        <strong>
+          <span className={best.pnl >= 0 ? 'delta--up' : 'delta--down'}>{signedUsd(best.pnl)}</span>{' '}
+          <span className="sub">{dayLabel(best.date)}</span>
+        </strong>
+      </li>
+      {/* With one day traded, best and worst are the same day and its weight
+          is 100 %: printed, they only repeat the line above. */}
+      {traded.length > 1 && (
+        <li>
+          <span>Peor día</span>
+          <strong>
+            <span className={worst.pnl >= 0 ? 'delta--up' : 'delta--down'}>{signedUsd(worst.pnl)}</span>{' '}
+            <span className="sub">{dayLabel(worst.date)}</span>
+          </strong>
+        </li>
+      )}
+      <li>
+        <span>Media por día operado</span>
+        <strong>
+          <span className={total >= 0 ? 'delta--up' : 'delta--down'}>{signedUsd(total / traded.length)}</span>
+        </strong>
+      </li>
+      {traded.length > 1 && best.pnl > 0 && total > 0 && (
+        <li>
+          <span>Peso del mejor día</span>
+          <strong>
+            {share(best.pnl / total, 0)} <span className="sub">del mes</span>
+          </strong>
+        </li>
+      )}
+      <li className="calendar-figures-foot sub">{plural(traded.reduce((s, c) => s + c.trades, 0), 'operación', 'operaciones')} en total</li>
+    </ul>
   )
 }

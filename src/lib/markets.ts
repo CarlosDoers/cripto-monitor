@@ -50,6 +50,12 @@ export interface Market {
   grade: 'excelente' | 'bueno' | 'aceptable' | 'evitar'
   /** Why it scored what it scored, for the tooltip. */
   reasons: string[]
+  /**
+   * The reasons that are a problem, the only ones the table prints under the
+   * grade. "Mucha liquidez" under "Excelente" said the same thing twice on
+   * nearly every row and doubled the table's height.
+   */
+  warnings: string[]
   /** The account has traded this contract. */
   traded: boolean
 }
@@ -161,19 +167,24 @@ export function useMarkets(tradedInstIds: string[] = []) {
         )
 
         const reasons: string[] = []
+        const warnings: string[] = []
+        const warn = (r: string) => {
+          reasons.push(r)
+          warnings.push(r)
+        }
         if (liquidity > 0.8) reasons.push('mucha liquidez')
-        else if (liquidity < 0.35) reasons.push('poca liquidez')
+        else if (liquidity < 0.35) warn('poca liquidez')
         if (Number.isFinite(m.spreadBps)) {
           if (m.spreadBps <= 2) reasons.push('horquilla muy estrecha')
-          else if (m.spreadBps > 20) reasons.push('horquilla ancha: entrar y salir cuesta')
+          else if (m.spreadBps > 20) warn('horquilla ancha: entrar y salir cuesta')
         }
-        if (m.rangePct > 15) reasons.push('movimiento extremo: riesgo alto')
-        else if (m.rangePct < 1) reasons.push('apenas se mueve')
+        if (m.rangePct > 15) warn('movimiento extremo: riesgo alto')
+        else if (m.rangePct < 1) warn('apenas se mueve')
 
         const grade: Market['grade'] =
           score >= 70 ? 'excelente' : score >= 55 ? 'bueno' : score >= 38 ? 'aceptable' : 'evitar'
 
-        return { ...m, score, grade, reasons }
+        return { ...m, score, grade, reasons, warnings }
       })
       .sort((a, b) => b.score - a.score)
   }, [instruments.data, tickers.data, openInterest.data, indices.data, traded])

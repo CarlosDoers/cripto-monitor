@@ -2059,6 +2059,57 @@ table.data td.num {
     display: none;
   }
 
+  /* A compact list instead of cards (HoldingsTable compactOnMobile): one line
+     per record, with only the columns that answer "how much and how is it
+     doing". The rest is one tap away in its own view. */
+  .table-wrap--compact table.data tbody tr {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 2px;
+    margin: 0;
+    background: none;
+    border: none;
+    border-bottom: 1px solid var(--border);
+    border-radius: 0;
+  }
+
+  .table-wrap--compact table.data tbody tr:last-child {
+    border-bottom: none;
+  }
+
+  .table-wrap--compact table.data tbody td,
+  .table-wrap--compact table.data tbody td:first-child {
+    display: block;
+    padding: 0;
+    margin: 0;
+    border: none;
+    flex: 0 0 auto;
+  }
+
+  .table-wrap--compact table.data tbody td::before {
+    display: none;
+  }
+
+  .table-wrap--compact table.data tbody td:first-child {
+    flex: 1 1 auto;
+    font-size: 13px;
+  }
+
+  /* As specific as the display rule above, or that one wins and the hidden
+     columns come back. */
+  .table-wrap--compact table.data tbody td:first-child .sub,
+  .table-wrap--compact table.data tbody td.col-qty,
+  .table-wrap--compact table.data tbody td.col-price,
+  .table-wrap--compact table.data tbody td.col-spark,
+  .table-wrap--compact table.data tbody td.col-weight .rail-track {
+    display: none;
+  }
+
+  .table-wrap--compact .col-weight {
+    min-width: 46px;
+  }
+
   /* An empty state or a spanning row is not a record: leave it alone. */
   table.data tbody tr:has(td[colspan]) {
     display: block;
@@ -2183,11 +2234,73 @@ table.data td.num {
   color: var(--ink-primary);
 }
 
+.calendar-body {
+  display: flex;
+  align-items: flex-start;
+  gap: 28px;
+}
+
 .calendar-grid {
   display: grid;
   grid-template-columns: repeat(7, minmax(0, 1fr));
   gap: 6px;
+  flex: 1 1 760px;
   max-width: 760px;
+}
+
+/* The month in figures, beside the grid where the card used to be empty. */
+.calendar-figures {
+  list-style: none;
+  flex: 0 1 320px;
+  min-width: 240px;
+  border-left: 1px solid var(--border);
+  padding-left: 24px;
+}
+
+.calendar-figures li {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 7px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 12px;
+  color: var(--ink-secondary);
+}
+
+.calendar-figures strong {
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+  font-weight: 500;
+  color: var(--ink-primary);
+  white-space: nowrap;
+}
+
+.calendar-figures .calendar-figures-foot {
+  border-bottom: none;
+  justify-content: flex-start;
+  font-size: 11px;
+}
+
+@media (max-width: 1100px) {
+  .calendar-body {
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .calendar-grid {
+    flex: none;
+    width: 100%;
+  }
+
+  .calendar-figures {
+    flex: none;
+    width: 100%;
+    max-width: 760px;
+    border-left: none;
+    padding-left: 0;
+    border-top: 1px solid var(--border);
+  }
 }
 
 .calendar-weekday {
@@ -3820,6 +3933,52 @@ table.data td.num {
   .opp + .opp {
     border-top: 1px solid var(--border);
   }
+}
+
+/* Folded tile, phones only: the headline as one tappable row. */
+.opp-fold {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 0;
+  background: none;
+  border: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.opp-fold .opp-head {
+  flex: 1 1 auto;
+  margin: 0;
+}
+
+.opp--folded {
+  padding-top: 12px;
+  padding-bottom: 12px;
+}
+
+.opp-fold-ratio {
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--ink-primary);
+}
+
+.opp-fold-chevron {
+  display: inline-block;
+  color: var(--ink-faint);
+  font-size: 18px;
+  line-height: 1;
+  transition: transform 0.15s ease;
+}
+
+.opp-fold-chevron.is-open {
+  transform: rotate(90deg);
+  margin-left: auto;
 }
 
 /* The legend glyphs match the marks on the track. */

@@ -196,3 +196,24 @@ export function timeAgo(ms: number): string {
   if (hours < 24) return `hace ${hours} h`
   return `hace ${Math.round(hours / 24)} d`
 }
+
+/**
+ * A figure that arrives as English text with its unit inside — "3.8%",
+ * "€21.3B", "-0.2%", "1,234.5K" from the economic calendar — rewritten in
+ * es-ES: decimal comma, dot for thousands, a space before "%". The unit and
+ * any currency symbol are kept; only the number is reformatted, with the
+ * decimals it came with. Printed raw, "3.8%" sat in a column of "3,8 %".
+ */
+export function localiseFigure(text: string): string {
+  return text
+    .replace(/-?\d{1,3}(?:,\d{3})+(?:\.\d+)?|-?\d+(?:\.\d+)?/g, (m) => {
+      const decimals = m.includes('.') ? m.split('.')[1].length : 0
+      const value = Number(m.replace(/,/g, ''))
+      if (!Number.isFinite(value)) return m
+      return new Intl.NumberFormat('es-ES', {
+        minimumFractionDigits: decimals,
+        maximumFractionDigits: decimals,
+      }).format(value)
+    })
+    .replace(/\s*%/g, '\u00a0%')
+}

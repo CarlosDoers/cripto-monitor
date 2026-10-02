@@ -4,7 +4,10 @@ import { useDailyBoard, usePositions } from './queries'
 import { toCandles } from './signals'
 import { analyseTraps, trapWatch, TUNED_SETTINGS } from './indicators/reversalTrap'
 import { profileOf, strategyByKey } from './indicators/registry'
-import type { Candle } from './indicators/types'
+import { feeInR, type Candle } from './indicators/types'
+
+/** The round trip the audit prices every late entry at. */
+const ROUND_TRIP_FEE = 0.001
 
 /**
  * *Oportunidades ahora*: the X-Perps where the reversal — the highest
@@ -90,6 +93,11 @@ export function scanReversal(candles: Candle[], price: number): Scan {
     // Past the measured age, or already through the stop or the target at
     // today's price even if no daily candle has closed there yet.
     if (age > maxAge || !(risk > 0) || !(reward > 0)) return null
+    // A hair from the stop the remaining risk is so small that the round-trip
+    // fee alone costs more than 1 R: not a trade anyone can take, yet its
+    // reward-to-risk is astronomic and it ranked first — PEPE printed
+    // "1:846.011" with its price 0,0 % from the stop.
+    if (feeInR(price, s.stop, ROUND_TRIP_FEE) > 1) return null
     return {
       kind: 'signal',
       opportunity: {

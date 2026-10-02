@@ -193,6 +193,8 @@ export function Stat({
   glow,
   badge,
   help,
+  chart,
+  flash,
 }: {
   label: string
   value: ReactNode
@@ -203,6 +205,10 @@ export function Stat({
   badge?: ReactNode
   /** What the figure means, behind a "?" beside the label. */
   help?: ReactNode
+  /** A small chart of the same figure, between the value and the foot. */
+  chart?: ReactNode
+  /** From `useFlash`: tints the value for a moment when a live figure moves. */
+  flash?: { dir: 'up' | 'down' | null; key: number }
 }) {
   return (
     <article className={`stat${hero ? ' stat--hero' : ''}${glow ? ' stat--glow' : ''}`}>
@@ -216,8 +222,14 @@ export function Stat({
       {loading ? (
         <div className="skeleton" style={{ height: hero ? 38 : 28, width: '75%', borderRadius: 8 }} />
       ) : (
-        <div className={`stat-value${hero ? ' stat-value--hero' : ''}`}>{value}</div>
+        <div
+          key={flash?.key}
+          className={`stat-value${hero ? ' stat-value--hero' : ''}${flash?.dir ? ` is-flash-${flash.dir}` : ''}`}
+        >
+          {value}
+        </div>
       )}
+      {chart && !loading && <div className="stat-chart">{chart}</div>}
       {foot && <div className="stat-foot">{foot}</div>}
     </article>
   )

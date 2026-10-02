@@ -27,6 +27,12 @@ export const HELP = {
       tu saldo y cambia con cada movimiento del precio.
     </p>
   ),
+  realisedToday: (
+    <p>
+      Resultado de las posiciones que has cerrado hoy (desde las 00:00 de tu hora), ya con comisiones y
+      financiación. Lo que sigue abierto está en la ganancia abierta.
+    </p>
+  ),
   realisedPnl30: (
     <p>
       Resultado de las posiciones de derivados que <strong>cerraste</strong> en los últimos 30

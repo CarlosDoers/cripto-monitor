@@ -25,10 +25,12 @@ import {
   usdCompact,
 } from '../lib/format'
 import { useAccountResult } from '../lib/result'
-import { AllocationBar } from '../components/AllocationBar'
+import { AllocationDonut } from '../components/AllocationBar'
+import { OverviewHero } from '../components/OverviewHero'
+import { DailyBars, PositionBars } from '../components/MiniCharts'
+import { useFlash } from '../lib/useFlash'
 import { DUST, HoldingsTable } from '../components/HoldingsTable'
 import { ProtectionBadge } from '../components/PositionGuard'
-import { PnlCurve } from '../components/PnlCurve'
 import { Opportunities } from '../components/Opportunities'
 import { guardsFor, hasStop, isShort, LIQ_DANGER, LIQ_WATCH, liquidationDistance, positionSize } from '../lib/guards'
 import { fuelUsed, liquidationRoom, NEARLY_DRY } from '../lib/bots'
@@ -45,6 +47,7 @@ import {
   TableSkeleton,
   TableWrap,
   Help,
+  ProgressBar,
 } from '../components/ui'
 import { HELP } from '../lib/glossary'
 
@@ -138,6 +141,9 @@ export function Overview() {
   // last week stopped paying, the Financiación rule says undo it.
   const carryExits = useCarryExits()
   const narrow = useMediaQuery(NARROW)
+  const todayStart = new Date().setHours(0, 0, 0, 0)
+  const todayCount = perf.trades.filter((t) => t.closedAt >= todayStart).length
+  const openFlash = useFlash(positions.isLoading || openPositions.length === 0 ? undefined : unrealised)
   const attention: { key: string; text: string; href: string; link: string }[] = [
     ...(atRisk
       ? [{ key: 'margin', href: '#/encurso', link: 'Ver en curso', text: `Margen ajustado (${share(marginRatio, 0)}): se acerca al nivel de liquidación.` }]
@@ -367,48 +373,32 @@ export function Overview() {
         </div>
       )}
 
-      {/* One dense strip instead of a hero card plus a KPI row: the old layout
-          printed the net worth twice, once in each. Win rate and profit factor
-          moved to Rendimiento: they describe how the trading went, and this
-          strip answers how the account is doing. */}
-      <div className="kpi-row">
-        <Stat
-          label="Patrimonio total"
-          help={HELP.netWorth}
-          hero
-          loading={portfolio.isLoading}
-          value={usd(portfolio.netWorth)}
-          foot={
-            <span>
-              Trading {usdCompact(tradingBal)} · Fondos {usdCompact(fundingBal)}
-              {earnBal > 0 ? ` · Earn ${usdCompact(earnBal)}` : ''}
-            </span>
-          }
-        />
-        <Stat
-          label="Resultado total"
-          help={HELP.totalResult}
-          loading={account$.isLoading}
-          value={
-            account$.noFlows ? (
-              '—'
-            ) : (
-              <DeltaValue value={shownAmount(account$.result, account$.resultEur)}>
-                {signedUsdOrEur(account$.result, account$.resultEur)}
-              </DeltaValue>
-            )
-          }
-          badge={account$.partial ? <Badge variant="warn">parcial</Badge> : undefined}
-          foot={
-            <span>
-              {account$.noFlows ? 'sin depósitos con los que comparar' : 'patrimonio menos lo que has aportado'}
-            </span>
-          }
-        />
+      {/* The lead: net worth, how much of it was made, and the closed result
+          over the account's life. Then the strip carries what is moving now. */}
+      <OverviewHero
+        loading={portfolio.isLoading}
+        netWorth={portfolio.netWorth}
+        composition={{ trading: tradingBal, funding: fundingBal, earn: earnBal }}
+        contributed={account$.net}
+        contributedEur={account$.netEur}
+        result={account$.result}
+        resultEur={account$.resultEur}
+        partial={account$.partial}
+        noFlows={account$.noFlows || account$.isLoading}
+        curve={allTime.equityCurve}
+        trades={allTime.trades}
+        curveLoading={allTime.isLoading}
+      />
+
+      {/* What is moving now. Net worth and the total result moved up into the
+          hero; win rate and profit factor live in Rendimiento. Each tile's
+          chart draws its own figure, never a stand-in. */}
+      <div className="kpi-row kpi-row--charts">
         <Stat
           label="Ganancia abierta"
           help={HELP.unrealisedPnl}
           loading={positions.isLoading}
+          flash={openFlash}
           value={
             openPositions.length > 0 ? (
               <DeltaValue value={unrealised}>{signedUsd(unrealised)}</DeltaValue>
@@ -416,6 +406,7 @@ export function Overview() {
               '—'
             )
           }
+          chart={openPositions.length > 0 ? <PositionBars positions={openPositions} /> : undefined}
           foot={
             <span>
               {openPositions.length > 0
@@ -432,19 +423,35 @@ export function Overview() {
           }
         />
         <Stat
+          label="Cerrado hoy"
+          help={HELP.realisedToday}
+          loading={perf.isLoading}
+          value={
+            perf.todayPnl !== 0 ? <DeltaValue value={perf.todayPnl}>{signedUsd(perf.todayPnl)}</DeltaValue> : '—'
+          }
+          foot={
+            <span>
+              {todayCount > 0
+                ? plural(todayCount, 'operación cerrada hoy', 'operaciones cerradas hoy')
+                : lastTrade
+                  ? `la última cerró ${timeAgo(lastTrade.closedAt)}`
+                  : 'ninguna operación cerrada'}
+            </span>
+          }
+        />
+        <Stat
           label="Cerrado en 30 días"
           help={HELP.realisedPnl30}
           loading={perf.isLoading}
           value={
             perf.count > 0 ? <DeltaValue value={perf.netPnl}>{signedUsd(perf.netPnl)}</DeltaValue> : '—'
           }
+          chart={perf.count > 0 ? <DailyBars trades={perf.trades} /> : undefined}
           foot={
             <span>
               {perf.count > 0
                 ? `${plural(perf.count, 'operación', 'operaciones')} · ${perf.wins} con ganancia`
-                : lastTrade
-                  ? `la última cerró ${timeAgo(lastTrade.closedAt)}`
-                  : 'ninguna operación cerrada'}
+                : 'ninguna operación cerrada'}
             </span>
           }
         />
@@ -460,6 +467,16 @@ export function Overview() {
               <Badge variant="live" pulse>
                 {plural(botCount, 'activo', 'activos')}
               </Badge>
+            ) : undefined
+          }
+          chart={
+            tightest ? (
+              <ProgressBar
+                value={tightest.used}
+                max={1}
+                variant={tightest.used >= NEARLY_DRY ? 'critical' : 'accent'}
+                label={`${tightest.bot.instId.split('-')[0]} · órdenes de seguridad usadas`}
+              />
             ) : undefined
           }
           foot={
@@ -482,18 +499,6 @@ export function Overview() {
       <Opportunities />
 
       <div className="grid-2">
-        <Card
-          title="Curva de resultado"
-          subtitle={perf.isLoading ? 'Últimos 30 días' : `Últimos 30 días · ${signedUsd(perf.netPnl)}`}
-          dimmed={perf.isFetching && !perf.isLoading}
-        >
-          {perf.isLoading ? (
-            <Skeleton height={140} />
-          ) : (
-            <PnlCurve points={perf.equityCurve} trades={perf.trades} height={140} />
-          )}
-        </Card>
-
         <Card
           title="Salud de la cuenta"
           action={
@@ -596,15 +601,18 @@ export function Overview() {
             </li>
           </ul>
         </Card>
+        <Card
+          title="Distribución de la cartera"
+          subtitle={`¿En qué está tu dinero?${dustNote}`}
+          dimmed={portfolio.isFetching && !portfolio.isLoading}
+        >
+          {portfolio.isLoading ? (
+            <Skeleton height={140} />
+          ) : (
+            <AllocationDonut holdings={mainHoldings} total={portfolio.netWorth} />
+          )}
+        </Card>
       </div>
-
-      <Card
-        title="Distribución de la cartera"
-        subtitle={`¿En qué está tu dinero?${dustNote}`}
-        dimmed={portfolio.isFetching && !portfolio.isLoading}
-      >
-        {portfolio.isLoading ? <Skeleton height={32} /> : <AllocationBar holdings={mainHoldings} />}
-      </Card>
 
       <Card
         title="Activos principales"

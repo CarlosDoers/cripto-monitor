@@ -4031,3 +4031,407 @@ table.data td.num {
     grid-column: auto !important;
   }
 }
+
+/* ---------- Resumen: hero, chart tiles, ring ("terminal vivo") ---------- */
+
+/* The lead band. Flat like everything else: hierarchy comes from the size of
+   the figure and the space around it, not from a card or a gradient. */
+.hero {
+  display: grid;
+  grid-template-columns: minmax(300px, 0.85fr) minmax(0, 1.4fr);
+  border-bottom: 1px solid var(--border);
+}
+
+.hero-main {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 20px 20px 18px;
+  border-right: 1px solid var(--border);
+  min-width: 0;
+}
+
+.hero-curve {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 16px 16px 4px;
+  min-width: 0;
+}
+
+.hero-label {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0 6px;
+  font-size: 9.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--ink-faint);
+  white-space: nowrap;
+}
+
+.hero-live {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-left: 4px;
+  border-radius: 50%;
+  background: var(--good);
+  animation: pulse 2s infinite;
+}
+
+.hero-curve-total {
+  margin-left: auto;
+  font-family: var(--mono);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+/* The one figure the page leads with. Mono like every figure in the app;
+   proportional digits would not change a monospaced face. */
+.hero-value {
+  margin: 2px 0 0;
+  padding: 0 6px;
+  margin-left: -6px;
+  align-self: flex-start;
+  font-family: var(--mono);
+  font-size: 40px;
+  font-weight: 600;
+  line-height: 1.1;
+  letter-spacing: -0.03em;
+  color: var(--ink-primary);
+}
+
+.hero-sub {
+  font-size: 12px;
+  color: var(--ink-muted);
+}
+
+.hero-split {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.hero-split-legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 16px;
+  font-size: 12px;
+  color: var(--ink-secondary);
+}
+
+.hero-split-legend strong {
+  font-family: var(--mono);
+  font-weight: 600;
+  color: var(--ink-primary);
+}
+
+.split-bar {
+  display: flex;
+  gap: 2px;
+  height: 8px;
+}
+
+.split-bar-part {
+  display: block;
+  flex-basis: 0;
+  min-width: 2px;
+}
+
+.split-bar-part.is-base,
+.split-key.is-base {
+  background: var(--series-other);
+}
+
+.split-bar-part.is-up,
+.split-key.is-up {
+  background: var(--good);
+}
+
+.split-bar-part.is-down,
+.split-key.is-down {
+  background: var(--critical);
+}
+
+.split-key {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-right: 6px;
+  vertical-align: 0;
+}
+
+/* A live figure that just moved: a brief tint in the direction it moved. */
+@keyframes flash-up {
+  from { background: color-mix(in srgb, var(--good) 28%, transparent); }
+  to { background: transparent; }
+}
+
+@keyframes flash-down {
+  from { background: color-mix(in srgb, var(--critical) 28%, transparent); }
+  to { background: transparent; }
+}
+
+.is-flash-up {
+  animation: flash-up 1.4s ease-out;
+}
+
+.is-flash-down {
+  animation: flash-down 1.4s ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .is-flash-up,
+  .is-flash-down,
+  .hero-live {
+    animation: none;
+  }
+}
+
+.stat-value.is-flash-up,
+.stat-value.is-flash-down {
+  margin-left: -4px;
+  padding-left: 4px;
+  align-self: flex-start;
+}
+
+/* Tiles with a chart: the chart sits between the figure and its foot. */
+.stat-chart {
+  margin: 4px 0 2px;
+  min-width: 0;
+}
+
+.kpi-row--charts .stat {
+  padding-bottom: 14px;
+}
+
+/* Daily bars: positive above the line, negative below. */
+.mini-daily-bars {
+  display: flex;
+  align-items: stretch;
+  gap: 2px;
+  height: 52px;
+}
+
+.mini-daily-slot {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 0;
+  min-width: 0;
+  cursor: default;
+}
+
+.mini-daily-half {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  flex: 1 1 0;
+  border-bottom: 1px solid var(--baseline);
+}
+
+.mini-daily-half.is-down {
+  justify-content: flex-start;
+  border-bottom: none;
+}
+
+.mini-daily-bar {
+  display: block;
+  width: 100%;
+}
+
+.mini-daily-bar.is-up {
+  background: var(--good);
+}
+
+.mini-daily-bar.is-down {
+  background: var(--critical);
+}
+
+.mini-daily-slot:not(.is-active) .mini-daily-bar {
+  opacity: 0.6;
+}
+
+.mini-readout {
+  margin-top: 5px;
+  font-size: 11px;
+  color: var(--ink-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.mini-readout strong {
+  font-family: var(--mono);
+  font-weight: 600;
+}
+
+/* Open PnL per position: a shared centre, gains right, losses left. */
+.mini-pos {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.mini-pos li {
+  display: grid;
+  grid-template-columns: 52px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+}
+
+.mini-pos-sym {
+  font-family: var(--mono);
+  color: var(--ink-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.mini-pos-track {
+  display: flex;
+  height: 6px;
+}
+
+.mini-pos-half {
+  display: flex;
+  justify-content: flex-end;
+  flex: 1 1 0;
+  border-right: 1px solid var(--baseline);
+}
+
+.mini-pos-half.is-right {
+  justify-content: flex-start;
+  border-right: none;
+}
+
+.mini-pos-bar {
+  display: block;
+  height: 100%;
+}
+
+.mini-pos-bar.is-up {
+  background: var(--good);
+}
+
+.mini-pos-bar.is-down {
+  background: var(--critical);
+}
+
+.mini-pos-val {
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.mini-pos-more {
+  display: block !important;
+  color: var(--ink-faint);
+}
+
+/* The distribution ring and its legend, side by side. */
+.donut {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+}
+
+.donut-svg {
+  width: 150px;
+  height: 150px;
+  flex: none;
+}
+
+.donut-center-label {
+  font-family: var(--font);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  fill: var(--ink-muted);
+}
+
+.donut-center-value {
+  font-family: var(--mono);
+  font-size: 15px;
+  font-weight: 600;
+  fill: var(--ink-primary);
+}
+
+.donut-legend {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.donut-legend li {
+  display: grid;
+  grid-template-columns: 9px minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 12px;
+  color: var(--ink-secondary);
+}
+
+.donut-legend li:last-child {
+  border-bottom: none;
+}
+
+.donut-legend li.is-active {
+  color: var(--ink-primary);
+}
+
+.donut-legend-share,
+.donut-legend-value {
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-primary);
+  text-align: right;
+}
+
+.donut-legend-value {
+  min-width: 96px;
+  color: var(--ink-secondary);
+}
+
+@media (max-width: 1100px) {
+  .hero {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .hero-main {
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+  }
+}
+
+@media (max-width: 720px) {
+  .hero-main {
+    padding: 16px 16px 14px;
+  }
+
+  .hero-value {
+    font-size: 32px;
+  }
+
+  .donut {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+
+  .donut-svg {
+    align-self: center;
+  }
+}

@@ -1,6 +1,9 @@
 import { useState } from 'react'
 import { assignColors, OTHER_COLOR, VISIBLE } from '../lib/colors'
 import { share, usd } from '../lib/format'
+import { activeCurrency, convert } from '../lib/currency'
+
+const WHOLE = new Intl.NumberFormat('es-ES', { maximumFractionDigits: 0 })
 import type { Holding } from '../lib/types'
 
 interface Segment {
@@ -103,6 +106,94 @@ export function AllocationBar({ holdings }: { holdings: Holding[] }) {
           </div>
         </div>
       )}
+    </div>
+  )
+}
+
+/**
+ * The same distribution as a ring, for the Resumen, where it sits beside the
+ * account health. A ring rather than the bar there because this account's
+ * slices are few and far apart (two-thirds, a third, a twentieth): part to
+ * whole at a glance, which is the one job a ring does well. Close values would
+ * still belong in the bar, and every value is printed in the legend beside it.
+ *
+ * Hovering a slice or its legend row puts that coin in the centre; otherwise
+ * the centre holds the total. Slices are separated by a surface gap.
+ */
+export function AllocationDonut({ holdings, total }: { holdings: Holding[]; total: number }) {
+  const [active, setActive] = useState<string | null>(null)
+  const segments = buildSegments(holdings)
+  if (segments.length === 0) return <p className="muted">Sin activos valorados.</p>
+
+  const R = 52
+  const STROKE = 14
+  const C = 2 * Math.PI * R
+  // A 2 px gap between slices, measured along the circumference.
+  const GAP = segments.length > 1 ? 2 : 0
+  const sum = segments.reduce((s, x) => s + x.weight, 0) || 1
+  let offset = 0
+  const arcs = segments.map((seg) => {
+    const len = (seg.weight / sum) * C
+    const arc = { seg, dash: Math.max(0.5, len - GAP), offset }
+    offset += len
+    return arc
+  })
+  const focus = segments.find((s) => s.ccy === active)
+
+  return (
+    <div className="donut" onPointerLeave={() => setActive(null)}>
+      <svg
+        className="donut-svg"
+        viewBox="0 0 140 140"
+        role="img"
+        aria-label={`Distribución de la cartera: ${segments.map((s) => `${s.ccy} ${share(s.weight)}`).join(', ')}`}
+      >
+        {/* Start at twelve o'clock and run clockwise. */}
+        <g transform="rotate(-90 70 70)">
+          {arcs.map(({ seg, dash, offset: o }) => (
+            <circle
+              key={seg.ccy}
+              cx="70"
+              cy="70"
+              r={R}
+              fill="none"
+              stroke={seg.color}
+              strokeWidth={active === seg.ccy ? STROKE + 4 : STROKE}
+              strokeDasharray={`${dash} ${C - dash}`}
+              strokeDashoffset={-o}
+              opacity={active && active !== seg.ccy ? 0.35 : 1}
+              onPointerEnter={() => setActive(seg.ccy)}
+              onClick={() => setActive(seg.ccy)}
+              style={{ transition: 'opacity 0.15s ease, stroke-width 0.15s ease', cursor: 'default' }}
+            />
+          ))}
+        </g>
+        {/* Whole units and the currency on its own line: with cents, the
+            total ran into the ring. */}
+        <text x="70" y="60" textAnchor="middle" className="donut-center-label">
+          {focus ? focus.ccy : 'Total'}
+        </text>
+        <text x="70" y="79" textAnchor="middle" className="donut-center-value">
+          {focus ? share(focus.weight) : WHOLE.format(convert(total))}
+        </text>
+        <text x="70" y="94" textAnchor="middle" className="donut-center-label">
+          {focus ? usd(focus.usd) : activeCurrency() === 'EUR' ? '€' : 'US$'}
+        </text>
+      </svg>
+      <ul className="donut-legend">
+        {segments.map((seg) => (
+          <li
+            key={seg.ccy}
+            className={active === seg.ccy ? 'is-active' : undefined}
+            onPointerEnter={() => setActive(seg.ccy)}
+          >
+            <span className="legend-swatch" style={{ background: seg.color }} />
+            <span className="donut-legend-name">{seg.ccy}</span>
+            <span className="donut-legend-share">{share(seg.weight)}</span>
+            <span className="donut-legend-value">{usd(seg.usd)}</span>
+          </li>
+        ))}
+      </ul>
     </div>
   )
 }

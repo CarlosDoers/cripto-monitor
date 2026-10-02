@@ -274,44 +274,30 @@ export function analyseTraps(
       activeShort = signal
     }
 
-    // ---- 5. Resolve open positions (never on the firing bar or the next) ----
-    const settled = i - lastSignalBar > 1
-
-    if (activeLong && settled) {
-      if (high[i] >= activeLong.target) {
-        const b = longBuckets[activeLong.bucket]
-        b.total += 1
-        b.wins += 1
-        activeLong.outcome = 'win'
-        activeLong.closedIndex = i
-        activeLong.closedTime = candles[i].time
-        activeLong = null
-      } else if (low[i] < activeLong.stop) {
-        longBuckets[activeLong.bucket].total += 1
-        activeLong.outcome = 'loss'
-        activeLong.closedIndex = i
-        activeLong.closedTime = candles[i].time
-        activeLong = null
-      }
+    // ---- 5. Resolve open positions, on every bar after the entry ----
+    // The Pine skips the firing bar *and the next one* (and any bar right after
+    // a signal on the other side). Drawing the indicator that way is harmless,
+    // but as a trade it excuses a stop touched the day after entry: five daily
+    // trades did exactly that and then reached the target, and booking them as
+    // wins put the daily at +0.61 R where the trade actually makes +0.43.
+    // Stop before target when one bar touches both — measured to change nothing
+    // here, but it is the rule every other strategy follows.
+    const resolve = (pos: Signal, buckets: BucketStats[], i: number): boolean => {
+      if (pos.index >= i) return false
+      const long = pos.side === 'long'
+      const hitStop = long ? low[i] < pos.stop : high[i] > pos.stop
+      const hitTarget = long ? high[i] >= pos.target : low[i] <= pos.target
+      if (!hitStop && !hitTarget) return false
+      const b = buckets[pos.bucket]
+      b.total += 1
+      if (!hitStop) b.wins += 1
+      pos.outcome = hitStop ? 'loss' : 'win'
+      pos.closedIndex = i
+      pos.closedTime = candles[i].time
+      return true
     }
-
-    if (activeShort && settled) {
-      if (low[i] <= activeShort.target) {
-        const b = shortBuckets[activeShort.bucket]
-        b.total += 1
-        b.wins += 1
-        activeShort.outcome = 'win'
-        activeShort.closedIndex = i
-        activeShort.closedTime = candles[i].time
-        activeShort = null
-      } else if (high[i] > activeShort.stop) {
-        shortBuckets[activeShort.bucket].total += 1
-        activeShort.outcome = 'loss'
-        activeShort.closedIndex = i
-        activeShort.closedTime = candles[i].time
-        activeShort = null
-      }
-    }
+    if (activeLong && resolve(activeLong, longBuckets, i)) activeLong = null
+    if (activeShort && resolve(activeShort, shortBuckets, i)) activeShort = null
   }
 
   for (const list of [longBuckets, shortBuckets]) {

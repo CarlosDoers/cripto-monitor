@@ -69,9 +69,11 @@ const FINDINGS: { verdict: Verdict; what: string; detail: ReactNode }[] = [
     what: 'Reversión en diario',
     detail: (
       <>
-        La estrategia más sólida de la app: <strong>+0,61 R</strong> por señal, positiva en BTC, ETH y
-        SOL por separado, en todos los años y en largos y cortos. Seguiría siendo real aunque fuera la
-        mejor de 58 variantes probadas.
+        La que más gana por operación: <strong>+0,43 R</strong> por señal, positiva en BTC, ETH y SOL
+        por separado, en todos los años y en largos y cortos. Pero menos sólida de lo que parecía: el
+        ancho de banda elegido es un pico (con 2 o 3 ATR la segunda mitad del histórico queda en cero),
+        y su ventaja aguantaría solo 6 variantes probadas. Hasta octubre de 2026 la app decía +0,61 R
+        porque el backtest no contaba el stop tocado el día después de la entrada.
       </>
     ),
   },

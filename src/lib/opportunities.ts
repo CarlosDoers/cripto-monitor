@@ -7,23 +7,23 @@ import { profileOf, strategyByKey } from './indicators/registry'
 import type { Candle } from './indicators/types'
 
 /**
- * *Oportunidades ahora*: the X-Perps where the reversal — the strongest thing
- * the app has measured — has a live daily signal that is still worth taking.
+ * *Oportunidades ahora*: the X-Perps where the reversal — the highest
+ * expectancy the app has measured — has a live daily signal still worth taking.
  *
  * What makes it a ranking and not a screen is two measurements, both in
  * `npm run audit`:
  *
  * - **A signal stays worth taking for a week.** The reversal fixes its stop
  *   and target when it fires, so entering k days late is a defined trade.
- *   Doing so, while price has touched neither, measured at least +0,34 R at
+ *   Doing so, while price has touched neither, measured at least +0,31 R at
  *   every age from 1 to 7 days, both halves positive (`lateEntry` on the
  *   profile). Older signals are left out: not measured is not offered.
  * - **More reward left per unit of risk ranks higher.** Pooling those late
- *   entries by the reward-to-risk remaining at that close: under 1:1 +0,24 R,
- *   1–1,5 +0,42, 1,5–2 +0,60, 2–3 +0,33, over 3 +0,87 — noisy, not monotonic,
- *   but the weakest bucket is the one with least room, and every bucket is
- *   positive in both halves. So the order is by what is left, and the number
- *   shown is that ratio, not an invented score.
+ *   entries by the reward-to-risk remaining at that close: under 1:1 +0,27 R,
+ *   1–1,5 +0,46, 1,5–2 +0,54, 2–3 +0,24, over 3 +0,79 — noisy and not
+ *   monotonic (2–3 is now the weakest), so the ordering is a mild preference:
+ *   the most room is clearly the best bucket and every bucket is positive in
+ *   both halves. The number shown is that ratio, not an invented score.
  *
  * Two limits the panel states. The edge was measured on BTC, ETH and SOL; on
  * any other coin it is the same rule, not the same evidence. And only crypto

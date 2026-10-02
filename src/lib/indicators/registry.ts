@@ -28,6 +28,10 @@ import { summarise } from './types'
  *   first half −0.09. Its 4 h stays: both halves hold there.
  * - `donchian/accurate`: +0.21 R with a 95 % interval reaching below zero and a
  *   first half of +0.01. No timeframe cleared both halves.
+ *
+ * And a correction in 2026-10, not a removal: the reversal's backtest skipped
+ * the bar after each entry, so a stop touched that day did not count. Resolved
+ * honestly its daily is +0.43 R, not +0.61, and it is now `weak`.
  * - `opening/selectiva` and the weekend days of `opening/todas`: the volume
  *   filter was mostly a weekend filter in disguise (it dropped 92 % of them).
  *   Weekends have no New York open to borrow and measured −0.17 R on 1 640
@@ -230,18 +234,21 @@ export const STRATEGIES: StrategyDef[] = [
       {
         key: 'tuned',
         label: 'Ajustada',
-        note: 'Bandas de 2,5 ATR y stop de 0,25. Es la más sólida de la app: +0,61 R por señal en diario, positiva en BTC, ETH y SOL por separado, en todos los años desde 2022 y en largos y cortos. Sin sus diez mejores operaciones sigue en +0,26 R, así que no depende de unas pocas. Al barrer las variantes de alrededor, todas las vecinas seguían siendo positivas. En 4 h mide +0,03 R, así que ese timeframe no se ofrece.',
+        note: 'Bandas de 2,5 ATR y stop de 0,25. La que más gana por operación de la app: +0,43 R en diario, positiva en BTC, ETH y SOL por separado, en todos los años desde 2022 y en largos y cortos, aunque los cortos ganan mucho menos (+0,16 R frente a +0,64). Sin sus diez mejores operaciones queda en +0,11 R. Dos avisos: el ancho de 2,5 ATR es un pico —con 2 o 3 ATR la segunda mitad del histórico se queda en torno a cero—, y su ventaja aguantaría como mucho 6 variantes probadas, así que parte de ella puede venir de haber elegido estos parámetros. En 4 h mide −0,06 R, así que ese timeframe no se ofrece.',
       },
     ],
     run: runReversal,
     backtest: {
-      byTimeframe: { '15m': -0.20, '1H': -0.02, '4H': 0.03, '1D': 0.61 },
-      halves: { '1D': [0.71, 0.40] },
-      outOfSample: 0.40,
+      byTimeframe: { '15m': -0.28, '1H': -0.10, '4H': -0.06, '1D': 0.43 },
+      halves: { '1D': [0.51, 0.21] },
+      outOfSample: 0.21,
       sampleSize: 141,
-      winRate: 0.504,
-      confidence: 'reasonable',
-      lateEntry: { maxAge: 7, floor: 0.34 },
+      winRate: 0.468,
+      // Was 'reasonable' while the daily read +0.61 R and the neighbourhood
+      // looked flat. Measured honestly (see `reversalTrap.ts`, step 5) the
+      // band width of 2.5 is a peak and the edge survives only 6 variants.
+      confidence: 'weak',
+      lateEntry: { maxAge: 7, floor: 0.31 },
     },
   },
   {

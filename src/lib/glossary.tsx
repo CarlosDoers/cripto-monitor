@@ -425,6 +425,45 @@ export const HELP = {
       resultado en spot sólo cuenta una parte de la historia.
     </p>
   ),
+
+  // ---- Financiación ----
+  carry: (
+    <>
+      <p>
+        Tener una moneda y abrir a la vez un <strong>corto del mismo tamaño</strong> en su perpetuo. Si
+        el precio sube, lo que ganas en la moneda lo pierdes en el corto, y al revés: el precio deja de
+        importar.
+      </p>
+      <p>
+        Lo que queda es la financiación: cuando es positiva, los largos pagan a los cortos cada 8 horas, y
+        tú cobras.
+      </p>
+    </>
+  ),
+  fundingTrailing: (
+    <p>
+      Lo que pagó la financiación del contrato en los últimos 7 días, llevado a un año. Es la cifra en la
+      que se apoya la regla: cubrir cuando pasa del 10 % y deshacer cuando baja de cero.
+    </p>
+  ),
+  fundingNow: (
+    <p>
+      El tipo del periodo que está corriendo ahora, llevado a un año. Cambia cada pocos minutos y un pico
+      de un día no dice nada; por eso la regla mira los últimos 7 días.
+    </p>
+  ),
+  carryBreakEven: (
+    <p>
+      Cuántos días de financiación, al ritmo de la última semana, hacen falta para pagar las comisiones de
+      montar y deshacer la cobertura. Si la financiación se gira antes, la operación pierde.
+    </p>
+  ),
+  carryContracts: (
+    <p>
+      Contratos en corto que igualan lo que tienes de la moneda, redondeados hacia abajo. Con menos quedas
+      cubierto solo en parte; con más, apuestas a que baja.
+    </p>
+  ),
 } satisfies Record<string, ReactNode>
 
 /**

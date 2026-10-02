@@ -208,3 +208,12 @@ export const IconBook = (p: Props) => (
     <path d="M8 7h7M8 11h7" />
   </svg>
 )
+
+export const IconFunding = (p: Props) => (
+  <svg {...base} className={p.className}>
+    <circle cx="12" cy="12" r="9" />
+    <path d="M9 15l6-6" />
+    <circle cx="9.5" cy="9.5" r="1" />
+    <circle cx="14.5" cy="14.5" r="1" />
+  </svg>
+)

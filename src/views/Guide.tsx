@@ -1,6 +1,8 @@
 import { useRef, type ReactNode } from 'react'
 import { Card } from '../components/ui'
 import { HELP } from '../lib/glossary'
+import { CARRY_EVIDENCE } from '../lib/carry'
+import { pct } from '../lib/format'
 
 /**
  * The Guía: how to read each section, how to use SMC and the Screener, what
@@ -97,6 +99,31 @@ const FINDINGS: { verdict: Verdict; what: string; detail: ReactNode }[] = [
         <strong>+0,25 R</strong> por señal, sobre más de 4.000 operaciones: aguantaría haber sido la
         mejor de cien mil variantes. Su ventaja se ha ido estrechando año a año, y cada entrada es una
         orden stop: el deslizamiento importa.
+      </>
+    ),
+  },
+  {
+    verdict: 'si',
+    what: 'Cobrar la financiación cubriendo lo que tienes (carry)',
+    detail: (
+      <>
+        Tener la moneda y un corto del mismo tamaño en su perpetuo, mientras la financiación pague:{' '}
+        <strong>{pct(CARRY_EVIDENCE.ownApr, 1)} anual</strong> desde 2022 en {CARRY_EVIDENCE.coins}{' '}
+        monedas, positivo en las dos mitades del histórico, y casi sin relación con las tres estrategias.
+        No es una predicción sino un cobro, con sus riesgos: el margen del corto y que la financiación se
+        gire. Está en la sección Financiación.
+      </>
+    ),
+  },
+  {
+    verdict: 'no',
+    what: 'Ir contra la financiación extrema',
+    detail: (
+      <>
+        Ponerse corto cuando la financiación está en su décimo más alto perdió un{' '}
+        {pct(CARRY_EVIDENCE.contrarianShortWeekly, 1)} por semana: cuando hay muchos largos, el precio
+        suele seguir subiendo. Ordenar el tablero por financiación (largo en la baja, corto en la alta)
+        tampoco funcionó: un año gana y el siguiente pierde lo mismo.
       </>
     ),
   },

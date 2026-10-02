@@ -35,3 +35,5 @@ dist-ssr
 # Candle cache for scripts/audit-strategies.mjs
 .candles
 .candles-screener
+# Funding history for scripts/funding-research.mjs
+.funding

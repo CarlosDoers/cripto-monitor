@@ -18,7 +18,9 @@
     "ma": "node --experimental-strip-types --import ./scripts/_hook.mjs scripts/ma-research.mjs",
     "smc": "node --experimental-strip-types --import ./scripts/_hook.mjs scripts/smc-research.mjs",
     "screener": "node --experimental-strip-types --import ./scripts/_hook.mjs scripts/screener-research.mjs",
-    "lookahead": "node --experimental-strip-types --import ./scripts/_hook.mjs scripts/lookahead-check.mjs"
+    "lookahead": "node --experimental-strip-types --import ./scripts/_hook.mjs scripts/lookahead-check.mjs",
+    "funding:fetch": "node scripts/fetch-funding.mjs",
+    "funding": "node --experimental-strip-types --import ./scripts/_hook.mjs scripts/funding-research.mjs"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.101.4",

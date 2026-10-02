@@ -22,6 +22,7 @@ import {
   IconFilter,
   IconTarget,
   IconBook,
+  IconFunding,
 } from './icons'
 
 type NavGroup = 'cuenta' | 'mercado' | 'ayuda'
@@ -84,6 +85,12 @@ const NAV: Record<Route, { label: string; description: string; group: NavGroup; 
     description: '¿Hay alguna señal? Las tres estrategias medidas, con sus resultados reales.',
     group: 'mercado',
     Icon: IconTarget,
+  },
+  financiacion: {
+    label: 'Financiación',
+    description: '¿Dónde se cobra por esperar? Cubrir lo que tienes con un corto y cobrar la financiación, sin apostar por el precio.',
+    group: 'mercado',
+    Icon: IconFunding,
   },
   guia: {
     label: 'Guía',

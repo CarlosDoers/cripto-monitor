@@ -15,6 +15,7 @@ import { Screener } from './views/Screener'
 import { Portfolio } from './views/Portfolio'
 import { Active } from './views/Active'
 import { History } from './views/History'
+import { Funding } from './views/Funding'
 import { Guide } from './views/Guide'
 
 const queryClient = new QueryClient({
@@ -83,6 +84,7 @@ function Views() {
       {route === 'screener' && <Screener />}
       {route === 'analisis' && <Signals section="analysis" />}
       {route === 'estrategias' && <Signals section="strategies" />}
+      {route === 'financiacion' && <Funding />}
       {route === 'guia' && <Guide />}
     </Layout>
   )

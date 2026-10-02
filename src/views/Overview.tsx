@@ -32,6 +32,7 @@ import { PnlCurve } from '../components/PnlCurve'
 import { Opportunities } from '../components/Opportunities'
 import { guardsFor, hasStop, isShort, LIQ_DANGER, LIQ_WATCH, liquidationDistance, positionSize } from '../lib/guards'
 import { fuelUsed, liquidationRoom, NEARLY_DRY } from '../lib/bots'
+import { useCarryExits } from '../lib/carry'
 import { IconAlert, IconShield } from '../components/icons'
 import {
   Badge,
@@ -132,6 +133,9 @@ export function Overview() {
   const tightest = botRisk[0]
   const dryBots = botRisk.filter((r) => r.used >= NEARLY_DRY)
   const alarm = atRisk || unprotected.length > 0 || dryBots.length > 0
+  // A short held against a coin the account owns is a funding hedge; when its
+  // last week stopped paying, the Financiación rule says undo it.
+  const carryExits = useCarryExits()
   const attention: { key: string; text: string; href: string; link: string }[] = [
     ...(atRisk
       ? [{ key: 'margin', href: '#/encurso', link: 'Ver en curso', text: `Margen ajustado (${share(marginRatio, 0)}): se acerca al nivel de liquidación.` }]
@@ -144,6 +148,12 @@ export function Overview() {
       href: '#/encurso',
       link: 'Ver en curso',
       text: `${r.bot.instId} ha gastado ${num(r.position?.fillSafetyOrds)} de ${r.bot.maxSafetyOrds} órdenes de seguridad${r.room !== null ? ` y la liquidación está a un ${share(r.room, 0)} del precio medio` : ''}: si el precio sigue en contra ya no le queda con qué promediar.`,
+    })),
+    ...carryExits.map((x) => ({
+      key: `carry-${x.instId}`,
+      href: '#/financiacion',
+      link: 'Ver financiación',
+      text: `La cobertura en ${x.instId} ya no cobra: la financiación de la última semana va al ${pct(x.apr ?? 0, 1)} anual, y la regla dice deshacerla.`,
     })),
     ...(locked && openPositions.length > 0
       ? [{ key: 'free', href: '#/encurso', link: 'Ver en curso', text: `Margen libre ${usd(portfolio.freeMargin)}: no queda con qué reforzar una posición que se tuerza.` }]

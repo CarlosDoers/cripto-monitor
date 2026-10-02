@@ -253,6 +253,9 @@ export interface Instrument {
   instCategory?: string
   /** Listing time, ms. The X-Perp board was listed on 2026-03-30, which caps its history. */
   listTime?: string
+  /** Smallest order, in contracts; and the step above it. */
+  minSz?: string
+  lotSz?: string
 }
 
 /** A single position in the portfolio, merged from trading + funding accounts. */
@@ -328,7 +331,25 @@ export interface FundingRate {
   realizedRate?: string
 }
 
-/** A deposit into or withdrawal out of the account. */
+/**
+ * One row of `/public/funding-rate?instId=ANY`: every perpetual's live rate in
+ * one response (724 on this account's entity, X-Perps included). `fundingRate`
+ * is the rate of the period now running, settled at `fundingTime`; the gap to
+ * `nextFundingTime` is the period length, which is 8 h on most X-Perps and 4 h
+ * on a few.
+ */
+export interface FundingBoardRow {
+  instId: string
+  instType: string
+  fundingRate: string
+  fundingTime: string
+  nextFundingTime: string
+  minFundingRate: string
+  maxFundingRate: string
+  method: string
+  premium?: string
+}
+
 /**
  * A coin sent on a chain, from `asset/deposit-history` or `withdrawal-history`.
  * `state` is a numeric code whose meaning differs between the two: `2` is

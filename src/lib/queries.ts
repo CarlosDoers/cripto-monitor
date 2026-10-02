@@ -12,6 +12,7 @@ import type {
   DcaPosition,
   CalendarEvent,
   FundingRate,
+  FundingBoardRow,
   GridBot,
   IndexTicker,
   OrderBook,
@@ -246,6 +247,50 @@ export function useFundingHistory(instId: string | undefined, limit = 100) {
     enabled: Boolean(instId),
     refetchInterval: SLOW,
     staleTime: SLOW,
+  })
+}
+
+/**
+ * Every perpetual's live funding rate, in one request.
+ *
+ * `instId=ANY` is the only way to see the whole board's funding without a
+ * request per contract. It is rate-limited harder than most endpoints — a
+ * second call in quick succession came back `Too Many Requests` — so it sits
+ * on SLOW and every view shares this one query.
+ */
+export function useFundingBoard() {
+  return useOkx<FundingBoardRow>(['funding-board'], '/api/v5/public/funding-rate', { instId: 'ANY' }, {
+    refetchInterval: SLOW,
+    staleTime: SLOW,
+  })
+}
+
+/** Settled funding moves every 8 h at most; an hour is fresh enough. */
+const HOURLY = 60 * 60 * 1000
+
+/**
+ * The last week or so of settled funding for several contracts, one query each
+ * so the set can change without refetching the rest, and paced with the
+ * candle requests because a dozen at once is a burst. 50 settlements cover
+ * seven days even on a 4 h contract.
+ */
+export function useFundingTrails(instIds: string[]) {
+  return useQueries({
+    queries: instIds.map((instId) => ({
+      queryKey: ['funding-trail', instId],
+      queryFn: () =>
+        paced(() => okx<FundingRate>('/api/v5/public/funding-rate-history', { instId, limit: 50 })),
+      staleTime: HOURLY,
+      refetchInterval: HOURLY,
+      retry: 2,
+    })),
+    combine: (results) => {
+      const byInst: Record<string, FundingRate[]> = {}
+      results.forEach((r, i) => {
+        if (r.data) byInst[instIds[i]] = r.data
+      })
+      return { byInst, pending: results.filter((r) => r.isPending).length }
+    },
   })
 }
 

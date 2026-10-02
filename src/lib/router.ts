@@ -17,6 +17,7 @@ export const ROUTES = [
   'screener',
   'analisis',
   'estrategias',
+  'financiacion',
   // Ayuda
   'guia',
 ] as const

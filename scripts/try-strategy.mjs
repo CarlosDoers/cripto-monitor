@@ -48,8 +48,12 @@ if (!existsSync(modulePath)) {
   process.exit(2)
 }
 
-const DIR = './.candles'
-const BARS = ['15m', '1H', '4H', '1D']
+// TRY_DIR + TRY_BAR measure on a cache of one file per coin and one timeframe —
+// the Screener's 30 coins of daily candles since 2022, for a daily idea that
+// three instruments cannot judge.
+const DIR = process.env.TRY_DIR ?? './.candles'
+const ONE_BAR = process.env.TRY_BAR
+const BARS = ONE_BAR ? [ONE_BAR] : ['15m', '1H', '4H', '1D']
 const MIN_SIGNALS = 30
 /** How much the signal must add over its own geometry to count as a signal. */
 const MIN_EDGE_OVER_RANDOM = 0.05
@@ -79,7 +83,8 @@ if (typeof run !== 'function') {
 // ── data ────────────────────────────────────────────────────────────────────
 const series = {}
 for (const f of readdirSync(DIR)) {
-  const [inst, bar] = f.replace('.json', '').split('__')
+  if (!f.endsWith('.json') || f.startsWith('_')) continue
+  const [inst, bar] = ONE_BAR ? [f.replace('.json', ''), ONE_BAR] : f.replace('.json', '').split('__')
   series[bar] ??= {}
   series[bar][inst] = JSON.parse(readFileSync(`${DIR}/${f}`, 'utf8'))
 }

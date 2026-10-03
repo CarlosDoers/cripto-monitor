@@ -69,7 +69,17 @@ const FALLBACK = ['BTC-USDT', 'ETH-USDT', 'SOL-USDT']
  * daily signal read "hace 5 d" here while the Resumen, counting closed bars,
  * said four.
  */
-function LiveSignal({ signal, last, detectedAt }: { signal: StrategySignal; last: number; detectedAt: number }) {
+function LiveSignal({
+  signal,
+  last,
+  detectedAt,
+  exitLabel = 'Trailing stop dinámico',
+}: {
+  signal: StrategySignal
+  last: number
+  detectedAt: number
+  exitLabel?: string
+}) {
   const long = signal.side === 'long'
   const goal = signal.target
   const progress = goal
@@ -106,7 +116,7 @@ function LiveSignal({ signal, last, detectedAt }: { signal: StrategySignal; last
         ) : (
           <li>
             <span className="metric-label">Estrategia de Salida</span>
-            <span className="metric-value">Trailing Stop Dinámico</span>
+            <span className="metric-value">{exitLabel}</span>
           </li>
         )}
         <li>
@@ -347,7 +357,13 @@ export function Signals({ section }: { section: 'analysis' | 'strategies' }) {
     setContext((c) => ({ ...c, [mode]: { ...c[mode], [key]: !c[mode][key] } }))
   // Off by default: six levels and two trendlines already fill the chart, and
   // an average is the easiest line there to over-read as a signal.
-  const [showMas, setShowMas] = useState(false)
+  // The Screener's EMA scan links here with `ema=N`: open with the averages on
+  // and that length drawn alongside the 50 and the 200.
+  const linkedEma = Math.round(Number(useRouteParam('ema'))) || 0
+  const [showMas, setShowMas] = useState(linkedEma > 0)
+  useEffect(() => {
+    if (linkedEma > 0) setShowMas(true)
+  }, [linkedEma])
   // Smart Money Concepts and its gaps, off by default like the averages: the
   // chart already carries levels and trendlines, and SMC alone draws a dozen
   // labelled lines.
@@ -362,8 +378,8 @@ export function Signals({ section }: { section: 'analysis' | 'strategies' }) {
    * strategy's own lines and read as part of it.
    */
   const mas = useMemo(
-    () => (analysis && showMas ? movingAverages(s.candles) : null),
-    [analysis, showMas, s.candles],
+    () => (analysis && showMas ? movingAverages(s.candles, linkedEma) : null),
+    [analysis, showMas, s.candles, linkedEma],
   )
   /**
    * Over every fetched candle, not the window: the 50-bar swing needs history
@@ -501,6 +517,15 @@ export function Signals({ section }: { section: 'analysis' | 'strategies' }) {
     setPresetKey(first)
     retarget(key, first)
   }
+
+  // A link can also name the strategy (`?s=ema200`): the Screener's watch list
+  // opens the chart of the contract on the strategy that put it there.
+  const linkedStrategy = useRouteParam('s')
+  useEffect(() => {
+    if (!analysis && linkedStrategy && STRATEGIES.some((x) => x.key === linkedStrategy)) pickStrategy(linkedStrategy)
+    // pickStrategy only reads state it also sets; the link is what should re-run this.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [linkedStrategy, analysis])
 
   function pickPreset(key: string) {
     setPresetKey(key)
@@ -702,6 +727,7 @@ export function Signals({ section }: { section: 'analysis' | 'strategies' }) {
       {!analysis && r.active && !s.isLoading && (
         <Card title="Operación abierta ahora" subtitle="Posición en curso según niveles calculados" glow>
           <LiveSignal
+            exitLabel={strategy.exitLabel}
             signal={r.active!}
             last={lastPrice}
             detectedAt={
@@ -841,7 +867,9 @@ export function Signals({ section }: { section: 'analysis' | 'strategies' }) {
               </>
             ) : (
               <span>
-                {mas.overlays.length
+                {/* Asked by key: the linked EMA is an overlay too, and counting
+                    overlays claimed the 50 was drawn when only the 25 was. */}
+                {mas.overlays.some((o) => o.key === `ema${FAST}`)
                   ? `La EMA ${SLOW} necesita ${SLOW * SEED_FACTOR} velas para ser fiable y hay ${s.candles.length} en ${currentTf?.label}; se muestra solo la EMA ${FAST}.`
                   : `Las medias necesitan ${FAST * SEED_FACTOR} velas (EMA ${FAST}) y ${SLOW * SEED_FACTOR} (EMA ${SLOW}) para ser fiables, y hay ${s.candles.length} en ${currentTf?.label}.`}{' '}
                 Prueba una temporalidad más corta.

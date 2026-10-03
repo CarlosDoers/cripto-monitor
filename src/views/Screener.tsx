@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useMarkets } from '../lib/markets'
 import { useClosedPositions, useDailyBoard, usePositions } from '../lib/queries'
+import { EmaScanner } from '../components/EmaScanner'
+import { EmaWatch } from '../components/EmaWatch'
 import {
   compareRows,
   NO_FILTERS,
@@ -262,6 +264,11 @@ export function Screener() {
 
   return (
     <>
+      {/* On demand: what to watch under the one EMA strategy that measured, then
+          the touches of the daily EMA the user follows, as context. */}
+      <EmaWatch markets={markets} />
+      <EmaScanner markets={markets} />
+
       {/* Finviz's Signal menu: one tap sets the filters and the order. */}
       <div className="tabs screen-presets" role="tablist" aria-label="Atajos">
         {PRESETS.map((p) => (

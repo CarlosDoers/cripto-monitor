@@ -753,6 +753,44 @@ const DAILY = 60 * 60 * 1000
  * daily closes at midnight Hong Kong time, 16:00 UTC, which is not what anyone
  * means by "today". 200 bars reaches past the X-Perp listing date anyway.
  */
+/** Four-hour candles move every four hours; ten minutes is fresh enough. */
+const BOARD = 10 * 60 * 1000
+
+/**
+ * Up to `pages` × 300 recent candles for a set of contracts, one query each,
+ * paced like the daily board. Five pages of 4 h reach the whole life of an
+ * X-Perp (listed 2026-03-30), which is what an EMA 200 needs to have settled.
+ */
+export function useCandleBoard(instIds: string[], bar: string, pages = 5) {
+  return useQueries({
+    queries: instIds.map((instId) => ({
+      queryKey: ['candle-board', instId, bar, pages],
+      queryFn: async () => {
+        const all: Candle[] = []
+        let after: string | undefined
+        for (let page = 0; page < pages; page++) {
+          const batch = await paced(() => okx<Candle>('/api/v5/market/candles', { instId, bar, limit: CANDLE_PAGE, after }))
+          if (!batch.length) break
+          all.push(...batch)
+          after = batch[batch.length - 1][0]
+          if (batch.length < CANDLE_PAGE) break
+        }
+        return all.sort((a, b) => Number(a[0]) - Number(b[0]))
+      },
+      staleTime: BOARD,
+      refetchInterval: BOARD,
+      retry: 2,
+    })),
+    combine: (results) => {
+      const byInst: Record<string, Candle[]> = {}
+      results.forEach((r, i) => {
+        if (r.data) byInst[instIds[i]] = r.data
+      })
+      return { byInst, loaded: results.filter((r) => r.data).length }
+    },
+  })
+}
+
 /**
  * `bar` is `1Dutc` for the Screener, whose returns are calendar days, and `1D`
  * for the Resumen's opportunities, which must see the very candles the

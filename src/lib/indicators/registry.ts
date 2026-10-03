@@ -1,6 +1,7 @@
 import { analyseTraps, TUNED_SETTINGS } from './reversalTrap'
 import { analyseDonchian, DONCHIAN_SETTINGS } from './donchianBreakout'
 import { analyseOpeningRange, OPENING_RANGE_SETTINGS } from './openingRange'
+import { analyseEmaCross, EMA_CROSS_SETTINGS } from './emaCross'
 import type { Candle, Overlay, StrategyResult, StrategySignal } from './types'
 import { summarise } from './types'
 
@@ -181,6 +182,8 @@ export interface StrategyDef {
    * fetched once and kept, so leave it unset unless the strategy is starved.
    */
   archiveBars?: number
+  /** How an open trade ends when it has no fixed target, for the live-trade card. */
+  exitLabel?: string
   presets: StrategyPreset[]
   run(candles: Candle[], presetKey: string): StrategyResult
   backtest: StrategyBacktest
@@ -253,6 +256,7 @@ export const STRATEGIES: StrategyDef[] = [
   },
   {
     key: 'donchian',
+    exitLabel: 'Trailing stop de 8 ATR',
     label: 'Ruptura',
     tagline: 'Canal de Donchian al estilo Turtle',
     description:
@@ -278,6 +282,7 @@ export const STRATEGIES: StrategyDef[] = [
   },
   {
     key: 'opening',
+    exitLabel: 'Cierre a las 24 horas',
     label: 'Apertura',
     tagline: 'Rotura del rango de apertura de Wall Street',
     description:
@@ -305,6 +310,37 @@ export const STRATEGIES: StrategyDef[] = [
       outOfSample: 0.13,
       sampleSize: 4176,
       winRate: 0.329,
+      confidence: 'weak',
+    },
+  },
+  {
+    key: 'ema200',
+    exitLabel: 'Cierre al otro lado de la EMA',
+    label: 'EMA 200',
+    tagline: 'Cruce del precio con la EMA 200 en 4 h',
+    description:
+      'Largo mientras las velas de 4 h cierran por encima de la EMA 200 y corto mientras cierran por debajo: da la vuelta en cada cruce, con un stop de 2 ATR por si el movimiento en contra llega antes del cierre. Acierta poco —una de cada seis— y vive de las tendencias largas. Se mueve distinto de la Ruptura: en 30 criptos comparten solo el 22 % de las entradas y sus resultados mensuales apenas se parecen (correlación 0,25).',
+    regime: 'trending',
+    // An EMA 200 needs far more than the ~1 200 bars the view fetches: at that
+    // depth it still carried enough of its SMA seed to flip 2 of 32 recent 4 h
+    // crosses against the deep cache (`npm run lookahead`). 3 000 bars leave
+    // a residue of about e^-30.
+    archiveBars: 1800,
+    presets: [
+      {
+        key: 'base',
+        label: 'EMA 200 · 4 h',
+        note: 'La única de 162 combinaciones de EMA (9 longitudes, 3 temporalidades, 3 formas de operarla y 2 salidas) que pasó el listón completo, medida en 30 criptos: +0,19 R por operación en 6732, positiva en las dos mitades, con todas las EMAs vecinas de 100 a 300 también positivas y +0,23 R por encima de entradas al azar; aguanta el doble de comisión (+0,16 R). Lo que conviene saber: sin sus 50 mejores operaciones queda en −0,02 R, los cortos ganan poco (+0,08 R frente a +0,29 de los largos) y la ventaja ha ido bajando (2023 +0,36, 2025 +0,11, 2026 +0,05).',
+      },
+    ],
+    run: (candles) => analyseEmaCross(candles, EMA_CROSS_SETTINGS),
+    backtest: {
+      byTimeframe: { '15m': -0.07, '1H': 0.07, '4H': 0.28, '1D': 0.59 },
+      halves: { '4H': [0.48, 0.17], '1D': [-0.36, 2.09] },
+      nativeTimeframe: '4H',
+      outOfSample: 0.17,
+      sampleSize: 974,
+      winRate: 0.164,
       confidence: 'weak',
     },
   },

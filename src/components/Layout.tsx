@@ -82,7 +82,7 @@ const NAV: Record<Route, { label: string; description: string; group: NavGroup; 
   },
   estrategias: {
     label: 'Estrategias',
-    description: '¿Hay alguna señal? Las tres estrategias medidas, con sus resultados reales.',
+    description: '¿Hay alguna señal? Las cuatro estrategias medidas, con sus resultados reales.',
     group: 'mercado',
     Icon: IconTarget,
   },

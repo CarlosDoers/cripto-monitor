@@ -13,18 +13,27 @@
 //
 // No walk-forward window is needed: an EMA at bar t reads only bars up to t, so
 // it cannot see the bars it is judged on.
+//
+// Env, for testing another average or another cache without editing:
+//   MA_LENGTHS=25            lengths to test (default 50,200)
+//   MA_SEED=7                seed of the decoy shifts (default 13)
+//   MA_DIR=./.candles-screener MA_BAR=1D
+//                            a cache of one file per coin and one timeframe —
+//                            the Screener's daily candles, 30 coins since 2022.
 import { readFileSync, readdirSync } from 'node:fs'
 import { atr, ema } from '../src/lib/indicators/ta.ts'
 
-const DIR = './.candles'
-const BARS = ['15m', '1H', '4H', '1D']
-const LENGTHS = [50, 200]
+const DIR = process.env.MA_DIR ?? './.candles'
+const ONE_BAR = process.env.MA_BAR
+const BARS = ONE_BAR ? [ONE_BAR] : ['15m', '1H', '4H', '1D']
+const LENGTHS = (process.env.MA_LENGTHS ?? '50,200').split(',').map(Number)
 const HORIZON = 40
 const MOVE_ATR = 1
 
 const series = {}
 for (const f of readdirSync(DIR)) {
-  const [inst, bar] = f.replace('.json', '').split('__')
+  if (!f.endsWith('.json') || f.startsWith('_')) continue
+  const [inst, bar] = ONE_BAR ? [f.replace('.json', ''), ONE_BAR] : f.replace('.json', '').split('__')
   series[bar] ??= {}
   series[bar][inst] = JSON.parse(readFileSync(`${DIR}/${f}`, 'utf8'))
 }
@@ -57,7 +66,7 @@ function testLine(candles, atrs, from, at, fromAbove) {
 }
 
 const rnd = (() => {
-  let seed = 13
+  let seed = Number(process.env.MA_SEED ?? 13)
   return () => (seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648
 })()
 

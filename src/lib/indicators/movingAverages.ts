@@ -56,7 +56,12 @@ export interface MovingAverages {
   reading: MaReading | null
 }
 
-export function movingAverages(candles: Candle[]): MovingAverages {
+/**
+ * `extra` adds one more EMA — the length a user follows, when the Screener's
+ * EMA scan links here. Drawn in its own series hue so it cannot be mistaken
+ * for the 50 or the 200, and only with the same `SEED_FACTOR` of history.
+ */
+export function movingAverages(candles: Candle[], extra = 0): MovingAverages {
   const closes = candles.map((c) => c.close)
   const fastEnough = candles.length >= FAST * SEED_FACTOR
   const slowEnough = candles.length >= SLOW * SEED_FACTOR
@@ -64,6 +69,16 @@ export function movingAverages(candles: Candle[]): MovingAverages {
   const slow = slowEnough ? ema(closes, SLOW) : closes.map(() => NaN)
 
   const overlays: Overlay[] = []
+  if (extra > 0 && extra !== FAST && extra !== SLOW && candles.length >= extra * SEED_FACTOR) {
+    overlays.push({
+      key: `ema${extra}`,
+      label: `EMA ${extra}`,
+      values: ema(closes, extra),
+      // Slot 7, not 3: in the dark theme slot 3 is the very green of a gain.
+      colour: 'var(--series-7)',
+      context: true,
+    })
+  }
   if (fastEnough) {
     overlays.push({
       key: 'ema50',

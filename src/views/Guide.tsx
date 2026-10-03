@@ -93,6 +93,29 @@ const FINDINGS: { verdict: Verdict; what: string; detail: ReactNode }[] = [
   },
   {
     verdict: 'si',
+    what: 'Cruce de la EMA 200 en 4 h',
+    detail: (
+      <>
+        La única de 162 combinaciones de EMA (9 longitudes, 1 h, 4 h y diario, cruce, rebote o retroceso, dos
+        salidas) que pasó el listón: <strong>+0,19 R</strong> por operación en 30 criptos, con las EMAs vecinas
+        también positivas y casi sin relación con la Ruptura. Vive de pocas tendencias largas y su ventaja ha ido
+        bajando. En el Screener, «Qué vigilo» dice qué X-Perp acaban de cruzar o están a punto.
+      </>
+    ),
+  },
+  {
+    verdict: 'no',
+    what: 'Rebotes en la EMA (25, 50…) y retrocesos a ella',
+    detail: (
+      <>
+        Tocar la media y rebotar no es más probable que con cualquier otra línea que siga al precio, aunque lo
+        confirmen el volumen o la estructura. Operado, en diario pierde o empata; las pocas variantes con números
+        buenos viven de cinco tendencias enormes.
+      </>
+    ),
+  },
+  {
+    verdict: 'si',
     what: 'Apertura de Nueva York en 15 m, días laborables',
     detail: (
       <>
@@ -109,7 +132,7 @@ const FINDINGS: { verdict: Verdict; what: string; detail: ReactNode }[] = [
       <>
         Tener la moneda y un corto del mismo tamaño en su perpetuo, mientras la financiación pague:{' '}
         <strong>{pct(CARRY_EVIDENCE.ownApr, 1)} anual</strong> desde 2022 en {CARRY_EVIDENCE.coins}{' '}
-        monedas, positivo en las dos mitades del histórico, y casi sin relación con las tres estrategias.
+        monedas, positivo en las dos mitades del histórico, y casi sin relación con las estrategias.
         No es una predicción sino un cobro, con sus riesgos: el margen del corto y que la financiación se
         gire. Está en la sección Financiación.
       </>
@@ -313,7 +336,7 @@ export function Guide() {
             estructura SMC y medias, en cualquier temporalidad. Para leer, no para operar.
           </li>
           <li>
-            <strong>Estrategias</strong>: las tres estrategias que se han medido con años de datos, con
+            <strong>Estrategias</strong>: las cuatro estrategias que se han medido con años de datos, con
             su señal actual y su historial. Solo se ofrecen en las temporalidades donde ganan.
           </li>
         </ul>

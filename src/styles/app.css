@@ -4435,3 +4435,40 @@ table.data td.num {
     align-self: center;
   }
 }
+
+/* ---------- Screener: EMA touch scan ---------- */
+
+.ema-controls {
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.ema-controls .btn--primary {
+  margin-left: auto;
+}
+
+.ema-length {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--ink-faint);
+}
+
+.ema-length input {
+  width: 52px;
+  padding: 3px 6px;
+  border: 1px solid var(--border);
+  background: var(--surface-inset);
+  color: var(--ink-primary);
+  font: 500 12px/1.4 var(--mono);
+}
+
+@media (max-width: 720px) {
+  .ema-controls .btn--primary {
+    margin-left: 0;
+    width: 100%;
+  }
+}

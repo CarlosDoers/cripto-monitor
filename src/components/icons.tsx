@@ -217,3 +217,10 @@ export const IconFunding = (p: Props) => (
     <circle cx="14.5" cy="14.5" r="1" />
   </svg>
 )
+
+export const IconChat = (p: Props) => (
+  <svg {...base} className={p.className}>
+    <path d="M4 5h16v11H9l-5 4z" />
+    <path d="M8 9.5h8M8 12.5h5" />
+  </svg>
+)

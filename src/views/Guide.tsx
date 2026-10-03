@@ -344,6 +344,15 @@ export function Guide() {
           Los «?» junto a cada cifra explican qué es y qué hacer con ella. Todos están también en el
           glosario, al final de esta página.
         </p>
+        <h3>Con Claude</h3>
+        <p>
+          El botón <strong>Claude</strong> de la barra de arriba copia la cuenta como texto (avisos, posiciones,
+          rendimiento, cartera y, si quieres, las señales y la financiación) para pegarla en un chat de
+          claude.ai. Lleva las reglas de esta app: Claude explica las cifras, no las recalcula, y no propone
+          entradas que no salgan de las estrategias medidas. El mismo botón explica cómo crear un proyecto
+          para no repetir las instrucciones, y cómo activar el conector, con el que Claude lee la cuenta
+          por sí mismo sin copiar nada.
+        </p>
       </Section>
 
       <Section id="dia" title="Un repaso en cinco minutos" refs={refs}>

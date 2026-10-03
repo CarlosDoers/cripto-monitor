@@ -18,7 +18,7 @@ cd "$(dirname "$0")/.."
 [ -d .vercel ]    || { echo "El proyecto no está enlazado. Ejecuta primero: vercel link"; exit 1; }
 
 # Estas nunca deben poder leerse una vez subidas.
-SECRETS="OKX_API_KEY OKX_API_SECRET OKX_API_PASSPHRASE APP_ACCESS_TOKEN"
+SECRETS="OKX_API_KEY OKX_API_SECRET OKX_API_PASSPHRASE APP_ACCESS_TOKEN MCP_TOKEN"
 
 # `vercel link` y `vercel env pull` escriben sus propias variables en
 # .env.local. Vercel las inyecta ya en cada deployment: subirlas a mano las

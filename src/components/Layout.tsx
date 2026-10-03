@@ -4,6 +4,7 @@ import { ROUTES, type Route } from '../lib/router'
 import { useTheme, isDark } from '../lib/theme'
 import { setCurrency, useCurrency } from '../lib/currency'
 import { timeAgo } from '../lib/format'
+import { ClaudeExport } from './ClaudeExport'
 import { MarketTicker } from './MarketTicker'
 import {
   IconHistory,
@@ -139,18 +140,21 @@ function LastUpdated() {
     return () => clearInterval(id)
   }, [])
 
+  // The text folds away on narrow phones (see app.css), so it is also the
+  // pill's accessible name and tooltip.
   if (isFetching > 0) {
     return (
-      <span className="update-status update-status--live">
+      <span className="update-status update-status--live" title="Actualizando" aria-label="Actualizando">
         <span className="dot-live" />
-        <span>Actualizando</span>
+        <span className="update-status-text">Actualizando</span>
       </span>
     )
   }
+  const ago = timeAgo(lastDone)
   return (
-    <span className="update-status">
+    <span className="update-status" title={`Actualizado ${ago}`} aria-label={`Actualizado ${ago}`}>
       <span className="update-status-dot" />
-      <span>{timeAgo(lastDone)}</span>
+      <span className="update-status-text">{ago}</span>
     </span>
   )
 }
@@ -244,6 +248,7 @@ export function Layout({
           </div>
           <div className="topbar-actions">
             <LastUpdated />
+            <ClaudeExport />
             {/* Currency and theme are both display preferences, so they live
                 together in the top bar instead of at the foot of the sidebar.
                 OKX shows amounts in whatever currency the account is set to;

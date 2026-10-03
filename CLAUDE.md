@@ -8,7 +8,7 @@ Read-only dashboard for an OKX trading account. Vite + React 19 + TypeScript, de
 
 ```bash
 npm run dev              # Vite dev server; also runs the api/ function (see below)
-npm run build            # tsc -b && vite build — the typecheck gate
+npm run build            # tsc -b && vite build && the connector bundle — the typecheck gate
 npm run lint             # oxlint
 npm run candles          # populate ./.candles (needs npm run dev up)
 npm run audit            # every strategy vs. the profile it claims — exits non-zero on drift
@@ -148,6 +148,24 @@ Two hooks compose the raw queries into what views actually need:
 - `src/lib/risk.ts` and `RiskCard` — Rendimiento's **¿Cuánto puede caer?** Rendimiento had no drawdown at all. `drawdowns()` measures peak-to-trough on the realised curve **in dollars** (deposits arrived along the way, so a percentage would jump at each one) with each episode's dates, recovery and trade count; `simulate()` resamples the period's own trades with replacement 5 000 times (a seeded PRNG, so the figures do not move between refetches) for the typical and one-in-twenty worst drop, the losing streak that counts as normal, and the chance a same-sized batch ends negative. Ideas and definitions from QuantStats (`montecarlo_drawdown`, `drawdown_details`, Apache-2.0); the code is this app's. Two things the first run on this account showed and the card now handles: **ties are the norm, not a corner case** — the worst drop was a single ZEC loss of −329,23 US$, and every run that draws it among winners reproduces it to the cent, so the rank counts ties as half and "caen más" means strictly more; and when one trade is the whole drop, the reading says so, because then the risk is position size rather than streaks. A probability of zero prints as "< 0,02 %" — 5 000 runs cannot resolve less.
 - `src/lib/performance.ts` — every trading statistic, plus the period filter. Rendimiento follows three rules from its review: **every grouped breakdown fades and hides its win rate under `MIN_SAMPLE`** (`DivergingRow.thin`) — "Cortos · 4 ops · 100 %" printed at full strength beside 71 longs; **per-trade costs are signed**, like the Detalle total, because funding a short collects can outweigh its fee and `Math.abs` turned that income into a cost; and the trade size carries `sizeUnit` (contracts, or coins on margin). The calendar ignores the period filter and says so in its subtitle. Amounts in a spot pair's own quote currency go through `quoteAmount()`: fiat gets two decimals ("21,885 EUR" read like twenty-one thousand), and money without a known cost is not coloured red — it is not a loss. `computePerformance()` is a pure function; test ideas belong there.
 - `src/lib/signals.ts` — candles plus the indicator, for the Señales view.
+
+### Claude: the copy button and the connector
+
+The account can be read by Claude in two ways, both on the user's claude.ai Pro plan. **The app never calls the Claude API**: that would bill per token on top of the subscription, which the user ruled out.
+
+- **"Copiar para Claude"** (`ClaudeExport.tsx`, the *Claude* button in the top bar) copies Markdown for a claude.ai chat or Project: the account, and optionally the live signals and the funding carry. The same dialog copies the Project instructions and explains the connector.
+- **The connector** (`api/mcp.ts`) is a read-only Model Context Protocol server: Streamable HTTP, stateless, plain JSON replies, six tools (`estado_cuenta`, `rendimiento`, `cartera`, `senales`, `financiacion`, `estrategias`) and one prompt (`revision`). It is added in claude.ai under Connectors → Add custom connector, with no sign-in, as `https://<app>/api/mcp?token=<MCP_TOKEN>`.
+
+**One pipeline behind both.** `src/lib/snapshot.ts` collects and renders. It is built from the pure functions the views use: `buildPortfolio()` (`portfolioCore.ts`, which `usePortfolio` now wraps), `accountAlerts()` (`alerts.ts`, which the Resumen's *Requiere atención* now calls), `computePerformance()` and the registry. So Claude reads the figures the screen shows and cannot be told the account is healthy while the Resumen flags it. The rules Claude gets live in `claudePrompt.ts`, shared by the Project instructions and the connector's `instructions`: use the figures as given, risk first, entries only from measured strategies, context is not signal. `renderMethod()` puts the measured strategies into every text from the registry, never typed.
+
+Things that bit, and stay true:
+
+- **Vercel cannot load `src/lib` from a function as-is.** `@vercel/node` transpiles each file under `api/` on its own and leaves imports as written, and Node's ESM loader rejects the app's extensionless imports. So `npm run build` ends with `scripts/build-mcp.mjs`, which bundles `src/lib/mcp.ts` into `api/_mcp.js` (gitignored). That works because Vercel runs the framework build *before* it compiles functions (`sortBuilders` in the CLI). This was checked with a local `vercel build`: the function ships `_mcp.js`, `_okx.js` and `react`, and answers when run. `api/_mcp.d.ts` types the bundle for `tsconfig.node.json`, and `handleMcp` is typed *by* that declaration, so the two cannot drift. In dev, `vite.config.ts` mounts `/api/mcp` from the source, so the bundle is never stale there.
+- **It fails closed.** `checkMcpToken()` returns 503 unless `MCP_TOKEN` is set and at least 32 characters long, and 401 on a wrong token. The token arrives as `?token=` (all a claude.ai custom connector can carry) or as a bearer header. Every OKX call goes through `proxyOkxGet`, so the allowlist and signing apply exactly as for the browser. Anyone holding the URL can read the account, so a leaked token is rotated, not tolerated.
+- **Rate limits are retried, in one place.** `/asset/asset-valuation` allows one request per second. Claude calls several tools at once, and a snapshot fires a dozen requests while the app polls the same endpoints, so both paths came back `Too Many Requests` the first time. `patient()` in `snapshot.ts` retries a 429 with jittered backoff; it works because both `okx()` and `okxData()` carry the HTTP status on the error.
+- **Currency.** `usd()` follows the euro switch and `price()` never converts, so a snapshot copied in euro mode has euro amounts beside dollar contract prices, and its header says so. The server has no switch and always speaks dollars. Dates carry their zone: the browser's, or UTC on Vercel. Note that `Intl.DateTimeFormat` **throws** when `dateStyle`/`timeStyle` is combined with `timeZoneName`, which is why `when()` spells out the fields.
+- **The clipboard write starts inside the click.** Safari allows a clipboard write only during the user gesture, and reading the account takes seconds. `writeClipboard()` therefore passes a `ClipboardItem` built from the pending promise, falls back to `writeText`, and if both fail shows the text to copy by hand.
+- **The phone top bar is full.** With the Claude button, the bar ran 27 px past a 390 px screen on the longer titles. Below 480 px the update pill now shows only its dot, with the time in its `title`. A further top-bar control needs the same measurement on every route.
 
 ### Indicators
 
@@ -493,5 +511,6 @@ Environment variables live only in Vercel and `.env.local` (gitignored):
 | `APP_ACCESS_TOKEN` | Password gate. Without it the public URL exposes the portfolio |
 | `OKX_BASE_URL` | Regional entity — required when the account is not on the global domain |
 | `OKX_SIMULATED` | `1` for the demo account |
+| `MCP_TOKEN` | The claude.ai connector's key, ≥ 32 characters (`openssl rand -hex 32`). Unset, `/api/mcp` is off |
 
-`scripts/push-env.sh` publishes them to Production and Preview, marks the four credentials as sensitive, and skips `VERCEL_*` (the platform injects those itself).
+`scripts/push-env.sh` publishes them to Production and Preview, marks the credentials and `MCP_TOKEN` as sensitive, and skips `VERCEL_*` (the platform injects those itself).

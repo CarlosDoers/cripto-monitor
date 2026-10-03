@@ -2,15 +2,8 @@ import { useEffect, useMemo } from 'react'
 import { useBalance, useFunding, useTickers, useValuation } from './queries'
 import { num } from './format'
 import { setUsdToEur } from './currency'
-import type { BalanceDetail, Holding, Ticker } from './types'
-
-const STABLES = new Set(['USDT', 'USDC', 'DAI', 'TUSD', 'USD'])
-
-export function priceOf(ccy: string, tickers: Map<string, Ticker>): number | undefined {
-  if (STABLES.has(ccy)) return 1
-  const t = tickers.get(`${ccy}-USDT`) ?? tickers.get(`${ccy}-USDC`)
-  return t ? num(t.last) : undefined
-}
+import { buildPortfolio } from './portfolioCore'
+export { priceOf } from './portfolioCore'
 
 /**
  * Feeds the euro rate to the formatters, from OKX's own USDC-EUR price so the
@@ -43,15 +36,6 @@ export function useSpotPrices() {
   )
 }
 
-function change24hOf(ccy: string, tickers: Map<string, Ticker>): number | undefined {
-  if (STABLES.has(ccy)) return 0
-  const t = tickers.get(`${ccy}-USDT`) ?? tickers.get(`${ccy}-USDC`)
-  if (!t) return undefined
-  const open = num(t.open24h)
-  if (open === 0) return undefined
-  return (num(t.last) - open) / open
-}
-
 /**
  * The portfolio as a single list, merging the trading and funding accounts and
  * pricing everything in USD. OKX gives a USD equity per currency on the trading
@@ -64,108 +48,17 @@ export function usePortfolio() {
   const tickers = useTickers('SPOT')
   const valuation = useValuation()
 
-  const tickerMap = useMemo(() => {
-    const map = new Map<string, Ticker>()
-    for (const t of tickers.data ?? []) map.set(t.instId, t)
-    return map
-  }, [tickers.data])
-
-  const holdings = useMemo<Holding[]>(() => {
-    const byCcy = new Map<string, Holding>()
-
-    const upsert = (ccy: string): Holding => {
-      let entry = byCcy.get(ccy)
-      if (!entry) {
-        entry = { ccy, trading: 0, funding: 0, total: 0, usd: 0, weight: 0 }
-        byCcy.set(ccy, entry)
-      }
-      return entry
-    }
-
-    for (const detail of balance.data?.[0]?.details ?? []) {
-      const entry = upsert(detail.ccy)
-      const amount = num(detail.eq) || num(detail.cashBal)
-      entry.trading += amount
-      // Trust OKX's own valuation when it provides one.
-      entry.usd += num(detail.eqUsd)
-      const upl = num(detail.spotUpl)
-      if (upl !== 0) entry.upl = (entry.upl ?? 0) + upl
-    }
-
-    for (const item of funding.data ?? []) {
-      const entry = upsert(item.ccy)
-      entry.funding += num(item.bal)
-    }
-
-    const holdingList: Holding[] = []
-    for (const entry of byCcy.values()) {
-      entry.total = entry.trading + entry.funding
-      entry.price = priceOf(entry.ccy, tickerMap)
-      entry.change24h = change24hOf(entry.ccy, tickerMap)
-
-      // Price the funding side ourselves, and the trading side too if OKX
-      // returned no eqUsd for it.
-      const fundingUsd = entry.price !== undefined ? entry.funding * entry.price : 0
-      if (entry.usd === 0 && entry.price !== undefined) {
-        entry.usd = entry.total * entry.price
-      } else {
-        entry.usd += fundingUsd
-      }
-
-      // Dust below a cent is noise, not a holding.
-      if (entry.total !== 0 || entry.usd >= 0.01) holdingList.push(entry)
-    }
-
-    const totalUsd = holdingList.reduce((sum, h) => sum + h.usd, 0)
-    for (const h of holdingList) h.weight = totalUsd > 0 ? h.usd / totalUsd : 0
-
-    return holdingList.sort((a, b) => b.usd - a.usd)
-  }, [balance.data, funding.data, tickerMap])
-
-  const totalUsd = useMemo(() => holdings.reduce((sum, h) => sum + h.usd, 0), [holdings])
-
-  /** Portfolio-weighted 24h move, ignoring assets with no ticker. */
-  const change24h = useMemo(() => {
-    let priced = 0
-    let weighted = 0
-    for (const h of holdings) {
-      if (h.change24h === undefined) continue
-      priced += h.usd
-      weighted += h.usd * h.change24h
-    }
-    return priced > 0 ? weighted / priced : undefined
-  }, [holdings])
-
-  // asset-valuation covers every wallet including Earn, so it is the honest
-  // headline figure; the priced holdings are the fallback when it is missing.
-  // Both views read this same number so they can never disagree.
-  const reported = num(valuation.data?.[0]?.totalBal)
-  const netWorth = reported > 0 ? reported : totalUsd
-
-  /**
-   * Margin the account can still deploy.
-   *
-   * The account-level `availEq` is the same trap as `mgnRatio`: with every
-   * position on isolated margin OKX leaves `availEq`, `adjEq`, `imr` and `mmr`
-   * empty at the top level, and `num()` turns that into 0 — which would read as
-   * "nothing free" even on an account that is entirely liquid. The figure only
-   * exists per currency, so it has to be summed out of `details`.
-   *
-   * Worth showing because the headline equity hides it: an account can look
-   * healthy at four figures while every cent is locked in isolated margin and
-   * bot reservations, leaving nothing to top up a position that turns.
-   */
-  const details = balance.data?.[0]?.details ?? []
-  // Every figure in `details` is in its own currency; OKX has already priced the
-  // equity, so that ratio is the exchange rate and there is no second source to
-  // disagree with.
-  const inUsd = (d: BalanceDetail, field: keyof BalanceDetail) => {
-    const eq = num(d.eq)
-    return eq > 0 ? num(d[field] as string) * (num(d.eqUsd) / eq) : 0
-  }
-  const freeMargin = details.reduce((sum, d) => sum + inUsd(d, d.availEq ? 'availEq' : 'availBal'), 0)
-  /** Equity locked as isolated margin behind open positions. */
-  const isolatedEq = details.reduce((sum, d) => sum + inUsd(d, 'isoEq'), 0)
+  const core = useMemo(
+    () =>
+      buildPortfolio({
+        balance: balance.data,
+        funding: funding.data,
+        tickers: tickers.data,
+        valuation: valuation.data,
+      }),
+    [balance.data, funding.data, tickers.data, valuation.data],
+  )
+  const { holdings, totalUsd, netWorth, change24h, freeMargin, isolatedEq } = core
 
   return {
     /** Deployable margin. Near zero means no room to defend a position. */
@@ -177,7 +70,7 @@ export function usePortfolio() {
     /** Everything OKX values across all wallets, Earn included. */
     netWorth,
     change24h,
-    tradingEq: num(balance.data?.[0]?.totalEq),
+    tradingEq: core.tradingEq,
     isLoading: balance.isLoading || funding.isLoading || tickers.isLoading,
     isFetching:
       balance.isFetching || funding.isFetching || tickers.isFetching || valuation.isFetching,

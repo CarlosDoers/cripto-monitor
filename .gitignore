@@ -39,3 +39,6 @@ dist-ssr
 .funding
 # Board candles for sweeps (scripts/fetch-board.mjs)
 .candles-board-*
+
+# claude.ai connector bundle, written by `npm run build` (scripts/build-mcp.mjs)
+api/_mcp.js

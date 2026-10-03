@@ -142,7 +142,30 @@ export function checkAccess(request: Request): Response | null {
   return null
 }
 
-/** Whether the server has credentials configured at all. */
+/**
+ * The claude.ai connector's gate. Unlike the app's it fails closed: without a
+ * MCP_TOKEN the endpoint is off, because the connector's URL is stored in
+ * claude.ai and anyone else holding it would read the account. The token comes
+ * in the URL (`?token=`, which is all a claude.ai custom connector can carry)
+ * or as a bearer header (Claude Code and other clients that can set one).
+ */
+export function checkMcpToken(request: Request): Response | null {
+  const expected = process.env.MCP_TOKEN ?? ''
+  if (expected.length < 32) {
+    return json(
+      { error: 'mcp_disabled', message: 'El conector está desactivado: define MCP_TOKEN (32 caracteres o más).' },
+      503,
+    )
+  }
+  const bearer = request.headers.get('authorization')?.match(/^Bearer\s+(.+)$/i)?.[1]
+  const provided = bearer ?? new URL(request.url).searchParams.get('token') ?? ''
+  if (!safeEqual(provided, expected)) {
+    return json({ error: 'unauthorized', message: 'Token del conector inválido.' }, 401)
+  }
+  return null
+}
+
+
 export function hasCredentials(): boolean {
   return Boolean(
     process.env.OKX_API_KEY && process.env.OKX_API_SECRET && process.env.OKX_API_PASSPHRASE,
@@ -234,6 +257,30 @@ export async function proxyOkxGet(path: string): Promise<Response> {
     status: upstream.status,
     headers: { 'content-type': 'application/json', 'cache-control': 'no-store' },
   })
+}
+
+/**
+ * `proxyOkxGet` for server-side callers: the `data` array, or a thrown error
+ * carrying the proxy's message and HTTP status (429 is retried by the
+ * snapshot code, as it is for the browser). It is the connector's `get`, so
+ * the connector is held to the same allowlist and signing as the app.
+ */
+export async function okxData<T>(
+  path: string,
+  params?: Record<string, string | number | undefined>,
+): Promise<T[]> {
+  const query = new URLSearchParams()
+  for (const [key, value] of Object.entries(params ?? {})) {
+    if (value !== undefined && value !== '') query.set(key, String(value))
+  }
+  const response = await proxyOkxGet(query.size ? `${path}?${query}` : path)
+  const body = (await response.json()) as { data?: T[]; message?: string; error?: string }
+  if (!response.ok) {
+    throw Object.assign(new Error(body.message || body.error || `Error ${response.status}`), {
+      status: response.status,
+    })
+  }
+  return body.data ?? []
 }
 
 /** Shared entry point used by both the Vercel function and the Vite dev server. */

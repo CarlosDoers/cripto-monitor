@@ -1,6 +1,7 @@
 import { atr, ema } from './indicators/ta'
 import { SEED_FACTOR } from './indicators/movingAverages'
 import { analyseSmc } from './indicators/smc'
+import { ratio, share } from './format'
 import type { Candle as OkxCandle } from './types'
 
 /**
@@ -187,4 +188,14 @@ export function compareTouches(a: EmaTouch, b: EmaTouch): number {
   const rb = b.ago ?? Infinity
   if (ra !== rb) return ra - rb
   return Math.abs(a.distance) - Math.abs(b.distance)
+}
+
+/** The measured verdict on EMA touches, in one sentence, for the Claude snapshot. */
+export function emaTouchSummary() {
+  const e = EMA_TOUCH_EVIDENCE
+  const p = (x: number) => share(x, 0)
+  return {
+    length: e.length,
+    text: `tras tocarla el precio rebota el ${p(e.rejection)} de las veces y una línea cualquiera el ${p(e.decoy)}; con estructura, volumen y vela a favor, ${p(e.all3.rejection)} frente a ${p(e.all3.decoy)}; operado, ${e.trade.netR < 0 ? '−' : '+'}${ratio(Math.abs(e.trade.netR))} R por operación`,
+  }
 }

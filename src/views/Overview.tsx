@@ -32,8 +32,9 @@ import { useFlash } from '../lib/useFlash'
 import { DUST, HoldingsTable } from '../components/HoldingsTable'
 import { ProtectionBadge } from '../components/PositionGuard'
 import { Opportunities } from '../components/Opportunities'
-import { guardsFor, hasStop, isShort, LIQ_DANGER, LIQ_WATCH, liquidationDistance, positionSize } from '../lib/guards'
-import { fuelUsed, liquidationRoom, NEARLY_DRY } from '../lib/bots'
+import { isShort, LIQ_DANGER, LIQ_WATCH, liquidationDistance, positionSize } from '../lib/guards'
+import { NEARLY_DRY } from '../lib/bots'
+import { accountAlerts } from '../lib/alerts'
 import { useCarryExits } from '../lib/carry'
 import { NARROW, useMediaQuery } from '../lib/useMediaQuery'
 import { IconAlert, IconShield } from '../components/icons'
@@ -50,13 +51,6 @@ import {
   ProgressBar,
 } from '../components/ui'
 import { HELP } from '../lib/glossary'
-
-/**
- * OKX reports the account margin ratio as a multiple of the maintenance
- * requirement, and shows it as a percentage in its own UI. Under ~150 % the
- * account is close to liquidation.
- */
-const MARGIN_WARN = 3
 
 /** Rows in the positions card; the rest are one click away in Posiciones. */
 const SHOWN_POSITIONS = 6
@@ -80,21 +74,6 @@ export function Overview() {
   const openPositions = positions.data ?? []
   const unrealised = openPositions.reduce((sum, p) => sum + num(p.upl), 0)
   const notional = openPositions.reduce((sum, p) => sum + num(p.notionalUsd), 0)
-  // Con margen aislado OKX deja vacío el ratio de la cuenta, y leerlo sin más
-  // pintaba "100 %" con una posición al 8,1 de mantenimiento. El número honesto
-  // entonces es el peor de las posiciones abiertas.
-  const accountRatio = num(account?.mgnRatio)
-  const positionRatios = openPositions.map((p) => num(p.mgnRatio)).filter((r) => r > 0)
-  const marginRatio =
-    accountRatio > 0 ? accountRatio : positionRatios.length ? Math.min(...positionRatios) : 0
-  const atRisk = openPositions.length > 0 && marginRatio > 0 && marginRatio < MARGIN_WARN
-  // Under 1 % of equity free is not a rounding detail: an isolated position that
-  // turns cannot be topped up, so the only remaining options are close or be
-  // liquidated. Relative, because "50 US$ free" means different things on a
-  // 500 US$ account and a 50.000 US$ one.
-  const locked =
-    portfolio.netWorth > 0 && portfolio.freeMargin / portfolio.netWorth < 0.01
-
   /**
    * What the running bots are worth right now.
    *
@@ -124,49 +103,34 @@ export function Overview() {
    * Each warning uses the exact rule of the view it comes from (`hasStop`,
    * `NEARLY_DRY`), so the two can never disagree about what counts.
    */
-  // Only claimed once the stops have loaded, so a slow request never invents an alarm.
-  const unprotected = algos.data
-    ? openPositions.filter((p) => !hasStop(guardsFor(p, algos.data)))
-    : []
-  const botRisk = dcaList
-    .map((bot) => {
-      const position = botPositions.data?.[bot.algoId]
-      return { bot, position, used: fuelUsed(bot, position), room: liquidationRoom(position) }
-    })
-    .sort((a, b) => b.used - a.used)
-  const tightest = botRisk[0]
-  const dryBots = botRisk.filter((r) => r.used >= NEARLY_DRY)
-  const alarm = atRisk || unprotected.length > 0 || dryBots.length > 0
   // A short held against a coin the account owns is a funding hedge; when its
   // last week stopped paying, the Financiación rule says undo it.
   const carryExits = useCarryExits()
+  // The rules live in `alerts.ts`, shared with the Claude snapshot and the
+  // claude.ai connector, so none of them can disagree with this page.
+  const {
+    alerts: attention,
+    alarm,
+    marginRatio,
+    accountRatio,
+    positionRatios,
+    atRisk,
+    locked,
+    tightest,
+  } = accountAlerts({
+    account,
+    positions: openPositions,
+    algos: algos.data,
+    dcaBots: dcaList,
+    dcaPositions: botPositions.data,
+    netWorth: portfolio.netWorth,
+    freeMargin: portfolio.freeMargin,
+    carryExits,
+  })
   const narrow = useMediaQuery(NARROW)
   const todayStart = new Date().setHours(0, 0, 0, 0)
   const todayCount = perf.trades.filter((t) => t.closedAt >= todayStart).length
   const openFlash = useFlash(positions.isLoading || openPositions.length === 0 ? undefined : unrealised)
-  const attention: { key: string; text: string; href: string; link: string }[] = [
-    ...(atRisk
-      ? [{ key: 'margin', href: '#/encurso', link: 'Ver en curso', text: `Margen ajustado (${share(marginRatio, 0)}): se acerca al nivel de liquidación.` }]
-      : []),
-    ...(unprotected.length
-      ? [{ key: 'stop', href: '#/encurso', link: 'Ver en curso', text: `${plural(unprotected.length, 'posición sin stop', 'posiciones sin stop')} (${unprotected.map((p) => p.instId).join(', ')}): su pérdida solo tiene como límite la liquidación.` }]
-      : []),
-    ...dryBots.map((r) => ({
-      key: `bot-${r.bot.algoId}`,
-      href: '#/encurso',
-      link: 'Ver en curso',
-      text: `${r.bot.instId} ha gastado ${num(r.position?.fillSafetyOrds)} de ${r.bot.maxSafetyOrds} órdenes de seguridad${r.room !== null ? ` y la liquidación está a un ${share(r.room, 0)} del precio medio` : ''}: si el precio sigue en contra ya no le queda con qué promediar.`,
-    })),
-    ...carryExits.map((x) => ({
-      key: `carry-${x.instId}`,
-      href: '#/financiacion',
-      link: 'Ver financiación',
-      text: `La cobertura en ${x.instId} ya no cobra: la financiación de la última semana va al ${pct(x.apr ?? 0, 1)} anual, y la regla dice deshacerla.`,
-    })),
-    ...(locked && openPositions.length > 0
-      ? [{ key: 'free', href: '#/encurso', link: 'Ver en curso', text: `Margen libre ${usd(portfolio.freeMargin)}: no queda con qué reforzar una posición que se tuerza.` }]
-      : []),
-  ]
 
   /**
    * Dust stays out of the two portfolio blocks. Before, five of the eight rows in

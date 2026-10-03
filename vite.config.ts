@@ -21,10 +21,34 @@ function apiDevServer(env: Record<string, string>): Plugin {
       }
 
       server.middlewares.use((req: IncomingMessage, res: ServerResponse, next: () => void) => {
-        if (!req.url?.startsWith('/api/okx')) return next()
+        if (!req.url?.startsWith('/api/okx') && !req.url?.startsWith('/api/mcp')) return next()
         void serve(server, req, res)
       })
     },
+  }
+}
+
+type Handler = (request: Request) => Promise<Response>
+
+/**
+ * ssrLoadModule keeps the handlers hot-reloadable while editing. The connector
+ * is wired here from its source, `src/lib/mcp.ts`, rather than through
+ * `api/mcp.ts`, which loads the bundle `npm run build` writes: in dev that
+ * bundle would be stale or missing. The wiring is the same one line.
+ */
+function handlerFor(server: ViteDevServer, url: string): Handler {
+  if (url.startsWith('/api/mcp')) {
+    return async (request) => {
+      const [okx, mcp] = (await Promise.all([
+        server.ssrLoadModule('/api/_okx.ts'),
+        server.ssrLoadModule('/src/lib/mcp.ts'),
+      ])) as [typeof import('./api/_okx.js'), { handleMcp: typeof import('./api/_mcp.js').handleMcp }]
+      return okx.checkMcpToken(request) ?? mcp.handleMcp(request, okx.okxData)
+    }
+  }
+  return async (request) => {
+    const mod = (await server.ssrLoadModule('/api/okx.ts')) as { default: { fetch: Handler } }
+    return mod.default.fetch(request)
   }
 }
 
@@ -36,14 +60,16 @@ async function serve(server: ViteDevServer, req: IncomingMessage, res: ServerRes
       else if (Array.isArray(value)) headers.set(key, value.join(', '))
     }
 
-    // ssrLoadModule keeps the handler hot-reloadable while editing api/.
-    const mod = (await server.ssrLoadModule('/api/okx.ts')) as {
-      default: { fetch(request: Request): Promise<Response> }
-    }
+    const method = req.method ?? 'GET'
+    const chunks: Buffer[] = []
+    if (method !== 'GET' && method !== 'HEAD') for await (const chunk of req) chunks.push(chunk as Buffer)
+    const request = new Request(`http://localhost${req.url}`, {
+      method,
+      headers,
+      body: chunks.length ? Buffer.concat(chunks) : undefined,
+    })
 
-    const response = await mod.default.fetch(
-      new Request(`http://localhost${req.url}`, { method: req.method ?? 'GET', headers }),
-    )
+    const response = await handlerFor(server, req.url ?? '')(request)
 
     res.statusCode = response.status
     response.headers.forEach((value, key) => res.setHeader(key, value))

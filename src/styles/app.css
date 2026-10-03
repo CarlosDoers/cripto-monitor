@@ -4472,3 +4472,199 @@ table.data td.num {
     width: 100%;
   }
 }
+
+/* ---------- Claude: copy the account for a claude.ai chat ---------- */
+
+.claude-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 27px;
+  padding: 0 10px;
+}
+
+.claude-button svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* A native <dialog>: the browser gives it the backdrop, Esc to close and the
+   focus trap. Flat like everything else; --shadow-pop is the one shadow the
+   design keeps, for what floats over the page. */
+.claude-dialog {
+  /* The reset zeroes every margin, and auto is what centres a modal dialog. */
+  margin: auto;
+  width: min(580px, calc(100vw - 32px));
+  max-height: calc(100dvh - 48px);
+  padding: 0;
+  border: 1px solid var(--baseline);
+  background: var(--surface-raised);
+  color: var(--ink-primary);
+  box-shadow: var(--shadow-pop);
+}
+
+.claude-dialog::backdrop {
+  background: rgb(0 0 0 / 0.45);
+}
+
+.claude-dialog-body {
+  display: grid;
+  gap: 16px;
+  padding: 18px 20px 20px;
+}
+
+.claude-dialog-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.claude-dialog-head h2 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.claude-lead {
+  margin: 0;
+  color: var(--ink-secondary);
+  font-size: 12.5px;
+  line-height: 1.55;
+}
+
+.claude-options {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 12px 0 0;
+  border: none;
+  border-top: 1px solid var(--border);
+}
+
+.claude-options legend {
+  padding: 0 0 8px;
+  color: var(--ink-muted);
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.claude-options label {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-size: 12.5px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.claude-options input {
+  margin: 2px 0 0;
+  accent-color: var(--accent);
+}
+
+.claude-options label .sub {
+  display: block;
+  margin-top: 2px;
+  font-weight: 400;
+}
+
+.claude-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.claude-status {
+  flex: 1 1 220px;
+  margin: 0;
+  color: var(--ink-secondary);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.claude-status--error {
+  color: var(--critical);
+}
+
+.claude-text {
+  width: 100%;
+  min-height: 180px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  background: var(--surface-inset);
+  color: var(--ink-primary);
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 1.5;
+  resize: vertical;
+}
+
+.claude-details {
+  border-top: 1px solid var(--border);
+  padding-top: 12px;
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--ink-secondary);
+}
+
+.claude-details summary {
+  cursor: pointer;
+  color: var(--ink-primary);
+  font-weight: 500;
+}
+
+.claude-details ol {
+  margin: 10px 0 0;
+  padding-left: 20px;
+  display: grid;
+  gap: 8px;
+}
+
+.claude-details p {
+  margin: 10px 0 0;
+}
+
+.claude-details .claude-text {
+  margin-top: 10px;
+}
+
+.claude-url {
+  display: block;
+  margin-top: 4px;
+  overflow-wrap: anywhere;
+}
+
+/* With the Claude button the phone topbar ran 27 px past a 390 px screen on
+   the longer titles (Financiación, Rendimiento). The update pill gives way
+   first: the spinning refresh button already says a fetch is running, and
+   the time stays in the pill's title. */
+@media (max-width: 480px) {
+  .update-status {
+    width: 27px;
+    height: 27px;
+    padding: 0;
+    justify-content: center;
+  }
+
+  .update-status-text {
+    display: none;
+  }
+}
+
+/* Label off on phones: the topbar there already holds the clock, the
+   currency, the theme and the refresh. */
+@media (max-width: 860px) {
+  .claude-button-label {
+    display: none;
+  }
+
+  .claude-button {
+    width: 27px;
+    padding: 0;
+    justify-content: center;
+  }
+}

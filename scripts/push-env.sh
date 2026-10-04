@@ -23,8 +23,25 @@ SECRETS="OKX_API_KEY OKX_API_SECRET OKX_API_PASSPHRASE APP_ACCESS_TOKEN MCP_TOKE
 # `vercel link` y `vercel env pull` escriben sus propias variables en
 # .env.local. Vercel las inyecta ya en cada deployment: subirlas a mano las
 # dejaría congeladas y caducadas.
+# BLOB_READ_WRITE_TOKEN también: la crea Vercel al enlazar el almacén Blob y
+# `vercel blob create-store` la baja a .env.local; resubirla desde aquí
+# reemplazaría la del almacén por una copia.
 is_reserved() {
-  case "$1" in VERCEL_*|NX_DAEMON|TURBO_*) return 0 ;; *) return 1 ;; esac
+  case "$1" in VERCEL_*|NX_DAEMON|TURBO_*|BLOB_READ_WRITE_TOKEN) return 0 ;; *) return 1 ;; esac
+}
+
+# Las órdenes de Vercel (`env pull`, `blob create-store`) reescriben .env.local
+# con cada valor entre comillas: KEY="valor". Las comillas son sintaxis del
+# archivo, no parte del valor, y subirlas tal cual dejó en producción una URL
+# "https://eea.okx.com" con comillas y una contraseña distinta de la de siempre:
+# la app entera cayó. Se quitan como lo hace dotenv.
+unquote() {
+  local v="${1%$'\r'}"
+  case "$v" in
+    \"*\") v="${v#\"}"; v="${v%\"}" ;;
+    \'*\') v="${v#\'}"; v="${v%\'}" ;;
+  esac
+  printf '%s' "$v"
 }
 
 pushed=0
@@ -38,6 +55,7 @@ while IFS='=' read -r key value <&3; do
   case "$key" in ''|\#*) continue ;; esac
   key="$(printf '%s' "$key" | tr -d '[:space:]')"
   [ -z "$key" ] && continue
+  value="$(unquote "$value")"
 
   if is_reserved "$key"; then
     echo "  ─ $key (la gestiona Vercel, se omite)"

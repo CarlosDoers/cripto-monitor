@@ -519,6 +519,8 @@ Three details the component depends on. The tip is **portalled to `<body>` with 
 
 `vercel` reads stdin. Inside a `while read` loop, redirect the loop's input to a separate descriptor (`done 3< file`) and give each command `</dev/null` — otherwise the command eats the rest of the file and the loop exits after one iteration. This already caused a bug in `scripts/push-env.sh`.
 
+**Vercel's own commands rewrite `.env.local` with every value quoted** (`KEY="value"`, headed "# Created by Vercel CLI") — `vercel env pull` and `vercel blob create-store` both do. The quotes are file syntax, not part of the value: dotenv and Vite strip them, so dev kept working, but `push-env.sh` sent them as-is and production got `OKX_BASE_URL="https://eea.okx.com"` with the quotes and an access password two characters longer. Every OKX call failed and the browser's stored token was refused. The script now strips quotes the way dotenv does (`unquote`), and skips `BLOB_READ_WRITE_TOKEN`, which the store link owns; pushing the local copy had replaced it with a quoted one. After any Vercel CLI command that touches env files, check production with a real request before calling it done.
+
 ## Deployment
 
 Manual by choice: `git push` publishes code, `vercel --prod` deploys. They are independent. Auto-deploy would need the repo connected in Vercel's *Settings → Git*, which requires installing the Vercel GitHub app on the account that owns the repo.

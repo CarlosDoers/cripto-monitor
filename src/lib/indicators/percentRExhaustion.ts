@@ -1,4 +1,4 @@
-import { highest, lowest } from './ta'
+import { atr, highest, lowest } from './ta'
 import { feeInR, summarise, type Candle, type StrategyResult, type StrategySignal } from './types'
 
 /**
@@ -184,3 +184,105 @@ export function analysePercentRTarget(candles: Candle[]): StrategyResult {
 export function analysePercentRReenter(candles: Candle[]): StrategyResult {
   return analysePercentR(candles, { ...PERCENT_R_SETTINGS, mode: 'reenter' })
 }
+
+/**
+ * The rest of the indicator's strategy menu (1, 2, 5, 6), measured in 2026-10
+ * when the script came back a second time. Same %R lines; the exit, which the
+ * indicator leaves to an external backtester, is the house one for an entry
+ * with no box behind it: a 2 ATR stop, and the strategy's own opposite signal
+ * closes the trade and opens the other side.
+ *
+ *   1 · trend following at the square — long when an overbought spell starts
+ *   2 · reversal at the square — short when an overbought spell starts
+ *   5 · pings — the slow %R crossing the fast one
+ *   6 · zero line — both lines above −50 as one of them crosses it
+ */
+export type PercentRMenu = 1 | 2 | 5 | 6
+
+export function analysePercentRMenu(candles: Candle[], strategy: PercentRMenu, stopAtr = 2): StrategyResult {
+  const { fastLen, fastSmooth, slowLen, slowSmooth, threshold, feeRate } = PERCENT_R_SETTINGS
+  const fast = emaFrom(percentR(candles, fastLen), fastSmooth)
+  const slow = emaFrom(percentR(candles, slowLen), slowSmooth)
+  const unit = atr(
+    candles.map((c) => c.high),
+    candles.map((c) => c.low),
+    candles.map((c) => c.close),
+    14,
+  )
+  const warmup = slowLen + slowSmooth + 5
+  const ok = (i: number) => Number.isFinite(fast[i]) && Number.isFinite(slow[i])
+  const ob = (i: number) => fast[i] >= -threshold && slow[i] >= -threshold
+  const os = (i: number) => fast[i] <= -100 + threshold && slow[i] <= -100 + threshold
+  const crossUp = (a: number[], b: number[] | number, i: number) => {
+    const bi = typeof b === 'number' ? b : b[i]
+    const bp = typeof b === 'number' ? b : b[i - 1]
+    return a[i] > bi && a[i - 1] <= bp
+  }
+
+  const want = (i: number): 'long' | 'short' | null => {
+    switch (strategy) {
+      case 1:
+        return ob(i) && !ob(i - 1) ? 'long' : os(i) && !os(i - 1) ? 'short' : null
+      case 2:
+        return os(i) && !os(i - 1) ? 'long' : ob(i) && !ob(i - 1) ? 'short' : null
+      case 5:
+        // Pine: cross_bull = crossunder(slow, fast) → long; cross_bear = crossover(slow, fast) → short.
+        return crossUp(fast, slow, i) ? 'long' : crossUp(slow, fast, i) ? 'short' : null
+      case 6: {
+        const upCross = crossUp(fast, -50, i) || crossUp(slow, -50, i)
+        const downCross = crossUp(fast.map((x) => -x), 50, i) || crossUp(slow.map((x) => -x), 50, i)
+        if (fast[i] > -50 && slow[i] > -50 && upCross) return 'long'
+        if (fast[i] < -50 && slow[i] < -50 && downCross) return 'short'
+        return null
+      }
+    }
+  }
+
+  const signals: StrategySignal[] = []
+  let open: { signal: StrategySignal; risk: number } | null = null
+  const exit = (price: number, i: number) => {
+    if (!open) return
+    const { signal, risk } = open
+    signal.resultR = (signal.side === 'long' ? price - signal.entry : signal.entry - price) / risk
+    signal.outcome = signal.resultR > 0 ? 'win' : 'loss'
+    signal.closedIndex = i
+    signal.closedTime = candles[i].time
+    signal.closedPrice = price
+    open = null
+  }
+
+  for (let i = 1; i < candles.length; i++) {
+    const b = candles[i]
+    const ready = i >= warmup && ok(i) && ok(i - 1)
+    const side = ready ? want(i) : null
+    if (open) {
+      const long = open.signal.side === 'long'
+      if (long ? b.low <= open.signal.stop : b.high >= open.signal.stop) exit(open.signal.stop, i)
+      else if (side && side !== open.signal.side) exit(b.close, i)
+    }
+    if (open || !side || !(unit[i] > 0)) continue
+    const entry = b.close
+    const stop: number = side === 'long' ? entry - stopAtr * unit[i] : entry + stopAtr * unit[i]
+    if (feeInR(entry, stop, feeRate) > 1) continue
+    const signal: StrategySignal = {
+      index: i,
+      time: b.time,
+      side,
+      entry,
+      stop,
+      outcome: 'open',
+      feeR: feeInR(entry, stop, feeRate),
+      note: `estrategia ${strategy}`,
+    }
+    signals.push(signal)
+    open = { signal, risk: Math.abs(entry - stop) }
+  }
+
+  const live = open as { signal: StrategySignal } | null
+  return summarise(signals, [], warmup, live ? live.signal : null)
+}
+
+export const analysePercentRTrendSquare = (c: Candle[]) => analysePercentRMenu(c, 1)
+export const analysePercentRReversalSquare = (c: Candle[]) => analysePercentRMenu(c, 2)
+export const analysePercentRPings = (c: Candle[]) => analysePercentRMenu(c, 5)
+export const analysePercentRZeroCross = (c: Candle[]) => analysePercentRMenu(c, 6)

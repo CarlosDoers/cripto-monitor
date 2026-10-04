@@ -218,6 +218,19 @@ const FINDINGS: { verdict: Verdict; what: string; detail: ReactNode }[] = [
     ),
   },
   {
+    verdict: 'ojo',
+    what: 'Indicadores de TradingView: %R Trend Exhaustion, SuperTrend AI, EMA Wave',
+    detail: (
+      <>
+        Se midieron tal como vienen, y todas las estrategias del menú del %R. Los que ganan algo lo
+        hacen en 4 h y siguiendo la tendencia: la EMA Wave con sus tres ondas alineadas da +0,22 R, pero
+        sus meses se mueven con los de la Ruptura (correlación 0,92) y sumarla no mejora el conjunto.
+        Sin sus diez mejores operaciones se quedan en casi nada. Ninguno se ofrece: repiten una ventaja
+        que la app ya tiene.
+      </>
+    ),
+  },
+  {
     verdict: 'no',
     what: 'Sobreventa (RSI < 30) para comprar el rebote',
     detail: <>No anticipa ningún rebote frente al resto del mercado la semana siguiente.</>,

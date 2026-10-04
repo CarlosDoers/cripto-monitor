@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useState } from 'react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { ApiError, probe } from './lib/api'
 import { useRoute } from './lib/router'
@@ -8,15 +8,31 @@ import { Layout } from './components/Layout'
 import { Gate } from './components/Gate'
 import { Card, ErrorNotice, Skeleton } from './components/ui'
 import { Overview } from './views/Overview'
-import { Performance } from './views/Performance'
-import { Signals } from './views/Signals'
-import { Markets } from './views/Markets'
-import { Screener } from './views/Screener'
-import { Portfolio } from './views/Portfolio'
-import { Active } from './views/Active'
-import { History } from './views/History'
-import { Funding } from './views/Funding'
-import { Guide } from './views/Guide'
+
+/**
+ * Every view but the Resumen loads when it is first opened. The bundle was
+ * 581 KB in one file, most of it the chart, the indicators and the Screener,
+ * downloaded before the Resumen could show a figure. The Resumen stays in the
+ * main file because it is what opens.
+ */
+const Performance = lazy(() => import('./views/Performance').then((m) => ({ default: m.Performance })))
+const Signals = lazy(() => import('./views/Signals').then((m) => ({ default: m.Signals })))
+const Markets = lazy(() => import('./views/Markets').then((m) => ({ default: m.Markets })))
+const Screener = lazy(() => import('./views/Screener').then((m) => ({ default: m.Screener })))
+const Portfolio = lazy(() => import('./views/Portfolio').then((m) => ({ default: m.Portfolio })))
+const Active = lazy(() => import('./views/Active').then((m) => ({ default: m.Active })))
+const History = lazy(() => import('./views/History').then((m) => ({ default: m.History })))
+const Funding = lazy(() => import('./views/Funding').then((m) => ({ default: m.Funding })))
+const Guide = lazy(() => import('./views/Guide').then((m) => ({ default: m.Guide })))
+
+function ViewLoading() {
+  return (
+    <div className="view-loading" aria-busy="true">
+      <Skeleton height={96} />
+      <Skeleton height={280} />
+    </div>
+  )
+}
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -93,6 +109,7 @@ function Views() {
   useEurRate()
   return (
     <Layout route={route} navigate={navigate}>
+      <Suspense fallback={<ViewLoading />}>
       {route === 'resumen' && <Overview />}
       {route === 'encurso' && <Active />}
       {route === 'cartera' && <Portfolio />}
@@ -104,6 +121,7 @@ function Views() {
       {route === 'estrategias' && <Signals section="strategies" />}
       {route === 'financiacion' && <Funding />}
       {route === 'guia' && <Guide />}
+      </Suspense>
     </Layout>
   )
 }

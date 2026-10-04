@@ -135,30 +135,7 @@ export function checkAccess(request: Request): Response | null {
   return null
 }
 
-/**
- * The claude.ai connector's gate. Unlike the app's it fails closed: without a
- * MCP_TOKEN the endpoint is off, because the connector's URL is stored in
- * claude.ai and anyone else holding it would read the account. The token comes
- * in the URL (`?token=`, which is all a claude.ai custom connector can carry)
- * or as a bearer header (Claude Code and other clients that can set one).
- */
-export function checkMcpToken(request: Request): Response | null {
-  const expected = process.env.MCP_TOKEN ?? ''
-  if (expected.length < 32) {
-    return json(
-      { error: 'mcp_disabled', message: 'El conector está desactivado: define MCP_TOKEN (32 caracteres o más).' },
-      503,
-    )
-  }
-  const bearer = request.headers.get('authorization')?.match(/^Bearer\s+(.+)$/i)?.[1]
-  const provided = bearer ?? new URL(request.url).searchParams.get('token') ?? ''
-  if (!safeEqual(provided, expected)) {
-    return json({ error: 'unauthorized', message: 'Token del conector inválido.' }, 401)
-  }
-  return null
-}
-
-
+/** Whether the server has credentials configured at all. */
 export function hasCredentials(): boolean {
   return Boolean(
     process.env.OKX_API_KEY && process.env.OKX_API_SECRET && process.env.OKX_API_PASSPHRASE,

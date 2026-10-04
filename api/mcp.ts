@@ -1,4 +1,5 @@
-import { checkMcpToken, okxData } from './_okx.js'
+import { checkMcpAuth } from './_oauth.js'
+import { okxData } from './_okx.js'
 import { handleMcp } from './_mcp.js'
 
 /**
@@ -11,6 +12,6 @@ import { handleMcp } from './_mcp.js'
  */
 export default {
   async fetch(request: Request): Promise<Response> {
-    return checkMcpToken(request) ?? handleMcp(request, okxData)
+    return checkMcpAuth(request) ?? handleMcp(request, okxData)
   },
 }

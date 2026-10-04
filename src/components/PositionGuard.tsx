@@ -1,5 +1,5 @@
 import { useAlgoOrders, useFundingHistory, useFundingRate } from '../lib/queries'
-import { guardsFor, isShort, stopOf, targetOf } from '../lib/guards'
+import { guardsFor, isShort, PARTIAL_STOP, stopCoverage, stopOf, targetOf } from '../lib/guards'
 import { num, price, share } from '../lib/format'
 import type { Position } from '../lib/types'
 import { Badge } from './ui'
@@ -33,7 +33,12 @@ export function ProtectionBadge({ position }: { position: Position }) {
   return (
     <span className="guard-set">
       {stop ? (
-        <span className="guard-line guard-line--stop">Stop {price(num(stop.slTriggerPx))}</span>
+        <span className="guard-line guard-line--stop">
+          Stop {price(num(stop.slTriggerPx))}
+          {stopCoverage(position, guards) < PARTIAL_STOP && (
+            <span className="guard-partial"> · cubre {share(stopCoverage(position, guards), 0)}</span>
+          )}
+        </span>
       ) : (
         <span className="guard-line guard-line--missing">Sin stop</span>
       )}

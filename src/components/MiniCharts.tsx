@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { num, signedUsd, usd } from '../lib/format'
 import type { Trade } from '../lib/performance'
 import type { Position } from '../lib/types'
+import { useSize } from '../lib/useSize'
 
 /**
  * Small charts for the Resumen's figures. Each one draws the very number it
@@ -154,6 +155,47 @@ export function SplitBar({
             title={`${p.key}: ${usd(p.value)}`}
           />
         ))}
+    </div>
+  )
+}
+
+/**
+ * The net worth day by day, from the history the app records itself (OKX keeps
+ * none). A thin line in ink, not a PnL colour: the net worth moves with
+ * deposits as much as with results, so up is not a gain. Its label says when
+ * the record starts, so a short line is not read as the account's whole life.
+ */
+export function NetWorthTrail({ points }: { points: { date: string; netWorth: number }[] }) {
+  const [ref, width] = useSize<HTMLDivElement>()
+  const height = 34
+  const values = points.map((p) => p.netWorth)
+  const min = Math.min(...values)
+  const max = Math.max(...values)
+  const span = max - min || 1
+  const x = (i: number) => (points.length > 1 ? (i / (points.length - 1)) * (width - 4) + 2 : width / 2)
+  const y = (v: number) => height - 3 - ((v - min) / span) * (height - 6)
+  const line = points.map((p, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)},${y(p.netWorth).toFixed(1)}`).join('')
+  const first = points[0]
+  const last = points.at(-1)!
+  const since = new Date(`${first.date}T12:00:00Z`).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })
+
+  return (
+    <div className="networth-trail">
+      <p className="networth-trail-label">
+        Patrimonio diario desde el {since}
+        <span className="sub">
+          {' '}
+          · {usd(first.netWorth)} → {usd(last.netWorth)}
+        </span>
+      </p>
+      <div ref={ref} className="networth-trail-plot">
+        {width > 0 && (
+          <svg width={width} height={height} role="img" aria-label={`Patrimonio diario: de ${usd(first.netWorth)} el ${since} a ${usd(last.netWorth)} hoy, ${points.length} días`}>
+            <path d={line} fill="none" stroke="var(--ink-secondary)" strokeWidth={1.5} />
+            <circle cx={x(points.length - 1)} cy={y(last.netWorth)} r={2.5} fill="var(--ink-primary)" />
+          </svg>
+        )}
+      </div>
     </div>
   )
 }

@@ -80,7 +80,9 @@ export function ClaudeExport() {
   }
 
   const busy = status.kind === 'busy'
-  const connectorUrl = `${window.location.origin}/api/mcp?token=TU_MCP_TOKEN`
+  // No key in it: claude.ai discovers the OAuth server from this address and
+  // asks for the app's password on connecting.
+  const connectorUrl = `${window.location.origin}/api/mcp`
 
   return (
     <>
@@ -187,14 +189,19 @@ export function ClaudeExport() {
                 En la app publicada en Vercel, define <code>MCP_TOKEN</code> (64 caracteres al azar) y despliega.
               </li>
               <li>
-                En claude.ai: Ajustes → Conectores → Añadir conector personalizado, sin inicio de sesión, con la
-                dirección <code className="claude-url">{connectorUrl}</code>
+                En claude.ai: Ajustes → Conectores → Añadir conector personalizado, con la dirección{' '}
+                <code className="claude-url">{connectorUrl}</code>
+              </li>
+              <li>
+                Pulsa Conectar: se abre una página de esta app que pide su contraseña (la misma con la que entras
+                aquí). Claude queda autorizado y renueva el acceso solo.
               </li>
               <li>En un chat, actívalo y pide, por ejemplo, «revisa mi cuenta».</li>
             </ol>
             <p className="sub">
-              Quien tenga esa dirección puede leer la cuenta: no la compartas. Si se filtra, cambia el token y
-              vuelve a desplegar.
+              Para retirar el acceso a todos los clientes a la vez, cambia <code>MCP_TOKEN</code> y vuelve a
+              desplegar. La dirección antigua con <code>?token=</code> sigue funcionando, pero lleva la clave dentro:
+              mejor pasarse a esta.
             </p>
           </details>
         </div>

@@ -26,10 +26,18 @@ export function fuelUsed(bot: DcaBot, position: DcaPosition | undefined): number
   return Math.min(1, num(position?.fillSafetyOrds) / max)
 }
 
-/** How far price has to fall to liquidate, as a fraction of the average entry. */
-export function liquidationRoom(position: DcaPosition | undefined): number | null {
+/**
+ * How far price has to move to liquidate, as a fraction of the price it is
+ * measured from: the live price when it is known, the bot's average otherwise.
+ *
+ * It used to be the average always. A martingale that has averaged down sits
+ * *below* its average, so measured from there the room read 14 % while the
+ * price was perhaps 4 % from liquidation — the one number that understated the
+ * risk in a warning meant to state it.
+ */
+export function liquidationRoom(position: DcaPosition | undefined, mark?: number): number | null {
   const liq = num(position?.liqPx)
-  const avg = num(position?.avgPx)
-  if (!liq || !avg) return null
-  return Math.abs(avg - liq) / avg
+  const from = mark && mark > 0 ? mark : num(position?.avgPx)
+  if (!liq || !from) return null
+  return Math.abs(from - liq) / from
 }

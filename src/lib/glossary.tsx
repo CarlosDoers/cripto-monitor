@@ -14,6 +14,25 @@ import { ratio, share } from './format'
  */
 
 export const HELP = {
+  // ---- Tamaño de la operación ----
+  positionSize: (
+    <>
+      <p>
+        Cuántos contratos abrir para que, si salta el stop, pierdas exactamente lo que eliges y no más. Es la otra
+        mitad de cualquier estrategia: las cifras en R dicen cuánto gana una señal por cada unidad de riesgo, pero
+        el riesgo lo decides tú.
+      </p>
+      <p>
+        La cuenta: lo que aceptas perder ÷ (distancia de la entrada al stop × lo que vale un contrato), redondeado
+        hacia abajo. El apalancamiento no cambia cuánto pierdes en el stop; solo cuánto margen queda bloqueado.
+      </p>
+      <p>
+        Una regla habitual es no arriesgar más del 1 % por operación: diez pérdidas seguidas, que pasan, dejan la
+        cuenta en un 90 % y no en la mitad.
+      </p>
+    </>
+  ),
+
   // ---- Resumen, Cartera ----
   netWorth: (
     <p>

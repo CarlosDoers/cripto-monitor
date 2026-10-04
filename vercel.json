@@ -10,6 +10,30 @@
   },
   "rewrites": [
     {
+      "source": "/.well-known/oauth-protected-resource/:path*",
+      "destination": "/api/oauth?step=resource"
+    },
+    {
+      "source": "/.well-known/oauth-protected-resource",
+      "destination": "/api/oauth?step=resource"
+    },
+    {
+      "source": "/.well-known/oauth-authorization-server/:path*",
+      "destination": "/api/oauth?step=metadata"
+    },
+    {
+      "source": "/.well-known/oauth-authorization-server",
+      "destination": "/api/oauth?step=metadata"
+    },
+    {
+      "source": "/.well-known/openid-configuration",
+      "destination": "/api/oauth?step=metadata"
+    },
+    {
+      "source": "/api/oauth/:step",
+      "destination": "/api/oauth?step=:step"
+    },
+    {
       "source": "/((?!api/).*)",
       "destination": "/index.html"
     }
@@ -33,6 +57,15 @@
       ]
     },
     {
+      "source": "/((?!api/).*)",
+      "headers": [
+        {
+          "key": "Content-Security-Policy",
+          "value": "default-src 'self'; script-src 'self' 'sha256-erXIt6C35PN1k4dbkudtKqrJla1P8pB8UwlhByFLkOQ='; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
+        }
+      ]
+    },
+    {
       "source": "/api/(.*)",
       "headers": [
         {
@@ -40,6 +73,12 @@
           "value": "no-store, max-age=0"
         }
       ]
+    }
+  ],
+  "crons": [
+    {
+      "path": "/api/history?record=cron",
+      "schedule": "55 23 * * *"
     }
   ]
 }

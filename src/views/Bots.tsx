@@ -1,4 +1,4 @@
-import { useBotHistory, useDcaBots, useDcaPositions, useGridBots } from '../lib/queries'
+import { useBotHistory, useDcaBots, useDcaPositions, useGridBots, useMarks } from '../lib/queries'
 import { dateTime, duration, num, pct, plural, price, share, signedUsd, usd } from '../lib/format'
 import {
   Badge,
@@ -24,6 +24,7 @@ export function Bots({ embedded = false }: { embedded?: boolean }) {
   const dca = useDcaBots()
   const grid = useGridBots()
   const bots = dca.data ?? []
+  const marks = useMarks(bots.map((b) => b.instId))
   const positions = useDcaPositions(bots)
   const grids = grid.data ?? []
 
@@ -156,7 +157,7 @@ export function Bots({ embedded = false }: { embedded?: boolean }) {
                 {bots.map((b) => {
                   const p = positions.data?.[b.algoId]
                   const used = fuelUsed(b, p)
-                  const room = liquidationRoom(p)
+                  const room = liquidationRoom(p, marks[b.instId])
                   const pnlValue = num(b.totalPnl)
                   return (
                     <tr key={b.algoId}>
@@ -179,7 +180,12 @@ export function Bots({ embedded = false }: { embedded?: boolean }) {
                         {p && num(p.liqPx) ? (
                           <>
                             {price(num(p.liqPx))}
-                            {room !== null && <span className="sub"> a {share(room, 1)}</span>}
+                            {room !== null && (
+                              <span className="sub">
+                                {' '}
+                                a {share(room, 1)} {marks[b.instId] ? 'del precio' : 'de la media'}
+                              </span>
+                            )}
                           </>
                         ) : (
                           '—'

@@ -350,7 +350,9 @@ export function Guide() {
           </li>
           <li>
             <strong>Estrategias</strong>: las cuatro estrategias que se han medido con años de datos, con
-            su señal actual y su historial. Solo se ofrecen en las temporalidades donde ganan.
+            su señal actual y su historial. Solo se ofrecen en las temporalidades donde ganan. Debajo del
+            gráfico, aquí y en Análisis, <em>Tamaño de la operación</em> calcula cuántos contratos abrir para
+            arriesgar lo que elijas si salta el stop, y si tu margen libre lo aguanta.
           </li>
         </ul>
         <p className="sub">

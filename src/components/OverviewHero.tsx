@@ -4,17 +4,18 @@ import type { Trade } from '../lib/performance'
 import { useFlash } from '../lib/useFlash'
 import { NARROW, useMediaQuery } from '../lib/useMediaQuery'
 import { PnlCurve } from './PnlCurve'
-import { SplitBar } from './MiniCharts'
+import { NetWorthTrail, SplitBar } from './MiniCharts'
 import { Badge, DeltaValue, Help, Skeleton } from './ui'
 
 /**
  * The Resumen's lead: what the account is worth, how much of that it made,
  * and the closed result over its whole life.
  *
- * Every figure here is the real one. The curve is the cumulative closed
- * result, not the net worth — OKX keeps no history of the net worth, and a
- * curve drawn behind that number would be read as one. It sits beside it with
- * its own label instead.
+ * Every figure here is the real one. The big curve is the cumulative closed
+ * result, not the net worth: OKX keeps no history of the net worth. The app
+ * records its own, one point a day (`api/history.ts`), and that line sits
+ * under the net worth with the date it starts from — only once it has two
+ * days, because one point is not a line.
  */
 export function OverviewHero({
   loading,
@@ -29,6 +30,7 @@ export function OverviewHero({
   curve,
   trades,
   curveLoading,
+  history,
 }: {
   loading: boolean
   netWorth: number
@@ -42,6 +44,8 @@ export function OverviewHero({
   curve: { t: number; value: number }[]
   trades: Trade[]
   curveLoading: boolean
+  /** The recorded daily net worth; undefined while it loads or when it is off. */
+  history?: { date: string; netWorth: number }[]
 }) {
   const flash = useFlash(loading ? undefined : netWorth)
   // Shorter on a phone, where the Resumen already runs to three screens.
@@ -110,6 +114,13 @@ export function OverviewHero({
               {partial && <Badge variant="warn">parcial</Badge>}
             </p>
           </div>
+        )}
+
+        {history && history.length >= 2 && <NetWorthTrail points={history} />}
+        {history && history.length === 1 && (
+          <p className="networth-trail-label sub">
+            El patrimonio diario empieza a registrarse hoy; la línea aparece a partir de mañana.
+          </p>
         )}
       </div>
 

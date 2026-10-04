@@ -9,19 +9,37 @@ import type { AccountBalance, AssetValuation, BalanceDetail, FundingBalance, Hol
 
 const STABLES = new Set(['USDT', 'USDC', 'DAI', 'TUSD', 'USD'])
 
+/**
+ * The pair that prices a currency in dollars, and whether it is quoted the
+ * other way round. Coins trade against a stable (`SOL-USDT`); fiat is the quote
+ * side (`USDC-EUR`), so a euro balance is one over that pair. Without the
+ * inversion a euro balance in the funding wallet was listed at 0 US$.
+ */
+function pairOf(ccy: string, tickers: Map<string, Ticker>): { t: Ticker; invert: boolean } | undefined {
+  const direct = tickers.get(`${ccy}-USDT`) ?? tickers.get(`${ccy}-USDC`)
+  if (direct) return { t: direct, invert: false }
+  const inverse = tickers.get(`USDC-${ccy}`) ?? tickers.get(`USDT-${ccy}`)
+  return inverse ? { t: inverse, invert: true } : undefined
+}
+
 export function priceOf(ccy: string, tickers: Map<string, Ticker>): number | undefined {
   if (STABLES.has(ccy)) return 1
-  const t = tickers.get(`${ccy}-USDT`) ?? tickers.get(`${ccy}-USDC`)
-  return t ? num(t.last) : undefined
+  const pair = pairOf(ccy, tickers)
+  if (!pair) return undefined
+  const last = num(pair.t.last)
+  if (!pair.invert) return last
+  return last > 0 ? 1 / last : undefined
 }
 
 export function change24hOf(ccy: string, tickers: Map<string, Ticker>): number | undefined {
   if (STABLES.has(ccy)) return 0
-  const t = tickers.get(`${ccy}-USDT`) ?? tickers.get(`${ccy}-USDC`)
-  if (!t) return undefined
-  const open = num(t.open24h)
-  if (open === 0) return undefined
-  return (num(t.last) - open) / open
+  const pair = pairOf(ccy, tickers)
+  if (!pair) return undefined
+  const open = num(pair.t.open24h)
+  const last = num(pair.t.last)
+  if (open === 0 || last === 0) return undefined
+  // Inverted, the currency's own move is open/last − 1.
+  return pair.invert ? open / last - 1 : (last - open) / open
 }
 
 export interface PortfolioCore {

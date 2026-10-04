@@ -1,5 +1,7 @@
 import { useQueries, useQuery, type UseQueryOptions } from '@tanstack/react-query'
-import { okx, ApiError } from './api'
+import { okx, ApiError, netWorthHistory, recordNetWorth, type NetWorthHistory } from './api'
+import { instTypeOf } from './instruments'
+import { num } from './format'
 import type {
   AccountBalance,
   AccountConfig,
@@ -127,6 +129,30 @@ export function useAccountConfig() {
 
 export function useTickers(instType = 'SPOT') {
   return useOkx<Ticker>(['tickers', instType], '/api/v5/market/tickers', { instType })
+}
+
+/**
+ * The live price of each instrument asked for, by instId — for the DCA bots,
+ * whose position details carry no mark. One ticker list per instrument type
+ * actually present, on the same keys `useTickers` uses, so a list the app
+ * already holds costs nothing.
+ */
+export function useMarks(instIds: string[]): Record<string, number> {
+  const types = [...new Set(instIds.map(instTypeOf))].sort()
+  const lists = useQueries({
+    queries: types.map((instType) => ({
+      queryKey: ['tickers', instType],
+      queryFn: () => okx<Ticker>('/api/v5/market/tickers', { instType }),
+      refetchInterval: LIVE,
+      staleTime: LIVE,
+    })),
+  })
+  const wanted = new Set(instIds)
+  const out: Record<string, number> = {}
+  for (const list of lists) {
+    for (const t of list.data ?? []) if (wanted.has(t.instId)) out[t.instId] = num(t.last)
+  }
+  return out
 }
 
 export function useOpenOrders() {
@@ -830,5 +856,35 @@ export function useDailyBoard(instIds: string[], bar: '1Dutc' | '1D' = '1Dutc') 
         pending: results.filter((r) => r.isPending).length,
       }
     },
+  })
+}
+
+
+/**
+ * The daily net worth the app records (`api/history.ts`). Read once an hour;
+ * and when the latest point is not today's, today's is recorded on the spot —
+ * the daily cron is the main writer, this covers a day it missed and gives a
+ * first point the day the store is linked. Once per page load at most.
+ */
+let recordedThisLoad = false
+export function useNetWorthHistory() {
+  return useQuery<NetWorthHistory, ApiError>({
+    queryKey: ['net-worth-history'],
+    queryFn: async () => {
+      const history = await netWorthHistory()
+      const today = new Date().toISOString().slice(0, 10)
+      if (history.enabled && history.points.at(-1)?.date !== today && !recordedThisLoad) {
+        recordedThisLoad = true
+        try {
+          return await recordNetWorth()
+        } catch {
+          return history
+        }
+      }
+      return history
+    },
+    staleTime: HOURLY,
+    refetchInterval: HOURLY,
+    retry: false,
   })
 }

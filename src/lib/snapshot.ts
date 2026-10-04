@@ -1,11 +1,12 @@
 import { accountAlerts, type AccountAlert } from './alerts'
 import { fuelUsed, liquidationRoom } from './bots'
+import { instTypeOf } from './instruments'
 import { BASE_FUNDING_APR, CARRY_EVIDENCE, CARRY_RULE, carryStatus, trailingApr } from './carry'
 import { emaTouchSummary } from './emaTouch'
 import { activeCurrency, convert } from './currency'
 import { compareWatch, watchEmaCross, type EmaWatch } from './emaWatch'
 import { duration, num, pct, plural, price, qty, ratio, share, signedUsd, usd } from './format'
-import { guardsFor, isShort, liquidationDistance, positionSize, stopOf, targetOf } from './guards'
+import { guardsFor, isShort, liquidationDistance, PARTIAL_STOP, positionSize, stopCoverage, stopOf, targetOf } from './guards'
 import { MIN_TRADABLE_R, profileOf, STRATEGIES, tradableTimeframes } from './indicators/registry'
 import { scanReversal } from './opportunities'
 import { computePerformance, MIN_SAMPLE, type Performance } from './performance'
@@ -97,6 +98,8 @@ export interface RawAccount {
   gridBots: GridBot[]
   /** Funding history of each short X-Perp held against a coin, for the carry exit. */
   hedgeFunding: Record<string, FundingRate[]>
+  /** Live price of each bot's instrument: bot positions carry no mark. */
+  marks: Record<string, number>
 }
 
 /** Same paging as `useClosedPositions`: five pages of 100, flagged if cut. */
@@ -138,6 +141,13 @@ export async function collectAccount(get: Get): Promise<RawAccount> {
   )
   const dcaPositions = Object.fromEntries(details.flat().filter((p) => p?.algoId).map((p) => [p.algoId, p]))
 
+  const botTypes = [...new Set(dcaBots.map((b) => instTypeOf(b.instId)))]
+  const botIds = new Set(dcaBots.map((b) => b.instId))
+  const marks: Record<string, number> = {}
+  for (const list of await Promise.all(botTypes.map((instType) => get<Ticker>('/api/v5/market/tickers', { instType })))) {
+    for (const t of list) if (botIds.has(t.instId)) marks[t.instId] = num(t.last)
+  }
+
   const portfolio = buildPortfolio({ balance, funding, tickers, valuation })
   const held = new Set(portfolio.holdings.filter((h) => h.total > 0).map((h) => h.ccy))
   const hedges = positions.filter(
@@ -165,6 +175,7 @@ export async function collectAccount(get: Get): Promise<RawAccount> {
     dcaPositions,
     gridBots: [...grid, ...contractGrid],
     hedgeFunding,
+    marks,
   }
 }
 
@@ -182,6 +193,7 @@ export interface AccountSnapshot {
   dcaBots: DcaBot[]
   dcaPositions: Record<string, DcaPosition>
   gridBots: GridBot[]
+  marks: Record<string, number>
 }
 
 export function buildAccount(raw: RawAccount, now = Date.now()): AccountSnapshot {
@@ -198,6 +210,7 @@ export function buildAccount(raw: RawAccount, now = Date.now()): AccountSnapshot
     netWorth: portfolio.netWorth,
     freeMargin: portfolio.freeMargin,
     carryExits,
+    marks: raw.marks,
   })
   return {
     at: now,
@@ -212,6 +225,7 @@ export function buildAccount(raw: RawAccount, now = Date.now()): AccountSnapshot
     dcaBots: raw.dcaBots,
     dcaPositions: raw.dcaPositions,
     gridBots: raw.gridBots,
+    marks: raw.marks,
   }
 }
 
@@ -265,7 +279,9 @@ export function renderPositions(s: AccountSnapshot): string {
       price(num(x.avgPx)),
       price(num(x.markPx)),
       `${num(x.liqPx) > 0 ? price(num(x.liqPx)) : '—'}${dist !== null ? ` (a ${share(dist, 0)})` : ''}`,
-      stop ? price(num(stop.slTriggerPx)) : 'SIN STOP',
+      stop
+        ? `${price(num(stop.slTriggerPx))}${stopCoverage(x, g) < PARTIAL_STOP ? ` (cubre solo el ${share(stopCoverage(x, g), 0)})` : ''}`
+        : 'SIN STOP',
       target ? price(num(target.tpTriggerPx)) : '—',
       `${signedUsd(num(x.upl))} (${pct(num(x.uplRatio), 1)})`,
       signedUsd(num(x.fundingFee)),
@@ -321,13 +337,16 @@ export function renderPerformance(p: Performance, period: string, truncated: boo
 export function renderBots(s: AccountSnapshot): string {
   const dca = s.dcaBots.map((b) => {
     const pos = s.dcaPositions[b.algoId]
-    const room = liquidationRoom(pos)
+    const mark = s.marks[b.instId]
+    const room = liquidationRoom(pos, mark)
     return [
       b.instId,
       b.direction,
       usd(num(b.investmentAmt)),
       pos ? price(num(pos.avgPx)) : '—',
-      pos && num(pos.liqPx) > 0 ? `${price(num(pos.liqPx))}${room !== null ? ` (a ${share(room, 0)})` : ''}` : '—',
+      pos && num(pos.liqPx) > 0
+        ? `${price(num(pos.liqPx))}${room !== null ? ` (a ${share(room, 0)} ${mark ? 'del precio' : 'de la media'})` : ''}`
+        : '—',
       `${num(pos?.fillSafetyOrds)}/${b.maxSafetyOrds} (${share(fuelUsed(b, pos), 0)})`,
       signedUsd(num(b.totalPnl)),
     ]

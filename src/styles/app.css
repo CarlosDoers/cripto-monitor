@@ -1074,6 +1074,13 @@ table.data td.num {
   color: var(--good);
 }
 
+/* A stop that closes only part of the position: the rest has no limit but
+   liquidation, so the share is read in the warning colour. */
+.guard-partial {
+  color: var(--warning);
+  white-space: nowrap;
+}
+
 .guard-line--missing {
   color: var(--ink-muted);
 }
@@ -4667,4 +4674,118 @@ table.data td.num {
     padding: 0;
     justify-content: center;
   }
+}
+
+/* ---------- Tamaño de la operación ---------- */
+
+.sizer {
+  display: grid;
+  gap: 16px;
+}
+
+.sizer-inputs {
+  display: grid;
+  grid-template-columns: auto repeat(3, minmax(110px, 1fr));
+  gap: 14px;
+  align-items: end;
+}
+
+.sizer-inputs .seg-control button {
+  padding: 7px 10px;
+}
+
+.sizer-result {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid var(--border);
+}
+
+.sizer-result li {
+  display: grid;
+  gap: 3px;
+  padding: 12px 14px 0 0;
+}
+
+.sizer-result li + li {
+  padding-left: 14px;
+  border-left: 1px solid var(--border-subtle);
+}
+
+.sizer-result li > span:first-child {
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  white-space: nowrap;
+}
+
+.sizer-result strong {
+  font-family: var(--mono);
+  font-size: 17px;
+  font-variant-numeric: tabular-nums;
+}
+
+.sizer-notes:empty {
+  display: none;
+}
+
+.sizer-warn {
+  margin: 0 0 6px;
+  padding-left: 10px;
+  border-left: 2px solid var(--warning);
+  font-size: 12.5px;
+  color: var(--ink-secondary);
+}
+
+@media (max-width: 900px) {
+  .sizer-inputs {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .sizer-inputs .field:first-child {
+    grid-column: 1 / -1;
+  }
+
+  .sizer-result {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .sizer-result li,
+  .sizer-result li + li {
+    padding: 12px 0 0;
+    border-left: none;
+  }
+}
+
+/* Shown for the moment a view's code takes to arrive the first time. */
+.view-loading {
+  display: grid;
+  gap: 16px;
+  padding: 20px;
+}
+
+/* The recorded daily net worth under the hero figure. */
+.networth-trail {
+  display: grid;
+  gap: 4px;
+  margin-top: 14px;
+}
+
+.networth-trail-label {
+  margin: 0;
+  font-size: 11.5px;
+  color: var(--ink-muted);
+}
+
+.networth-trail-plot {
+  width: 100%;
+  min-width: 0;
+}
+
+.networth-trail-plot svg {
+  display: block;
 }

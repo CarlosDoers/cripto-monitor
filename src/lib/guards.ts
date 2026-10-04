@@ -37,6 +37,26 @@ export function hasStop(guards: AlgoOrder[]): boolean {
 }
 
 /**
+ * How much of the position its stops would close, 0 to 1. A TP/SL set on the
+ * whole position carries `closeFraction: 1` and no size; a conditional order
+ * carries its size in the position's own unit (contracts, or coins on margin).
+ * A stop for 100 of 4 718 contracts used to count as protection for all of them.
+ * With neither field the coverage is unknowable, and it is taken as full rather
+ * than raising an alarm the data does not support.
+ */
+export function stopCoverage(position: Position, guards: AlgoOrder[]): number {
+  const stops = guards.filter((g) => num(g.slTriggerPx) > 0)
+  if (stops.length === 0) return 0
+  if (stops.some((g) => g.closeFraction === '1' || !(num(g.sz) > 0))) return 1
+  const size = Math.abs(num(position.pos))
+  if (!(size > 0)) return 1
+  return Math.min(1, stops.reduce((sum, g) => sum + num(g.sz), 0) / size)
+}
+
+/** Under this share covered, a stop is reported as partial. */
+export const PARTIAL_STOP = 0.99
+
+/**
  * Whether a position is short.
  *
  * `posSide` only says `long`/`short` on a hedge-mode account. In one-way mode

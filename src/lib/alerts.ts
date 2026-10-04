@@ -1,6 +1,6 @@
 import { fuelUsed, liquidationRoom, NEARLY_DRY } from './bots'
 import { num, pct, plural, share, usd } from './format'
-import { guardsFor, hasStop } from './guards'
+import { guardsFor, hasStop, PARTIAL_STOP, stopCoverage } from './guards'
 import type { AccountBalance, AlgoOrder, DcaBot, DcaPosition, Position } from './types'
 
 /**
@@ -36,10 +36,12 @@ export interface AlertInput {
   freeMargin: number
   /** Hedges whose funding stopped paying (see `useCarryExits`). */
   carryExits: { instId: string; apr: number | undefined }[]
+  /** Live price of each bot's instrument, by instId, when loaded. */
+  marks?: Record<string, number>
 }
 
 export function accountAlerts(input: AlertInput) {
-  const { account, positions, algos, dcaBots, dcaPositions, netWorth, freeMargin, carryExits } = input
+  const { account, positions, algos, dcaBots, dcaPositions, netWorth, freeMargin, carryExits, marks } = input
 
   // With isolated margin OKX leaves the account ratio empty, and read as-is it
   // printed "100 %" beside a position at 8× maintenance. The honest figure is
@@ -54,10 +56,23 @@ export function accountAlerts(input: AlertInput) {
   const locked = netWorth > 0 && freeMargin / netWorth < 0.01
 
   const unprotected = algos ? positions.filter((p) => !hasStop(guardsFor(p, algos))) : []
+  const partial = algos
+    ? positions
+        .map((p) => ({ p, covered: stopCoverage(p, guardsFor(p, algos)) }))
+        .filter((x) => x.covered > 0 && x.covered < PARTIAL_STOP)
+    : []
   const botRisk = dcaBots
     .map((bot) => {
       const position = dcaPositions?.[bot.algoId]
-      return { bot, position, used: fuelUsed(bot, position), room: liquidationRoom(position) }
+      const mark = marks?.[bot.instId]
+      return {
+        bot,
+        position,
+        used: fuelUsed(bot, position),
+        room: liquidationRoom(position, mark),
+        /** Whether `room` is measured from the live price or only from the average. */
+        roomFromMark: Boolean(mark && mark > 0),
+      }
     })
     .sort((a, b) => b.used - a.used)
   const dryBots = botRisk.filter((r) => r.used >= NEARLY_DRY)
@@ -69,11 +84,17 @@ export function accountAlerts(input: AlertInput) {
     ...(unprotected.length
       ? [{ key: 'stop', href: '#/encurso', link: 'Ver en curso', text: `${plural(unprotected.length, 'posición sin stop', 'posiciones sin stop')} (${unprotected.map((p) => p.instId).join(', ')}): su pérdida solo tiene como límite la liquidación.` }]
       : []),
+    ...partial.map((x) => ({
+      key: `partial-${x.p.instId}`,
+      href: '#/encurso',
+      link: 'Ver en curso',
+      text: `El stop de ${x.p.instId} cubre solo el ${share(x.covered, 0)} de la posición: el resto no tiene más límite que la liquidación.`,
+    })),
     ...dryBots.map((r) => ({
       key: `bot-${r.bot.algoId}`,
       href: '#/encurso',
       link: 'Ver en curso',
-      text: `${r.bot.instId} ha gastado ${num(r.position?.fillSafetyOrds)} de ${r.bot.maxSafetyOrds} órdenes de seguridad${r.room !== null ? ` y la liquidación está a un ${share(r.room, 0)} del precio medio` : ''}: si el precio sigue en contra ya no le queda con qué promediar.`,
+      text: `${r.bot.instId} ha gastado ${num(r.position?.fillSafetyOrds)} de ${r.bot.maxSafetyOrds} órdenes de seguridad${r.room !== null ? ` y la liquidación está a un ${share(r.room, 0)} del ${r.roomFromMark ? 'precio actual' : 'precio medio'}` : ''}: si el precio sigue en contra ya no le queda con qué promediar.`,
     })),
     ...carryExits.map((x) => ({
       key: `carry-${x.instId}`,
@@ -89,13 +110,14 @@ export function accountAlerts(input: AlertInput) {
   return {
     alerts,
     /** The alarms proper: margin, no stop, a dry bot. */
-    alarm: atRisk || unprotected.length > 0 || dryBots.length > 0,
+    alarm: atRisk || unprotected.length > 0 || partial.length > 0 || dryBots.length > 0,
     marginRatio,
     accountRatio,
     positionRatios,
     atRisk,
     locked,
     unprotected,
+    partial,
     botRisk,
     tightest: botRisk[0],
   }

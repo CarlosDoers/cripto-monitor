@@ -243,6 +243,8 @@ export interface Instrument {
   ctValCcy: string
   /** `linear` or `inverse`: decides whether ctVal is in coin or in dollars. */
   ctType: string
+  /** Multiplier on ctVal; 1 on every X-Perp. */
+  ctMult?: string
   state: string
   expTime: string
   /** Max leverage the contract allows. */
@@ -307,7 +309,10 @@ export interface AlgoOrder {
   ordType: string
   side: string
   posSide: string
+  /** In contracts (coins on margin). Empty on a TP/SL set on the whole position. */
   sz: string
+  /** `1` when the order closes the whole position, whatever its size. */
+  closeFraction?: string
   state: string
   /** Trigger price for the stop-loss leg, when set. */
   slTriggerPx: string

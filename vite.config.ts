@@ -21,7 +21,9 @@ function apiDevServer(env: Record<string, string>): Plugin {
       }
 
       server.middlewares.use((req: IncomingMessage, res: ServerResponse, next: () => void) => {
-        if (!req.url?.startsWith('/api/okx') && !req.url?.startsWith('/api/mcp')) return next()
+        const url = req.url ?? ''
+        const ours = ['/api/okx', '/api/mcp', '/api/oauth', '/api/history', '/.well-known/oauth-', '/.well-known/openid-configuration']
+        if (!ours.some((p) => url.startsWith(p))) return next()
         void serve(server, req, res)
       })
     },
@@ -39,11 +41,28 @@ type Handler = (request: Request) => Promise<Response>
 function handlerFor(server: ViteDevServer, url: string): Handler {
   if (url.startsWith('/api/mcp')) {
     return async (request) => {
-      const [okx, mcp] = (await Promise.all([
+      const [okx, oauth, mcp] = (await Promise.all([
         server.ssrLoadModule('/api/_okx.ts'),
+        server.ssrLoadModule('/api/_oauth.ts'),
         server.ssrLoadModule('/src/lib/mcp.ts'),
-      ])) as [typeof import('./api/_okx.js'), { handleMcp: typeof import('./api/_mcp.js').handleMcp }]
-      return okx.checkMcpToken(request) ?? mcp.handleMcp(request, okx.okxData)
+      ])) as [
+        typeof import('./api/_okx.js'),
+        typeof import('./api/_oauth.js'),
+        { handleMcp: typeof import('./api/_mcp.js').handleMcp },
+      ]
+      return oauth.checkMcpAuth(request) ?? mcp.handleMcp(request, okx.okxData)
+    }
+  }
+  if (url.startsWith('/api/history')) {
+    return async (request) => {
+      const mod = (await server.ssrLoadModule('/api/history.ts')) as { default: { fetch: Handler } }
+      return mod.default.fetch(request)
+    }
+  }
+  if (url.startsWith('/api/oauth') || url.startsWith('/.well-known/')) {
+    return async (request) => {
+      const oauth = (await server.ssrLoadModule('/api/_oauth.ts')) as typeof import('./api/_oauth.js')
+      return oauth.handleOauth(request)
     }
   }
   return async (request) => {
@@ -63,7 +82,8 @@ async function serve(server: ViteDevServer, req: IncomingMessage, res: ServerRes
     const method = req.method ?? 'GET'
     const chunks: Buffer[] = []
     if (method !== 'GET' && method !== 'HEAD') for await (const chunk of req) chunks.push(chunk as Buffer)
-    const request = new Request(`http://localhost${req.url}`, {
+    // The OAuth metadata names absolute URLs, so the request keeps its real host.
+    const request = new Request(`http://${req.headers.host ?? 'localhost'}${req.url}`, {
       method,
       headers,
       body: chunks.length ? Buffer.concat(chunks) : undefined,

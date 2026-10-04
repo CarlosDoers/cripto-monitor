@@ -192,9 +192,15 @@ function Fills({ instType }: { instType: string }) {
                 </td>
                 <td className="num">{o.notional !== undefined ? usd(o.notional) : '—'}</td>
                 <td className="num">
-                  {o.fee !== 0 ? (
+                  {/* OKX signs fees from the account's side: negative is a charge,
+                      positive a maker rebate. Math.abs printed a rebate as a cost. */}
+                  {o.fee < 0 ? (
                     <span>
-                      {qty(Math.abs(o.fee))} <span className="sub">{o.feeCcy}</span>
+                      {qty(-o.fee)} <span className="sub">{o.feeCcy}</span>
+                    </span>
+                  ) : o.fee > 0 ? (
+                    <span>
+                      <DeltaValue value={o.fee}>+{qty(o.fee)}</DeltaValue> <span className="sub">{o.feeCcy} · reembolso</span>
                     </span>
                   ) : (
                     '—'

@@ -48,12 +48,12 @@ export function setToken(token: string): void {
   }
 }
 
-async function request(search: string): Promise<unknown> {
+async function request(search: string, endpoint = '/api/okx', method = 'GET'): Promise<unknown> {
   const headers: Record<string, string> = {}
   const token = getToken()
   if (token) headers['x-app-token'] = token
 
-  const response = await fetch(`/api/okx?${search}`, { headers })
+  const response = await fetch(`${endpoint}${search ? `?${search}` : ''}`, { headers, method })
   const text = await response.text()
 
   let payload: unknown
@@ -107,4 +107,28 @@ export interface ProbeResult {
  */
 export async function probe(): Promise<ProbeResult> {
   return (await request('probe=1')) as ProbeResult
+}
+
+/** One day of the net-worth history the app keeps (see `api/_history.ts`). */
+export interface HistoryPoint {
+  date: string
+  at: number
+  netWorth: number
+  tradingEq: number
+  openPnl: number
+}
+
+export interface NetWorthHistory {
+  /** False until a Blob store is linked to the Vercel project. */
+  enabled: boolean
+  points: HistoryPoint[]
+}
+
+export async function netWorthHistory(): Promise<NetWorthHistory> {
+  return (await request('', '/api/history')) as NetWorthHistory
+}
+
+/** Records today's point; the server measures it from OKX. */
+export async function recordNetWorth(): Promise<NetWorthHistory> {
+  return (await request('', '/api/history', 'POST')) as NetWorthHistory
 }

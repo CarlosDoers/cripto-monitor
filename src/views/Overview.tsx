@@ -8,6 +8,8 @@ import {
   useGridBots,
   usePositions,
   useValuation,
+  useMarks,
+  useNetWorthHistory,
 } from '../lib/queries'
 import {
   num,
@@ -68,6 +70,8 @@ export function Overview() {
   const algos = useAlgoOrders()
   const dcaList = dcaBots.data ?? []
   const botPositions = useDcaPositions(dcaList)
+  const botMarks = useMarks(dcaList.map((b) => b.instId))
+  const history = useNetWorthHistory()
 
   const account = balance.data?.[0]
   const valDetails = valuation.data?.[0]?.details
@@ -126,6 +130,7 @@ export function Overview() {
     netWorth: portfolio.netWorth,
     freeMargin: portfolio.freeMargin,
     carryExits,
+    marks: botMarks,
   })
   const narrow = useMediaQuery(NARROW)
   const todayStart = new Date().setHours(0, 0, 0, 0)
@@ -351,6 +356,7 @@ export function Overview() {
         noFlows={account$.noFlows || account$.isLoading}
         curve={allTime.equityCurve}
         trades={allTime.trades}
+        history={history.data?.enabled ? history.data.points : undefined}
         curveLoading={allTime.isLoading}
       />
 

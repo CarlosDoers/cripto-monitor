@@ -22,6 +22,7 @@ import { feeMix } from '../lib/fees'
 import { dateTime, num, pct, plural, price, ratio, share, timeAgo } from '../lib/format'
 import { PriceChart } from '../components/PriceChart'
 import { LevelsTable } from '../components/LevelsTable'
+import { PositionSizer } from '../components/PositionSizer'
 import { ReversalWatch } from '../components/ReversalWatch'
 import { trapWatch, TUNED_SETTINGS } from '../lib/indicators/reversalTrap'
 import { chartStart } from '../lib/chartWindow'
@@ -934,6 +935,11 @@ export function Signals({ section }: { section: 'analysis' | 'strategies' }) {
           </p>
         )}
       </Card>
+
+      {/* Right under the chart: the stop is read there, and the size is the
+          decision that follows it. Filled from the open signal on a strategy
+          tab; in Análisis the stop is the user's own. */}
+      <PositionSizer instId={selected} signal={analysis ? null : r.active} />
 
       {analysis ? (
         <LevelsTable

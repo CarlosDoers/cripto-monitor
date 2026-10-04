@@ -24,10 +24,28 @@ const queryClient = new QueryClient({
       // Keep showing the last good data while a refetch runs, and don't retry
       // a 401/403 — those are configuration problems, not transient ones.
       placeholderData: <T,>(previous: T) => previous,
+      // Data counts as fresh for a while after it arrives. Without this every
+      // component that mounted with a query already in the cache refetched it:
+      // one load of the Resumen fired the spot tickers 32 times and the five
+      // pages of closed positions 5 times each in its first 12 seconds, and
+      // each of those is a serverless invocation and a slice of OKX's limit.
+      staleTime: 20_000,
       retry: (failureCount, error) => {
+        // A rate limit is the one 4xx that passes on its own: OKX's
+        // `funding-rate?instId=ANY` returned 429 on opening Financiación, and
+        // without a retry the page showed the error for the five minutes until
+        // its next refetch.
+        if (error instanceof ApiError && error.status === 429) return failureCount < 3
         if (error instanceof ApiError && error.status < 500) return false
         return failureCount < 2
       },
+      // A rate limit needs longer than an outage: the funding board
+      // (`funding-rate?instId=ANY`) answered 429 to a second call 3 s after
+      // the first and 200 again at 6 s, so 1 s and 2 s retries both landed
+      // inside the window. 3, 6, 12 s for a 429; 1, 2 s otherwise. Jittered
+      // so retries do not collide again.
+      retryDelay: (attempt, error) =>
+        (error instanceof ApiError && error.status === 429 ? 3_000 : 1_000) * 2 ** attempt + Math.random() * 500,
       refetchOnWindowFocus: true,
     },
   },

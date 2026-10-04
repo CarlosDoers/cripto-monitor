@@ -506,14 +506,25 @@ export async function signalsText(get: Get, market: RawMarket, opts: { reversal:
 // ── funding carry ─────────────────────────────────────────────────────────────
 
 export async function fundingText(get: Get, account: AccountSnapshot, market: RawMarket): Promise<string> {
-  const board = await get<FundingBoardRow>('/api/v5/public/funding-rate', { instId: 'ANY' })
-  const byCoin = new Map<string, FundingBoardRow>()
+  // The board is the most rate-limited call the app makes; without it there is
+  // no live rate, but the rule reads the last week, which comes from elsewhere.
+  // So a refusal costs one column, as in Financiación, not the whole text.
+  let board: FundingBoardRow[] = []
+  let boardMissing = false
+  try {
+    board = await get<FundingBoardRow>('/api/v5/public/funding-rate', { instId: 'ANY' })
+  } catch {
+    boardMissing = true
+  }
+  const rateById = new Map(board.map((r) => [r.instId, r]))
   const vol = new Map(liquidCrypto(market, 400).map((x) => [x.instId, x.volumeUsd]))
-  for (const r of board) {
-    if (!r.instId.includes('_UM_XPERP')) continue
-    const coin = r.instId.split('-')[0]
+  // One X-Perp per coin, the most traded, from the catalogue.
+  const byCoin = new Map<string, { instId: string; rate?: FundingBoardRow }>()
+  for (const i of market.instruments) {
+    if (!i.instId.includes('_UM_XPERP') || i.state !== 'live' || (i.instCategory ?? '1') !== '1') continue
+    const coin = i.instId.split('-')[0]
     const prev = byCoin.get(coin)
-    if (!prev || (vol.get(r.instId) ?? 0) > (vol.get(prev.instId) ?? 0)) byCoin.set(coin, r)
+    if (!prev || (vol.get(i.instId) ?? 0) > (vol.get(prev.instId) ?? 0)) byCoin.set(coin, { instId: i.instId, rate: rateById.get(i.instId) })
   }
   const inst = new Map(market.instruments.map((i) => [i.instId, i]))
   const shorts = new Map(account.positions.filter((p) => num(p.pos) < 0).map((p) => [p.instId, -num(p.pos)]))
@@ -526,6 +537,7 @@ export async function fundingText(get: Get, account: AccountSnapshot, market: Ra
     const gap = num(r.nextFundingTime) - num(r.fundingTime)
     return num(r.fundingRate) * (gap > 0 ? 86_400_000 / gap : 3) * 365
   }
+  const nowText = (r: FundingBoardRow | undefined) => (r ? pct(nowApr(r), 1) : '—')
   const rows = holdings.map((h, i) => {
     const r = byCoin.get(h.ccy)!
     const apr = trailingApr(histories[i], now)
@@ -535,33 +547,48 @@ export async function fundingText(get: Get, account: AccountSnapshot, market: Ra
       h.ccy,
       usd(h.usd),
       apr !== undefined ? pct(apr, 1) : '—',
-      pct(nowApr(r), 1),
+      nowText(r.rate),
       ctVal > 0 ? `${qty(Math.floor(h.total / ctVal))} contratos` : '—',
       hedged ? `${qty(hedged)} en corto` : 'no',
       carryStatus(apr, hedged > 0) ?? '—',
     ]
   })
-  const liquidNow = [...byCoin.values()].filter((r) => vol.has(r.instId))
-  const paying = liquidNow.filter((r) => nowApr(r) > CARRY_RULE.enter).length
+  const liquidNow = [...byCoin.values()].filter((r) => vol.has(r.instId) && r.rate)
+  const paying = liquidNow.filter((r) => nowApr(r.rate!) > CARRY_RULE.enter).length
   return [
     `# Financiación (carry) — ${when(now)}`,
     `Regla medida: cubrir con un corto cuando los últimos 7 días pagaron más del ${share(CARRY_RULE.enter, 0)} anual; deshacer cuando dejan de pagar. Medido: ${pct(CARRY_EVIDENCE.ownApr, 1)} anual desde 2022 cubriendo monedas que ya se tienen (${pct(CARRY_EVIDENCE.spotLimitApr, 1)} comprando el spot). Riesgos: el corto necesita margen y puede liquidarse; la financiación se gira; el spot en esta cuenta cuesta 0,20–0,35 % por lado.`,
     table(['Moneda', 'Valor', 'Últimos 7 días (anual)', 'Ahora (anual)', 'Para cubrir', 'Ya cubierta', 'Regla'], rows),
-    `En el tablero: ${paying} de ${liquidNow.length} X-Perp líquidos pagan ahora más del ${share(CARRY_RULE.enter, 0)} anual (el tipo por defecto es ${share(BASE_FUNDING_APR, 2)}).`,
+    boardMissing
+      ? 'OKX no dejó leer ahora la financiación de todo el mercado (límite de peticiones): falta la columna «Ahora», pero la regla usa la última semana, que sí está.'
+      : `En el tablero: ${paying} de ${liquidNow.length} X-Perp líquidos pagan ahora más del ${share(CARRY_RULE.enter, 0)} anual (el tipo por defecto es ${share(BASE_FUNDING_APR, 2)}).`,
   ].join('\n\n')
 }
 
 // ── the whole text, as the copy button produces it ────────────────────────────
 
+/**
+ * The account is the point of the copy; signals and funding are extras. An
+ * extra that fails (a rate limit, a contract that errors) becomes one line
+ * saying so, rather than taking the account down with it.
+ */
 export async function fullSnapshot(okx: Get, opts: { signals: boolean; funding: boolean }): Promise<string> {
   const get = patient(okx)
+  const wantsMarket = opts.signals || opts.funding
   const [raw, market] = await Promise.all([
     collectAccount(get),
-    opts.signals || opts.funding ? collectMarket(get) : Promise.resolve(null),
+    wantsMarket ? collectMarket(get).catch(() => null) : Promise.resolve(null),
   ])
   const account = buildAccount(raw)
   const parts = [renderAccount(account)]
-  if (market && opts.signals) parts.push(await signalsText(get, market, { reversal: 40, ema: 10 }))
-  if (market && opts.funding) parts.push(await fundingText(get, account, market))
+  const extra = async (label: string, run: () => Promise<string>) => {
+    try {
+      parts.push(market ? await run() : `_${label}: no se pudo leer el mercado de OKX ahora._`)
+    } catch (err) {
+      parts.push(`_${label}: no se pudo leer de OKX (${err instanceof Error ? err.message : String(err)})._`)
+    }
+  }
+  if (opts.signals) await extra('Señales en vivo', () => signalsText(get, market!, { reversal: 40, ema: 10 }))
+  if (opts.funding) await extra('Financiación', () => fundingText(get, account, market!))
   return parts.join('\n\n---\n\n')
 }

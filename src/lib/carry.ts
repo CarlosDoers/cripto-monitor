@@ -147,26 +147,33 @@ export function useCarry() {
   const spotMaker = -num(spotFee.data?.[0]?.maker) || 0.002
   const costs = { own: 2 * taker, spot: 2 * (spotMaker + taker), taker, spotMaker }
 
-  /** The crypto X-Perps, with their live rate and volume. */
+  /**
+   * The crypto X-Perps, with their live rate and volume. The list comes from
+   * the instrument catalogue, not from the funding board: `funding-rate?instId=ANY`
+   * is the most rate-limited call the app makes (429 again 3 s, 21 s and 72 s
+   * after a success when probed), and when the list came from it one refusal
+   * blanked the whole page. Without the board a contract just has no live rate
+   * (`nowApr` NaN); the rule reads the last week, which comes from elsewhere.
+   */
   const contracts = useMemo(() => {
-    const instById = new Map((instruments.data ?? []).map((i) => [i.instId, i]))
+    const rateById = new Map((board.data ?? []).map((r) => [r.instId, r]))
     const tickById = new Map((tickers.data ?? []).map((t) => [t.instId, t]))
     const out: CarryContract[] = []
-    for (const r of board.data ?? []) {
-      if (!r.instId.includes('_UM_XPERP')) continue
-      const inst = instById.get(r.instId)
-      if (inst?.instCategory && inst.instCategory !== '1') continue
-      const t = tickById.get(r.instId)
+    for (const inst of instruments.data ?? []) {
+      if (!inst.instId.includes('_UM_XPERP') || inst.state !== 'live') continue
+      if (inst.instCategory && inst.instCategory !== '1') continue
+      const r = rateById.get(inst.instId)
+      const t = tickById.get(inst.instId)
       const last = num(t?.last)
       out.push({
-        instId: r.instId,
-        ccy: r.instId.split('-')[0],
+        instId: inst.instId,
+        ccy: inst.instId.split('-')[0],
         inst,
-        nowApr: num(r.fundingRate) * periodsPerDay(r.fundingTime, r.nextFundingTime) * 365,
+        nowApr: r ? num(r.fundingRate) * periodsPerDay(r.fundingTime, r.nextFundingTime) * 365 : NaN,
         trailing: undefined,
         // volCcy24h is in the base currency on these linear contracts.
         volumeUsd: num(t?.volCcy24h) * last,
-        contractUsd: num(inst?.ctVal) * last,
+        contractUsd: num(inst.ctVal) * last,
       })
     }
     return out
@@ -201,8 +208,9 @@ export function useCarry() {
 
   const scanned = useMemo(
     () =>
+      // Ranked by the live rate, so only when the board answered.
       [...byCoin.values()]
-        .filter((c) => c.volumeUsd >= MIN_LIQUID_VOLUME)
+        .filter((c) => c.volumeUsd >= MIN_LIQUID_VOLUME && Number.isFinite(c.nowApr))
         .sort((a, b) => b.nowApr - a.nowApr)
         .slice(0, SCAN),
     [byCoin],
@@ -261,7 +269,7 @@ export function useCarry() {
     .filter((c) => (c.trailing ?? 0) > CARRY_RULE.enter)
     .sort((a, b) => (b.trailing ?? 0) - (a.trailing ?? 0))
 
-  const liquid = contracts.filter((c) => c.volumeUsd >= MIN_LIQUID_VOLUME)
+  const liquid = contracts.filter((c) => c.volumeUsd >= MIN_LIQUID_VOLUME && Number.isFinite(c.nowApr))
   const sortedNow = liquid.map((c) => c.nowApr).sort((a, b) => a - b)
 
   return {
@@ -276,10 +284,14 @@ export function useCarry() {
       median: sortedNow.length ? sortedNow[Math.floor(sortedNow.length / 2)] : NaN,
     },
     costs,
-    isLoading: board.isLoading || instruments.isLoading || tickers.isLoading || portfolio.isLoading,
+    isLoading: instruments.isLoading || tickers.isLoading || portfolio.isLoading,
+    /** The board is still on its way (or retrying a rate limit). */
+    boardLoading: board.isLoading,
     trailsPending: trails.pending,
     isFetching: board.isFetching,
-    error: board.error ?? instruments.error ?? null,
+    /** The live rates could not be read; everything that does not need them still renders. */
+    boardError: board.data ? null : (board.error ?? null),
+    error: instruments.error ?? null,
   }
 }
 

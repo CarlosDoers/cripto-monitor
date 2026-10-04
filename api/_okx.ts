@@ -11,20 +11,19 @@ import { createHmac, timingSafeEqual } from 'node:crypto'
  * Endpoints this proxy is willing to sign. Everything is GET and read-only, so
  * even a leaked deployment URL cannot place an order, transfer or withdraw —
  * regardless of what permissions the API key itself was granted.
+ *
+ * Only what the app reads: twelve read endpoints nothing called (max-withdrawal,
+ * leverage-info, bills-archive…) were removed in the 2026-10 audit. Someone
+ * holding the access token reads what is listed here, so the list stays the
+ * size of the app.
  */
 export const ALLOWED_PATHS = new Set([
   // Trading account
   '/api/v5/account/balance',
   '/api/v5/account/positions',
   '/api/v5/account/positions-history',
-  '/api/v5/account/account-position-risk',
   '/api/v5/account/config',
-  '/api/v5/account/account-info',
   '/api/v5/account/bills',
-  '/api/v5/account/bills-archive',
-  '/api/v5/account/max-withdrawal',
-  '/api/v5/account/interest-accrued',
-  '/api/v5/account/leverage-info',
   // The real maker/taker rates for this account's fee tier. Every expectancy
   // figure in Señales is quoted net of an assumed 0.1 % round trip, so the
   // actual number decides whether those figures apply to this account at all.
@@ -33,7 +32,6 @@ export const ALLOWED_PATHS = new Set([
   // Funding account
   '/api/v5/asset/balances',
   '/api/v5/asset/asset-valuation',
-  '/api/v5/asset/bills',
   '/api/v5/asset/deposit-history',
   '/api/v5/asset/withdrawal-history',
   // Euros in and out by bank transfer. deposit-history only knows about coins
@@ -45,14 +43,11 @@ export const ALLOWED_PATHS = new Set([
 
   // Orders & fills
   '/api/v5/trade/orders-pending',
-  '/api/v5/trade/orders-history',
   '/api/v5/trade/orders-history-archive',
-  '/api/v5/trade/fills',
   '/api/v5/trade/fills-history',
   // Stop-loss and take-profit live here, not in orders-pending. Without these
   // the app cannot tell an unprotected position from a protected one.
   '/api/v5/trade/orders-algo-pending',
-  '/api/v5/trade/orders-algo-history',
 
   // Public market data
   '/api/v5/public/open-interest',
@@ -61,8 +56,6 @@ export const ALLOWED_PATHS = new Set([
   // whose rate has been climbing for a week is a different position from one
   // that spiked today, and the current rate cannot tell them apart.
   '/api/v5/public/funding-rate-history',
-  '/api/v5/public/price-limit',
-  '/api/v5/market/ticker',
   '/api/v5/market/tickers',
   '/api/v5/market/candles',
   '/api/v5/market/history-candles',
@@ -243,13 +236,16 @@ export async function proxyOkxGet(path: string): Promise<Response> {
 
   const body = payload as { code?: string; msg?: string }
   if (body?.code && body.code !== '0') {
+    // OKX can signal its rate limit inside a 200 (code 50011, or 50061 for the
+    // per-account limit). Reported as 429 so every caller retries it as one.
+    const limited = body.code === '50011' || body.code === '50061'
     return json(
       {
         error: 'okx_error',
         code: body.code,
         message: `${body.msg || 'Error de OKX'}${regionHint(body.code, base)}`,
       },
-      upstream.ok ? 400 : upstream.status,
+      limited ? 429 : upstream.ok ? 400 : upstream.status,
     )
   }
 

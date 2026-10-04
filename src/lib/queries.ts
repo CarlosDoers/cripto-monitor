@@ -44,10 +44,14 @@ function useOkx<T>(
   params?: Record<string, string | number | undefined>,
   options?: Options<T> & { refetchInterval?: number },
 ) {
+  // Fresh for as long as the query's own polling interval: a component that
+  // mounts in between reads the cache instead of refetching it.
+  const interval = options?.refetchInterval ?? LIVE
   return useQuery<T[], ApiError>({
     queryKey: key,
     queryFn: () => okx<T>(path, params),
     refetchInterval: LIVE,
+    staleTime: typeof interval === 'number' ? interval : LIVE,
     ...options,
   })
 }
@@ -101,6 +105,7 @@ export function useClosedPositions() {
       return { positions, truncated: true }
     },
     refetchInterval: SLOW,
+    staleTime: SLOW,
   })
 }
 
@@ -461,6 +466,7 @@ export function useBotHistory() {
       return { dca: [...contractDca, ...spotDca], grid: [...grid, ...contractGrid] }
     },
     refetchInterval: SLOW,
+    staleTime: SLOW,
   })
 }
 
@@ -665,6 +671,7 @@ export function useTransfers() {
       }
     },
     refetchInterval: SLOW,
+    staleTime: SLOW,
   })
 }
 

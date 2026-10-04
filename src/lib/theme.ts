@@ -4,9 +4,15 @@ export type Theme = 'system' | 'light' | 'dark'
 
 const KEY = 'cripto-monitor:theme'
 
+// Storage can throw (blocked site data, some in-app browsers); a theme is not
+// worth failing the whole app over.
 function read(): Theme {
-  const stored = localStorage.getItem(KEY)
-  return stored === 'light' || stored === 'dark' ? stored : 'system'
+  try {
+    const stored = localStorage.getItem(KEY)
+    return stored === 'light' || stored === 'dark' ? stored : 'system'
+  } catch {
+    return 'system'
+  }
 }
 
 /**
@@ -20,7 +26,11 @@ export function useTheme(): [Theme, () => void] {
     const root = document.documentElement
     if (theme === 'system') root.removeAttribute('data-theme')
     else root.setAttribute('data-theme', theme)
-    localStorage.setItem(KEY, theme)
+    try {
+      localStorage.setItem(KEY, theme)
+    } catch {
+      // Remembered for this visit only.
+    }
   }, [theme])
 
   const toggle = useCallback(() => {

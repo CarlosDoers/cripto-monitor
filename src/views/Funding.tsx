@@ -89,14 +89,18 @@ export function Funding() {
         />
         <Stat
           label="Pagan más del 10 %"
-          loading={c.isLoading}
-          value={String(c.board.paying)}
+          loading={c.isLoading || c.boardLoading}
+          value={c.boardError ? '—' : String(c.board.paying)}
           help={HELP.fundingNow}
           foot={
-            <span>
-              de {c.board.liquid} líquidos al tipo de ahora · {c.board.aboveBase} claramente por encima de la base del{' '}
-              {share(BASE_FUNDING_APR, 1)}
-            </span>
+            c.boardError ? (
+              <span>OKX no ha dejado leer el tipo de ahora; se reintenta solo</span>
+            ) : (
+              <span>
+                de {c.board.liquid} líquidos al tipo de ahora · {c.board.aboveBase} claramente por encima de la base del{' '}
+                {share(BASE_FUNDING_APR, 1)}
+              </span>
+            )
           }
         />
         <Stat
@@ -207,7 +211,12 @@ export function Funding() {
         flush
         dimmed={c.isFetching && !c.isLoading}
       >
-        {c.isLoading || (c.trailsPending > 0 && c.opportunities.length === 0) ? (
+        {c.boardError ? (
+          <EmptyState
+            title="OKX no ha dejado leer ahora la financiación de todo el mercado"
+            hint="Esa consulta tiene un límite muy estricto. Se reintentará sola en unos segundos, y si no, en el próximo refresco; tus monedas, arriba, no la necesitan."
+          />
+        ) : c.isLoading || c.boardLoading || (c.trailsPending > 0 && c.opportunities.length === 0) ? (
           <TableSkeleton rows={5} cols={6} />
         ) : c.opportunities.length === 0 ? (
           <EmptyState

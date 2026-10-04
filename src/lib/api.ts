@@ -23,13 +23,29 @@ export class ApiError extends Error {
   }
 }
 
+/**
+ * Where storage is blocked the token lives in memory for the visit: every
+ * request reads it, so an unguarded `localStorage` threw on each one and the
+ * app never loaded.
+ */
+let memoryToken = ''
+
 export function getToken(): string {
-  return localStorage.getItem(TOKEN_KEY) ?? ''
+  try {
+    return localStorage.getItem(TOKEN_KEY) ?? memoryToken
+  } catch {
+    return memoryToken
+  }
 }
 
 export function setToken(token: string): void {
-  if (token) localStorage.setItem(TOKEN_KEY, token)
-  else localStorage.removeItem(TOKEN_KEY)
+  memoryToken = token
+  try {
+    if (token) localStorage.setItem(TOKEN_KEY, token)
+    else localStorage.removeItem(TOKEN_KEY)
+  } catch {
+    // Kept in memory above.
+  }
 }
 
 async function request(search: string): Promise<unknown> {

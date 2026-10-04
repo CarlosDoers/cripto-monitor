@@ -9,12 +9,18 @@ import type { AlgoOrder, Position } from '../lib/types'
  * endpoint shows a protected position and a bare one identically.
  */
 export function guardsFor(position: Position, algos: AlgoOrder[]): AlgoOrder[] {
+  // Only an order on the closing side protects: a sell for a long, a buy for a
+  // short. On a one-way account a conditional *buy* with a trigger on a long is
+  // a stop-entry that adds to it, and it used to count as the position's stop
+  // and silence the "sin stop" warning.
+  const closing = isShort(position) ? 'buy' : 'sell'
   return algos.filter(
     (a) =>
       a.instId === position.instId &&
       // A one-way account reports posSide `net` on both sides, so an exact
       // match would drop every guard on it.
-      (a.posSide === position.posSide || a.posSide === 'net' || position.posSide === 'net'),
+      (a.posSide === position.posSide || a.posSide === 'net' || position.posSide === 'net') &&
+      (!a.side || a.side === closing),
   )
 }
 

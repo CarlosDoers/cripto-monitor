@@ -21,6 +21,7 @@ const Markets = lazy(() => import('./views/Markets').then((m) => ({ default: m.M
 const Screener = lazy(() => import('./views/Screener').then((m) => ({ default: m.Screener })))
 const Portfolio = lazy(() => import('./views/Portfolio').then((m) => ({ default: m.Portfolio })))
 const Active = lazy(() => import('./views/Active').then((m) => ({ default: m.Active })))
+const Bots = lazy(() => import('./views/Bots').then((m) => ({ default: m.Bots })))
 const History = lazy(() => import('./views/History').then((m) => ({ default: m.History })))
 const Funding = lazy(() => import('./views/Funding').then((m) => ({ default: m.Funding })))
 const Guide = lazy(() => import('./views/Guide').then((m) => ({ default: m.Guide })))
@@ -112,6 +113,7 @@ function Views() {
       <Suspense fallback={<ViewLoading />}>
       {route === 'resumen' && <Overview />}
       {route === 'encurso' && <Active />}
+      {route === 'bots' && <Bots />}
       {route === 'cartera' && <Portfolio />}
       {route === 'rendimiento' && <Performance />}
       {route === 'historial' && <History />}

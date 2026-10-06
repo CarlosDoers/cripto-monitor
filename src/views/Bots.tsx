@@ -1,4 +1,4 @@
-import { useBotHistory, useDcaBots, useDcaPositions, useGridBots, useMarks } from '../lib/queries'
+import { useBotHistory, useDcaBots, useDcaPositions, useGridBots, useGridPositions, useMarks, useTradeFee } from '../lib/queries'
 import { dateTime, duration, num, pct, plural, price, share, signedUsd, usd } from '../lib/format'
 import {
   Badge,
@@ -12,32 +12,31 @@ import {
   Help,
 } from '../components/ui'
 import { IconAlert } from '../components/icons'
-import { fuelUsed, liquidationRoom, NEARLY_DRY } from '../lib/bots'
+import { fuelUsed, gridLiquidationRoom, gridPlace, liquidationRoom, NEARLY_DRY, rangePosition } from '../lib/bots'
+import { LIQ_DANGER, LIQ_WATCH } from '../lib/guards'
+import type { DcaBot, DcaPosition, GridBot } from '../lib/types'
+import { GridBotCard } from '../components/GridBotCard'
 import { HELP } from '../lib/glossary'
 
 /**
- * Running bots. Embedded in *En curso* it drops its figures strip and hides
- * what has nothing to show; the stopped ones are history and live in the
- * Historial as `StoppedBots`.
+ * Running bots: the summary across both families, one card per grid bot with
+ * its range, its money and its risk, and the DCA bots' table. Embedded in
+ * *En curso* it is a compact list that links here; the stopped ones are
+ * history and live in the Historial as `StoppedBots`.
  */
 export function Bots({ embedded = false }: { embedded?: boolean }) {
   const dca = useDcaBots()
   const grid = useGridBots()
   const bots = dca.data ?? []
-  const marks = useMarks(bots.map((b) => b.instId))
-  const positions = useDcaPositions(bots)
   const grids = grid.data ?? []
+  const marks = useMarks([...bots, ...grids].map((b) => b.instId))
+  const positions = useDcaPositions(bots)
+  // The per-bot details cost a request each, so only the full view asks.
+  const gridPositions = useGridPositions(embedded ? [] : grids)
+  const fees = useTradeFee('FUTURES')
+  // OKX signs fees from the account's side: negative is charged.
+  const maker = -num(fees.data?.[0]?.maker) || 0.0002
 
-  const invested = bots.reduce((sum, b) => sum + num(b.investmentAmt), 0)
-  const pnl = bots.reduce((sum, b) => sum + num(b.totalPnl), 0)
-  const funding = bots.reduce((sum, b) => sum + num(b.totalFundingFee), 0)
-
-  // The worst fuel gauge across the bots, because that is the one that decides
-  // how much room the account still has, not the average.
-  const tightest = bots.reduce(
-    (worst, b) => Math.max(worst, fuelUsed(b, positions.data?.[b.algoId])),
-    0,
-  )
   const nearlyDry = bots.filter((b) => fuelUsed(b, positions.data?.[b.algoId]) >= NEARLY_DRY)
 
   const error = dca.error ?? grid.error
@@ -45,8 +44,26 @@ export function Bots({ embedded = false }: { embedded?: boolean }) {
     return <ErrorNotice title="No se pudieron cargar los bots" message={error.message} />
   }
 
-  const isLoading = dca.isLoading
-  if (embedded && !isLoading && bots.length === 0 && grids.length === 0) return null
+  const isLoading = dca.isLoading || grid.isLoading
+  if (embedded) {
+    return isLoading || bots.length + grids.length === 0 ? null : (
+      <BotsSummary dca={bots} grids={grids} marks={marks} dcaPositions={positions.data} />
+    )
+  }
+
+  const pnl = bots.reduce((s, b) => s + num(b.totalPnl), 0) + grids.reduce((s, g) => s + num(g.totalPnl), 0)
+  const invested =
+    bots.reduce((s, b) => s + num(b.investmentAmt), 0) + grids.reduce((s, g) => s + num(g.investment), 0)
+  const gridProfit = grids.reduce((s, g) => s + num(g.gridProfit), 0)
+  const gridFees = grids.reduce((s, g) => s - num(g.fee), 0)
+  // The tightest liquidation across every bot, from the live price where known:
+  // the one that decides how much room the account has, not the average.
+  const rooms = [
+    ...grids.map((g) => ({ name: g.instId.split('-')[0], room: gridLiquidationRoom(g, marks[g.instId]) })),
+    ...bots.map((b) => ({ name: b.instId.split('-')[0], room: liquidationRoom(positions.data?.[b.algoId], marks[b.instId]) })),
+  ].filter((r): r is { name: string; room: number } => r.room !== null)
+  const tightest = rooms.sort((a, b) => a.room - b.room)[0]
+  const count = bots.length + grids.length
 
   return (
     <>
@@ -55,7 +72,7 @@ export function Bots({ embedded = false }: { embedded?: boolean }) {
           <IconAlert />
           <div className="notice-body">
             <p className="notice-title">
-              {plural(nearlyDry.length, 'bot casi sin munición', 'bots casi sin munición')}
+              {plural(nearlyDry.length, 'bot casi sin órdenes de seguridad', 'bots casi sin órdenes de seguridad')}
             </p>
             <p className="notice-text">
               {nearlyDry.map((b) => b.instId).join(', ')} — ha gastado tres cuartas partes de sus
@@ -66,48 +83,194 @@ export function Bots({ embedded = false }: { embedded?: boolean }) {
         </div>
       )}
 
-      {!embedded && (
       <div className="kpi-row">
         <Stat
           label="Resultado de los bots"
           help={HELP.botPnl}
           hero
-          glow
           loading={isLoading}
           value={<DeltaValue value={pnl}>{signedUsd(pnl)}</DeltaValue>}
           badge={
-            bots.length > 0 ? (
+            count > 0 ? (
               <Badge variant="live" pulse>
-                {plural(bots.length, 'activo', 'activos')}
+                {plural(count, 'activo', 'activos')}
               </Badge>
             ) : undefined
           }
+          foot={<span>{count ? `sobre ${usd(invested)} invertidos` : 'ningún bot en marcha'}</span>}
+        />
+        <Stat
+          label="Ganado por las rejillas"
+          help={HELP.gridProfit}
+          loading={isLoading}
+          value={grids.length ? <DeltaValue value={gridProfit}>{signedUsd(gridProfit)}</DeltaValue> : '—'}
+          foot={<span>{grids.length ? `${usd(gridFees)} pagados en comisiones` : 'sin bots de rejilla'}</span>}
+        />
+        <Stat
+          label="Liquidación más cercana"
+          help={HELP.liqPrice}
+          loading={isLoading}
+          value={tightest ? `a ${share(tightest.room, 0)}` : '—'}
+          foot={<span>{tightest ? `${tightest.name}, desde el precio actual` : 'ningún bot con liquidación'}</span>}
         />
         <Stat
           label="Capital comprometido"
           help={HELP.committed}
           loading={isLoading}
           value={usd(invested)}
-          foot={<span>Reservado por los bots, no necesariamente desplegado</span>}
-        />
-        <Stat
-          label="Órdenes de seguridad usadas"
-          help={HELP.fuelUsed}
-          loading={isLoading}
-          value={share(tightest, 0)}
-          foot={<span>Órdenes de seguridad usadas por el bot más apurado</span>}
-        />
-        <Stat
-          label="Financiación acumulada"
-          help={HELP.funding}
-          loading={isLoading}
-          value={<DeltaValue value={funding}>{signedUsd(funding)}</DeltaValue>}
-          foot={<span>Ya descontada del PnL de al lado, no se resta otra vez</span>}
+          foot={<span>ya dentro del patrimonio, no se suma</span>}
         />
       </div>
+
+      {!isLoading && count === 0 && (
+        <Card title="Ningún bot en marcha">
+          <div className="prose">
+            <p>
+              Cuando pongas en marcha un bot de rejilla o de DCA en OKX, aparecerá aquí con su rango, su posición, lo
+              que lleva ganado y lo lejos que está de la liquidación. Los que ya paraste están en{' '}
+              <a className="card-link" href="#/historial">Historial → Bots detenidos</a>.
+            </p>
+          </div>
+        </Card>
       )}
 
-      {(!embedded || bots.length > 0) && (
+      {grids.map((g) => (
+        <GridBotCard key={g.algoId} bot={g} position={gridPositions.byAlgo[g.algoId]} mark={marks[g.instId]} makerFee={maker} />
+      ))}
+
+      {bots.length > 0 && <DcaCard bots={bots} dca={dca} positions={positions} marks={marks} />}
+
+      {count > 0 && (
+        <p className="bots-foot sub">
+          Los bots ya detenidos, con lo que dejó cada uno, están en{' '}
+          <a className="card-link" href="#/historial">Historial → Bots detenidos</a>.
+        </p>
+      )}
+    </>
+  )
+}
+
+/** One line per running bot, for *En curso*; the detail is a click away. */
+function BotsSummary({
+  dca,
+  grids,
+  marks,
+  dcaPositions,
+}: {
+  dca: DcaBot[]
+  grids: GridBot[]
+  marks: Record<string, number>
+  dcaPositions: Record<string, DcaPosition> | undefined
+}) {
+  const rows = [
+    ...grids.map((g) => {
+      const mark = marks[g.instId]
+      const place = mark ? gridPlace(g, mark) : null
+      const at = mark ? rangePosition(num(g.minPx), num(g.maxPx), mark) : null
+      return {
+        id: g.algoId,
+        name: g.instId.split('-')[0],
+        kind: 'Rejilla',
+        direction: g.direction,
+        lever: g.lever,
+        invested: num(g.investment),
+        pnl: num(g.totalPnl),
+        state:
+          place === 'dentro' ? `dentro del rango, al ${share(at ?? 0, 0)}` : place ? `fuera del rango, por ${place === 'encima' ? 'arriba' : 'abajo'}` : '—',
+        room: gridLiquidationRoom(g, mark),
+      }
+    }),
+    ...dca.map((b) => {
+      const p = dcaPositions?.[b.algoId]
+      return {
+        id: b.algoId,
+        name: b.instId.split('-')[0],
+        kind: 'DCA',
+        direction: b.direction,
+        lever: b.lever,
+        invested: num(b.investmentAmt),
+        pnl: num(b.totalPnl),
+        state: `${num(p?.fillSafetyOrds)}/${b.maxSafetyOrds} órdenes de seguridad`,
+        room: liquidationRoom(p, marks[b.instId]),
+      }
+    }),
+  ]
+  return (
+    <Card
+      title="Bots en marcha"
+      subtitle={`${plural(rows.length, 'bot', 'bots')} · el detalle de cada uno, su rango y su posición, en Bots`}
+      action={
+        <a className="card-link" href="#/bots">
+          Ver bots →
+        </a>
+      }
+      flush
+    >
+      <TableWrap>
+        <table className="data">
+          <thead>
+            <tr>
+              <th>Bot</th>
+              <th>Dirección</th>
+              <th className="num">Invertido</th>
+              <th>Estado</th>
+              <th className="num">Liquidación</th>
+              <th className="num">Resultado</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r) => (
+              <tr key={r.id}>
+                <td>
+                  <span>
+                    <strong>{r.name}</strong> <span className="sub">{r.kind}</span>
+                  </span>
+                </td>
+                <td>
+                  <span>
+                    <Badge variant={r.direction === 'short' ? 'sell' : r.direction === 'long' ? 'buy' : 'neutral'}>
+                      {r.direction === 'short' ? 'Corto' : r.direction === 'long' ? 'Largo' : 'Neutral'}
+                    </Badge>
+                    {num(r.lever) > 0 && <span className="sub"> {r.lever}×</span>}
+                  </span>
+                </td>
+                <td className="num">{usd(r.invested)}</td>
+                <td className="sub">{r.state}</td>
+                <td className="num">
+                  {r.room !== null ? (
+                    <span className={`badge badge--${r.room < LIQ_DANGER ? 'sell' : r.room < LIQ_WATCH ? 'warn' : 'neutral'}`}>
+                      a {share(r.room, 0)}
+                    </span>
+                  ) : (
+                    '—'
+                  )}
+                </td>
+                <td className="num">
+                  <DeltaValue value={r.pnl}>{signedUsd(r.pnl)}</DeltaValue>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </TableWrap>
+    </Card>
+  )
+}
+
+/** The DCA bots: a martingale is read by the safety orders it has left. */
+function DcaCard({
+  bots,
+  dca,
+  positions,
+  marks,
+}: {
+  bots: DcaBot[]
+  dca: ReturnType<typeof useDcaBots>
+  positions: ReturnType<typeof useDcaPositions>
+  marks: Record<string, number>
+}) {
+  const isLoading = dca.isLoading
+  return (
       <Card
         title="Bots DCA en marcha"
         subtitle={
@@ -226,47 +389,6 @@ export function Bots({ embedded = false }: { embedded?: boolean }) {
           </TableWrap>
         )}
       </Card>
-      )}
-
-      {grids.length > 0 && (
-        <Card title="Bots de rejilla en marcha" flush dimmed={grid.isFetching}>
-          <TableWrap>
-            <table className="data">
-              <thead>
-                <tr>
-                  <th>Instrumento</th>
-                  <th className="num">Inversión</th>
-                  <th className="num">Rango</th>
-                  <th className="num">Niveles</th>
-                  <th className="num">Arbitrajes</th>
-                  <th className="num">PnL</th>
-                </tr>
-              </thead>
-              <tbody>
-                {grids.map((g) => (
-                  <tr key={g.algoId}>
-                    <td>
-                      <strong>{g.instId}</strong>
-                      <span className="sub"> desde {dateTime(num(g.cTime))}</span>
-                    </td>
-                    <td className="num">{usd(num(g.investment))}</td>
-                    <td className="num">
-                      {price(num(g.minPx))} – {price(num(g.maxPx))}
-                    </td>
-                    <td className="num">{g.gridNum}</td>
-                    <td className="num">{g.arbitrageNum}</td>
-                    <td className="num">
-                      <DeltaValue value={num(g.totalPnl)}>{signedUsd(num(g.totalPnl))}</DeltaValue>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </TableWrap>
-        </Card>
-      )}
-
-    </>
   )
 }
 

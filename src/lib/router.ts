@@ -9,6 +9,7 @@ export const ROUTES = [
   // Tu cuenta
   'resumen',
   'encurso',
+  'bots',
   'cartera',
   'rendimiento',
   'historial',
@@ -30,7 +31,6 @@ export type Route = (typeof ROUTES)[number]
 const ALIASES: Record<string, Route> = {
   senales: 'estrategias',
   posiciones: 'encurso',
-  bots: 'encurso',
   ordenes: 'historial',
 }
 

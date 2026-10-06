@@ -33,6 +33,55 @@ export const HELP = {
     </>
   ),
 
+  // ---- Bots de rejilla ----
+  gridRange: (
+    <>
+      <p>
+        Un bot de rejilla pone órdenes de compra y de venta en cada nivel entre el precio mínimo y el máximo, y gana
+        un escalón cada vez que el precio cruza un nivel y vuelve: un arbitraje. Gana mientras el precio se mueve{' '}
+        <strong>dentro</strong> del rango.
+      </p>
+      <p>
+        Fuera deja de operar. En un bot largo, por debajo del mínimo ya ha comprado todos los niveles: mantiene la
+        posición entera, no le queda con qué comprar y su límite es la liquidación. Por encima del máximo lo ha vendido
+        todo y espera parado a que el precio vuelva.
+      </p>
+    </>
+  ),
+  gridProfit: (
+    <p>
+      Lo que han dejado los arbitrajes ya cerrados: cada compra en un nivel vendida en el de arriba (o al revés). Es
+      dinero realizado. Junto a él, el flotante es lo que gana o pierde ahora la posición que el bot tiene abierta.
+    </p>
+  ),
+  gridFloat: (
+    <p>
+      La ganancia o pérdida de la posición que el bot mantiene abierta ahora mismo, a precio de mercado. Cambia con
+      cada movimiento y no está cobrada. Resultado total = rejilla + flotante.
+    </p>
+  ),
+  gridFees: (
+    <p>
+      Lo pagado en comisiones por todas las órdenes del bot. Un bot con muchos niveles hace muchas operaciones
+      pequeñas, y cada una paga comisión: si se comen buena parte de lo que gana la rejilla, los niveles están
+      demasiado juntos para lo que se mueve el precio.
+    </p>
+  ),
+  gridPerArbitrage: (
+    <p>
+      La distancia entre dos niveles, menos la comisión de la compra y la de la venta (las órdenes de la rejilla
+      esperan en el libro, así que pagan la tarifa maker). Es lo que gana cada arbitraje. Si sale negativa, el bot
+      pierde con cada vuelta por mucho que el precio vaya y venga.
+    </p>
+  ),
+  gridMargin: (
+    <p>
+      Con margen <strong>cruzado</strong>, la posición del bot usa el margen libre de toda la cuenta: si otra
+      posición cruzada pierde, la liquidación del bot se acerca, y al revés. Con margen aislado solo arriesga lo que
+      se le asignó.
+    </p>
+  ),
+
   // ---- Resumen, Cartera ----
   netWorth: (
     <p>

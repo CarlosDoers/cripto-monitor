@@ -86,6 +86,12 @@ export const ALLOWED_PATHS = new Set([
   // the published v5 docs; the paths come from OKX's own agent-trade-kit.
   '/api/v5/tradingBot/grid/orders-algo-pending',
   '/api/v5/tradingBot/grid/orders-algo-history',
+  // A contract grid's own position (average price, size, liquidation) and its
+  // orders: the resting buys and sells around price, and the fills behind each
+  // arbitrage. Read-only like the rest; the list above says what the bot is,
+  // these say what it holds and what it is about to do.
+  '/api/v5/tradingBot/grid/positions',
+  '/api/v5/tradingBot/grid/sub-orders',
   '/api/v5/tradingBot/dca/ongoing-list',
   '/api/v5/tradingBot/dca/history-list',
   '/api/v5/tradingBot/dca/position-details',

@@ -70,7 +70,7 @@ export function Overview() {
   const algos = useAlgoOrders()
   const dcaList = dcaBots.data ?? []
   const botPositions = useDcaPositions(dcaList)
-  const botMarks = useMarks(dcaList.map((b) => b.instId))
+  const botMarks = useMarks([...dcaList, ...(gridBots.data ?? [])].map((b) => b.instId))
   const history = useNetWorthHistory()
 
   const account = balance.data?.[0]
@@ -121,6 +121,7 @@ export function Overview() {
     atRisk,
     locked,
     tightest,
+    gridRisk,
   } = accountAlerts({
     account,
     positions: openPositions,
@@ -131,7 +132,10 @@ export function Overview() {
     freeMargin: portfolio.freeMargin,
     carryExits,
     marks: botMarks,
+    gridBots: gridBots.data ?? [],
   })
+  // The grid whose liquidation is nearest the live price, for the bots tile.
+  const closestGrid = gridRisk.filter((r) => r.room !== null).sort((a, b) => (a.room ?? 1) - (b.room ?? 1))[0]
   const narrow = useMediaQuery(NARROW)
   const todayStart = new Date().setHours(0, 0, 0, 0)
   const todayCount = perf.trades.filter((t) => t.closedAt >= todayStart).length
@@ -454,6 +458,7 @@ export function Overview() {
               <span>
                 <DeltaValue value={botPnl}>{signedUsd(botPnl)}</DeltaValue> · ya dentro del
                 patrimonio
+                {closestGrid && ` · liquidación más cercana a ${share(closestGrid.room ?? 0, 0)} (${closestGrid.bot.instId.split('-')[0]})`}
               </span>
             ) : (
               <span>ningún bot en marcha</span>

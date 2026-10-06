@@ -1,5 +1,5 @@
 import { accountAlerts, type AccountAlert } from './alerts'
-import { fuelUsed, liquidationRoom } from './bots'
+import { feeShareOfGrid, fuelUsed, gridLiquidationRoom, gridPlace, liquidationRoom, rangePosition } from './bots'
 import { instTypeOf } from './instruments'
 import { BASE_FUNDING_APR, CARRY_EVIDENCE, CARRY_RULE, carryStatus, trailingApr } from './carry'
 import { emaTouchSummary } from './emaTouch'
@@ -141,8 +141,11 @@ export async function collectAccount(get: Get): Promise<RawAccount> {
   )
   const dcaPositions = Object.fromEntries(details.flat().filter((p) => p?.algoId).map((p) => [p.algoId, p]))
 
-  const botTypes = [...new Set(dcaBots.map((b) => instTypeOf(b.instId)))]
-  const botIds = new Set(dcaBots.map((b) => b.instId))
+  // Live prices for every bot's instrument: neither the DCA details nor the
+  // grid list carries a mark, and both liquidation distances are read from it.
+  const allBots = [...dcaBots, ...grid, ...contractGrid]
+  const botTypes = [...new Set(allBots.map((b) => instTypeOf(b.instId)))]
+  const botIds = new Set(allBots.map((b) => b.instId))
   const marks: Record<string, number> = {}
   for (const list of await Promise.all(botTypes.map((instType) => get<Ticker>('/api/v5/market/tickers', { instType })))) {
     for (const t of list) if (botIds.has(t.instId)) marks[t.instId] = num(t.last)
@@ -211,6 +214,7 @@ export function buildAccount(raw: RawAccount, now = Date.now()): AccountSnapshot
     freeMargin: portfolio.freeMargin,
     carryExits,
     marks: raw.marks,
+    gridBots: raw.gridBots,
   })
   return {
     at: now,
@@ -351,12 +355,37 @@ export function renderBots(s: AccountSnapshot): string {
       signedUsd(num(b.totalPnl)),
     ]
   })
-  const grid = s.gridBots.map((g) => [g.instId, usd(num(g.investment)), `${price(num(g.minPx))}–${price(num(g.maxPx))}`, g.gridNum, signedUsd(num(g.totalPnl))])
+  // The same reading as the Bots view: where price is in the range, the
+  // liquidation from the live price, and what the fees took of the grid's profit.
+  const grid = s.gridBots.map((g) => {
+    const mark = s.marks[g.instId]
+    const at = mark ? rangePosition(num(g.minPx), num(g.maxPx), mark) : null
+    const place = mark ? gridPlace(g, mark) : null
+    const room = gridLiquidationRoom(g, mark)
+    const feeShare = feeShareOfGrid(g)
+    return [
+      g.instId,
+      `${g.direction === 'short' ? 'Corto' : g.direction === 'long' ? 'Largo' : 'Neutral'}${num(g.lever) > 0 ? ` ${g.lever}×` : ''}`,
+      usd(num(g.investment)),
+      `${price(num(g.minPx))}–${price(num(g.maxPx))} (${g.gridNum} niveles)`,
+      mark
+        ? `${price(mark)} · ${place === 'dentro' ? `dentro, al ${share(at ?? 0, 0)}` : `fuera, por ${place === 'encima' ? 'arriba' : 'abajo'}`}`
+        : '—',
+      num(g.liqPx) > 0 ? `${price(num(g.liqPx))}${room !== null ? ` (a ${share(room, 0)} del precio)` : ''}` : '—',
+      `${signedUsd(num(g.gridProfit))} en ${g.arbitrageNum} arbitrajes`,
+      signedUsd(num(g.floatProfit)),
+      `${usd(Math.abs(num(g.fee)))}${feeShare !== null ? ` (${share(feeShare, 0)} de la rejilla)` : ''}`,
+      num(g.slTriggerPx) > 0 ? price(num(g.slTriggerPx)) : 'SIN STOP',
+      signedUsd(num(g.totalPnl)),
+    ]
+  })
   return [
     '## Bots en marcha',
     s.dcaBots.length || s.gridBots.length ? '' : '_(ninguno)_',
     s.dcaBots.length ? table(['DCA', 'Dirección', 'Invertido', 'Precio medio', 'Liquidación', 'Órdenes de seguridad usadas', 'PnL'], dca) : '',
-    s.gridBots.length ? table(['Grid', 'Invertido', 'Rango', 'Niveles', 'PnL'], grid) : '',
+    s.gridBots.length
+      ? table(['Rejilla', 'Dirección', 'Invertido', 'Rango', 'Precio ahora', 'Liquidación', 'Ganado por la rejilla', 'Flotante', 'Comisiones', 'Stop', 'PnL total'], grid)
+      : '',
   ]
     .filter(Boolean)
     .join('\n\n')

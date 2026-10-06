@@ -322,6 +322,11 @@ export function Guide() {
             bot.
           </li>
           <li>
+            <strong>Bots</strong>: cada bot en marcha con su rango y dónde está el precio dentro de él, lo
+            que ha ganado la rejilla frente a lo que se han llevado las comisiones, la posición que acumula
+            y lo lejos que está de la liquidación.
+          </li>
+          <li>
             <strong>Cartera</strong>: qué monedas tienes, cuánto valen y cuánto dinero está disponible
             frente a comprometido.
           </li>

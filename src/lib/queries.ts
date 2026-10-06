@@ -16,6 +16,8 @@ import type {
   FundingRate,
   FundingBoardRow,
   GridBot,
+  GridPosition,
+  GridSubOrder,
   IndexTicker,
   OrderBook,
   Instrument,
@@ -475,6 +477,47 @@ export function useGridBots() {
       return families.flat()
     },
     refetchInterval: LIVE,
+  })
+}
+
+/**
+ * What each contract grid holds: average price, size, liquidation, margin.
+ * One request per bot, so a minute rather than the 30 s of the list — and only
+ * while something on screen asks. Spot grids hold coins, not a position.
+ */
+const GRID_DETAIL = 60_000
+
+export function useGridPositions(bots: GridBot[]) {
+  const contract = bots.filter((b) => b.algoOrdType === 'contract_grid')
+  const results = useQueries({
+    queries: contract.map((b) => ({
+      queryKey: ['grid-position', b.algoId],
+      queryFn: () =>
+        okx<GridPosition>('/api/v5/tradingBot/grid/positions', { algoOrdType: b.algoOrdType, algoId: b.algoId }),
+      refetchInterval: GRID_DETAIL,
+      staleTime: GRID_DETAIL,
+    })),
+  })
+  const byAlgo: Record<string, GridPosition | undefined> = {}
+  contract.forEach((b, i) => {
+    byAlgo[b.algoId] = results[i]?.data?.[0]
+  })
+  return { byAlgo, isLoading: results.some((r) => r.isLoading) }
+}
+
+/**
+ * A grid's orders: `live` are the levels resting around price, `filled` the
+ * executions behind the arbitrages (the latest 100). `enabled` lets a closed
+ * panel cost nothing.
+ */
+export function useGridOrders(bot: GridBot, type: 'live' | 'filled', enabled = true) {
+  return useQuery<GridSubOrder[], ApiError>({
+    queryKey: ['grid-orders', bot.algoId, type],
+    queryFn: () =>
+      okx<GridSubOrder>('/api/v5/tradingBot/grid/sub-orders', { algoOrdType: bot.algoOrdType, algoId: bot.algoId, type }),
+    enabled,
+    refetchInterval: type === 'live' ? GRID_DETAIL : SLOW,
+    staleTime: type === 'live' ? GRID_DETAIL : SLOW,
   })
 }
 

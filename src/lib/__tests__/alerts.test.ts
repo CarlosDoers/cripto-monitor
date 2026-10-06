@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { accountAlerts, type AlertInput } from '../alerts'
 import { liquidationRoom } from '../bots'
 import { instTypeOf } from '../instruments'
-import type { AccountBalance } from '../types'
+import type { AccountBalance, GridBot } from '../types'
 import { algo, dcaBot, dcaPosition, position } from './fixtures'
 
 /** es-ES puts a no-break space before %; compare as plain text. */
@@ -78,6 +78,34 @@ describe('accountAlerts', () => {
     expect(plain(fromAvg.alerts[0].text)).toContain('14 % del precio medio')
     const fromMark = accountAlerts({ ...base, dcaBots: [bot], dcaPositions: { b1: pos }, marks: { 'ETH-USDT-SWAP': 1800 } })
     expect(plain(fromMark.alerts[0].text)).toContain('4 % del precio actual')
+  })
+})
+
+describe('grid bots in the notice', () => {
+  const grid = { algoId: 'g1', instId: 'NEAR-USD_UM_XPERP-310613', direction: 'long', minPx: '4.3', maxPx: '5.25', liqPx: '4.236' } as GridBot
+
+  it('says nothing while price is in range and liquidation far', () => {
+    expect(accountAlerts({ ...base, gridBots: [grid], marks: { [grid.instId]: 5.1 } }).alerts).toHaveLength(0)
+  })
+
+  it('flags a grid near liquidation, from the live price', () => {
+    const a = accountAlerts({ ...base, gridBots: [{ ...grid, minPx: '4.0' }], marks: { [grid.instId]: 4.4 } })
+    expect(plain(a.alerts[0].text)).toContain('a un 4 % de su liquidación')
+    expect(a.alarm).toBe(true)
+  })
+
+  it('tells an adverse exit from an idle one', () => {
+    const below = accountAlerts({ ...base, gridBots: [grid], marks: { [grid.instId]: 4.25 } })
+    expect(below.alerts.map((x) => x.text).join()).toContain('en su contra')
+    expect(below.alarm).toBe(true)
+    const above = accountAlerts({ ...base, gridBots: [grid], marks: { [grid.instId]: 5.5 } })
+    expect(above.alerts[0].text).toContain('ya no opera')
+    expect(above.alarm).toBe(false)
+  })
+
+  it('reads the sides the other way for a short grid', () => {
+    const short = { ...grid, direction: 'short', liqPx: '7' }
+    expect(accountAlerts({ ...base, gridBots: [short], marks: { [grid.instId]: 5.5 } }).alerts[0].text).toContain('en su contra')
   })
 })
 

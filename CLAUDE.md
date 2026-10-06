@@ -406,6 +406,37 @@ The list is on `LIVE` and `position-details` on `SLOW`, deliberately: the list i
 one request for every bot and carries the live PnL, while the details cost one
 invocation *per bot* and add only numbers that change when a safety order fills.
 
+**Bots is its own section again** (2026-10, route `bots`, after En curso): the
+user had three contract grids running and could not find them — the grid table
+showed investment, range, levels, arbitrages and PnL, and nothing about risk.
+Each grid now gets a `GridBotCard`: the range on a line with the live price,
+the position's average and the liquidation (labels placed by priority and
+dropped on collision, like `PositionRisk`; the range itself is named in the
+sentence under it, because with price near one edge and liquidation near the
+other its own labels are the ones dropped); result, grid profit (realised by
+the arbitrages) against float (the open position), **fees paid and their share
+of the grid profit** (the PUMP grid had paid 10,94 US$ against 14,23 earned,
+77 %), the position, the liquidation *from the live price* with the margin
+mode, what one arbitrage keeps after two maker fees (`netPerArbitrage`), the
+next buy and sell levels, the stop (all three had none) and what stopping does,
+and the latest fills behind a `<details>` that only fetches when opened.
+`/tradingBot/grid/positions` and `/tradingBot/grid/sub-orders` were added to the
+allowlist for this; both are one request per bot, so they poll every minute and
+only while the view is open. **A contract grid's position is not in
+`/account/positions`**, like a DCA bot's, and it runs on **cross** margin: its
+liquidation moves with the rest of the account. The grid rules live in
+`src/lib/bots.ts` (`rangePosition`, `gridPlace`, `gridStep`, `gridLiquidationRoom`,
+`nextLevels`, `feeShareOfGrid`), shared by the view, the Resumen's notice and the
+Claude snapshot. The notice now also raises a grid within `LIQ_DANGER` of its
+liquidation and a price out of range — an alarm when it left on the losing side
+(the grid holds the whole position and cannot average further), a plain notice
+when it left on the winning side (idle). OKX's fills list names the contract
+family as the fee currency (`USD_UM_XPERP`) and orders them by placement, so the
+view relabels the one and sorts by fill time. En curso keeps a one-line-per-bot
+summary that links here. `totalPnl = gridProfit + floatProfit`, checked on the
+NEAR grid to the cent; whether `gridProfit` is net of `fee` is not documented,
+so the fee is shown beside it as a share, never subtracted.
+
 A subaccount named in the account (`/users/subaccount/list`) is not where the
 bots are unless it holds money — this account has one with 0.0007 USD in it,
 which sent the first investigation down a blind alley. Check `totalEq` before
@@ -413,10 +444,10 @@ concluding anything from a subaccount's existence.
 
 ### Navigation: one question per section
 
-The 2026-09 simplification reorganised the app around the questions a user brings to it, because the old eleven-tab layout was organised around OKX's endpoints. Nav groups in `Layout.tsx`: **Tu cuenta** (Resumen, En curso, Cartera, Rendimiento, Historial), **El mercado** (Mercados, Screener, Análisis, Estrategias, Financiación), **Ayuda** (Guía). Each `NAV` description is the section's question, and the header prints it.
+The 2026-09 simplification reorganised the app around the questions a user brings to it, because the old eleven-tab layout was organised around OKX's endpoints. Nav groups in `Layout.tsx`: **Tu cuenta** (Resumen, En curso, Bots, Cartera, Rendimiento, Historial), **El mercado** (Mercados, Screener, Análisis, Estrategias, Financiación), **Ayuda** (Guía). Each `NAV` description is the section's question, and the header prints it.
 
-- **Old hashes still resolve.** `ALIASES` in `router.ts` maps `senales` → `estrategias`, `posiciones` and `bots` → `encurso`, `ordenes` → `historial`, so bookmarks and old links keep working.
-- **En curso** (`Active.tsx`) is Posiciones, Bots and the open Órdenes stacked, each rendered with `embedded` so it returns `null` when empty and drops its own KPI strip. With nothing open it says so in a sentence, with the free money and the last closed trade, instead of three strips of zeros over three empty tables.
+- **Old hashes still resolve.** `ALIASES` in `router.ts` maps `senales` → `estrategias`, `posiciones` → `encurso`, `ordenes` → `historial`, so bookmarks and old links keep working. `bots` is a route again (2026-10), so `#/bots` opens it.
+- **En curso** (`Active.tsx`) is Posiciones, a one-line-per-bot summary linking to Bots, and the open Órdenes stacked, each rendered with `embedded` so it returns `null` when empty and drops its own KPI strip. With nothing open it says so in a sentence, with the free money and the last closed trade, instead of three strips of zeros over three empty tables.
 - **Historial** is tabbed: Órdenes (`OrderHistory`, defaults to futuros), Ejecuciones (**grouped by `ordId`** with a size-weighted price, because one market order produced ten identical-looking rows), Bots detenidos (`StoppedBots`: duration and result over investment), Depósitos y retiradas, Movimientos.
 - **Señales became two sections.** `Signals` takes `section`: `analysis` is the context chart (levels, trendlines, SMC, EMAs) on every timeframe, and `strategies` is the three measured strategies with their tabs. They were one view whose first tab behaved nothing like the others.
 - **The Resumen opens with a sentence** (`Summary` in `Overview.tsx`) that answers "¿cómo voy?": result since the first deposit, the last 30 days, what is open or what money is free, and a pointer to any warning. *Resultado total* comes from `useAccountResult()` in `src/lib/result.ts`, shared with Historial so the two can never disagree. Win rate and profit factor left the KPI strip for Rendimiento. Its `partial` flag is false while loading: until the day candles arrive every deposit is unpriced, and the `parcial` badge flashed on every load.

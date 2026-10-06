@@ -4789,3 +4789,208 @@ table.data td.num {
 .networth-trail-plot svg {
   display: block;
 }
+
+/* ---------- Bots: one card per grid ---------- */
+
+.bot-badges {
+  display: inline-flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.bot-card {
+  display: grid;
+  gap: 14px;
+}
+
+.grid-range {
+  padding: 4px 0 0;
+}
+
+.grid-range-track {
+  position: relative;
+  height: 14px;
+  border-bottom: 1px solid var(--baseline);
+}
+
+/* The range itself: where the grid trades. */
+.grid-range-band {
+  position: absolute;
+  display: block;
+  top: 2px;
+  bottom: 0;
+  /* Neutral on purpose: the accent is for navigation and controls, and never
+     fills a surface this size. */
+  background: var(--surface-2);
+  border-left: 1px solid var(--ink-muted);
+  border-right: 1px solid var(--ink-muted);
+}
+
+.grid-range-tick {
+  position: absolute;
+  display: block;
+  bottom: -4px;
+  width: 2px;
+  height: 18px;
+  transform: translateX(-1px);
+  background: var(--ink-muted);
+}
+
+.grid-range-tick.is-price {
+  width: 8px;
+  height: 8px;
+  bottom: 3px;
+  border-radius: 50%;
+  transform: translateX(-4px);
+  background: var(--ink-primary);
+  box-shadow: 0 0 0 2px var(--surface-1);
+}
+
+.grid-range-tick.is-liq {
+  background: var(--critical);
+}
+
+.grid-range-tick.is-edge {
+  background: var(--ink-secondary);
+}
+
+.grid-range-tick.is-avg {
+  height: 10px;
+  background: var(--ink-faint);
+}
+
+.grid-range-labels {
+  position: relative;
+  height: 18px;
+  margin-top: 6px;
+}
+
+.grid-range-label {
+  position: absolute;
+  top: 0;
+  white-space: nowrap;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  color: var(--ink-muted);
+  transform: translateX(-50%);
+}
+
+.grid-range-label.is-start {
+  transform: none;
+}
+
+.grid-range-label.is-end {
+  transform: translateX(-100%);
+}
+
+.grid-range-label.is-price {
+  color: var(--ink-primary);
+  font-weight: 600;
+}
+
+.grid-range-label.is-liq {
+  color: var(--critical);
+}
+
+.bot-place {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--ink-secondary);
+}
+
+.bot-place.is-out {
+  padding-left: 10px;
+  border-left: 2px solid var(--warning);
+}
+
+.bot-figures {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin: 0;
+  border-top: 1px solid var(--border);
+}
+
+.bot-figures > div {
+  display: grid;
+  align-content: start;
+  gap: 3px;
+  min-width: 0;
+  padding: 12px 14px 12px 0;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.bot-figures > div:not(:nth-child(4n + 1)) {
+  padding-left: 14px;
+  border-left: 1px solid var(--border-subtle);
+}
+
+.bot-figures dt {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  white-space: nowrap;
+}
+
+.bot-figures dd {
+  margin: 0;
+  font-family: var(--mono);
+  font-size: 16px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* A unit beside a figure ("en largo") reads in the text face and stays with it. */
+.bot-figures dd .sub {
+  font-family: var(--font);
+  font-size: 11.5px;
+  white-space: nowrap;
+}
+
+.bot-figures dd.sub {
+  font-family: inherit;
+  font-size: 11.5px;
+  overflow-wrap: anywhere;
+}
+
+.bot-guard {
+  margin: 0;
+  font-size: 12px;
+}
+
+.bot-fills summary {
+  cursor: pointer;
+  font-size: 12.5px;
+  font-weight: 500;
+}
+
+.bot-fills[open] summary {
+  margin-bottom: 10px;
+}
+
+.bots-foot {
+  margin: 0;
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--border);
+  font-size: 12px;
+}
+
+@media (max-width: 900px) {
+  .bot-figures {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .bot-figures > div:not(:nth-child(4n + 1)) {
+    padding-left: 0;
+    border-left: none;
+  }
+
+  .bot-figures > div:nth-child(2n) {
+    padding-left: 14px;
+    border-left: 1px solid var(--border-subtle);
+  }
+}

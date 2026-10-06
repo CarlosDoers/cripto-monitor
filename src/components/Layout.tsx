@@ -24,6 +24,7 @@ import {
   IconTarget,
   IconBook,
   IconFunding,
+  IconBots,
 } from './icons'
 
 type NavGroup = 'cuenta' | 'mercado' | 'ayuda'
@@ -44,6 +45,12 @@ const NAV: Record<Route, { label: string; description: string; group: NavGroup; 
     description: '¿Qué tengo abierto ahora? Posiciones, bots y órdenes pendientes, con su riesgo.',
     group: 'cuenta',
     Icon: IconPositions,
+  },
+  bots: {
+    label: 'Bots',
+    description: '¿Cómo van mis bots? Su rango, lo que ganan, lo que pagan en comisiones y lo lejos que están de la liquidación.',
+    group: 'cuenta',
+    Icon: IconBots,
   },
   cartera: {
     label: 'Cartera',

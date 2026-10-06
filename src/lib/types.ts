@@ -446,21 +446,77 @@ export interface DcaPosition {
 /** A grid bot, from `tradingBot/grid/orders-algo-pending` or its history. */
 export interface GridBot {
   algoId: string
+  /** `grid` (spot) or `contract_grid`. */
   algoOrdType: string
   instId: string
   instType: string
   state: string
+  /** `long`, `short` or `neutral` on a contract grid; empty on spot. */
   direction: string
+  /** Leverage chosen; `actualLever` is what the position carries now. */
   lever: string
+  actualLever?: string
   investment: string
+  /** Grid profit plus the open position's float: what the bot has made so far. */
   totalPnl: string
+  /** Realised by the arbitrages: each buy-low/sell-high pair the grid closed. */
   gridProfit: string
+  /** Unrealised on the position the grid holds. */
   floatProfit: string
   pnlRatio: string
+  /** Fees paid so far, negative as OKX signs them. Contract grids only. */
+  fee?: string
+  fundingFee?: string
   gridNum: string
   minPx: string
   maxPx: string
+  /** `1` arithmetic (equal price steps), `2` geometric (equal percentage steps). */
+  runType?: string
+  /** The bot's liquidation price; empty on spot. */
+  liqPx?: string
+  slTriggerPx?: string
+  tpTriggerPx?: string
+  /** On stopping: `1` closes the position (sells the base on spot), `2` keeps it. */
+  stopType?: string
   arbitrageNum: string
+  cTime: string
+  uTime: string
+}
+
+/** The position a contract grid holds, from `tradingBot/grid/positions`. */
+export interface GridPosition {
+  algoId: string
+  instId: string
+  avgPx: string
+  /** Contracts, signed: negative is short. */
+  pos: string
+  markPx: string
+  last: string
+  liqPx: string
+  lever: string
+  /** `cross` shares the account's margin; `isolated` does not. */
+  mgnMode: string
+  mgnRatio: string
+  notionalUsd: string
+  upl: string
+  uplRatio: string
+}
+
+/** One of a grid's orders, resting (`live`) or done (`filled`). */
+export interface GridSubOrder {
+  ordId: string
+  algoId: string
+  instId: string
+  side: 'buy' | 'sell'
+  px: string
+  sz: string
+  /** Contract value, so a size in contracts can be read as coins. */
+  ctVal: string
+  avgPx: string
+  accFillSz: string
+  fee: string
+  feeCcy: string
+  state: string
   cTime: string
   uTime: string
 }

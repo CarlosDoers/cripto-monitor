@@ -114,3 +114,24 @@ export function feeShareOfGrid(bot: GridBot): number | null {
   const grid = num(bot.gridProfit)
   return fee > 0 && grid > 0 ? fee / grid : null
 }
+
+/**
+ * What stopping a grid now would leave, in dollars.
+ *
+ * `totalPnl` is already net of the fees the grid has paid: checked on
+ * 2026-10-07 against each bot's own equity in `orders-algo-details`, where
+ * `eq − investment` equals `totalPnl` to the fourth decimal on all three of
+ * this account's grids (were the fees outside it, NEAR's would have been 2,84
+ * US$ lower). What it does not include is the exit: a bot set to close on stop
+ * (`stopType` 1) sells or buys back its whole position at market, paying the
+ * taker rate on its notional. Slippage comes on top and is not known in advance.
+ */
+export function stopNow(
+  bot: GridBot,
+  position: { notionalUsd: string } | undefined,
+  takerFee: number,
+): { value: number; closeCost: number; keepsPosition: boolean } {
+  const keepsPosition = bot.stopType === '2'
+  const closeCost = keepsPosition ? 0 : Math.abs(num(position?.notionalUsd)) * takerFee
+  return { value: num(bot.totalPnl) - closeCost, closeCost, keepsPosition }
+}

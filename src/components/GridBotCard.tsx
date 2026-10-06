@@ -7,6 +7,7 @@ import {
   netPerArbitrage,
   nextLevels,
   rangePosition,
+  stopNow,
 } from '../lib/bots'
 import { dateTime, duration, num, pct, plural, price, qty, ratio, share, signedUsd, timeAgo, usd } from '../lib/format'
 import { HELP } from '../lib/glossary'
@@ -156,12 +157,15 @@ export function GridBotCard({
   position,
   mark,
   makerFee,
+  takerFee,
 }: {
   bot: GridBot
   position: GridPosition | undefined
   mark: number | undefined
   /** The account's maker rate, as a positive fraction (0.0002 = 0,02 %). */
   makerFee: number
+  /** And its taker rate: what closing the position at market pays. */
+  takerFee: number
 }) {
   const live = useGridOrders(bot, 'live')
   const now = mark || num(position?.markPx)
@@ -180,6 +184,7 @@ export function GridBotCard({
   const posSize = num(position?.pos)
   const noStop = !(num(bot.slTriggerPx) > 0)
   const total = num(bot.totalPnl)
+  const stop = stopNow(bot, position, takerFee)
 
   const placeText =
     place === 'dentro'
@@ -219,12 +224,19 @@ export function GridBotCard({
 
         <dl className="bot-figures">
           <div>
-            <dt>Resultado</dt>
+            <dt>
+              Si lo paras ahora
+              <Help label="Si lo paras ahora">{HELP.gridStopNow}</Help>
+            </dt>
             <dd>
-              <DeltaValue value={total}>{signedUsd(total)}</DeltaValue>
+              <DeltaValue value={stop.value}>{signedUsd(stop.value)}</DeltaValue>
             </dd>
             <dd className="sub">
-              {pct(num(bot.pnlRatio), 2)} sobre {usd(num(bot.investment))} invertidos
+              {stop.keepsPosition
+                ? `al pararlo mantiene la posición abierta: su flotante sigue en juego · resultado ${signedUsd(total)}`
+                : `resultado ${signedUsd(total)} − ${usd(stop.closeCost)} de cerrar la posición a mercado`}
+              {' · '}
+              {pct(num(bot.investment) > 0 ? stop.value / num(bot.investment) : 0, 2)} sobre {usd(num(bot.investment))}
             </dd>
           </div>
           <div>
@@ -248,7 +260,7 @@ export function GridBotCard({
             <dd>
               <DeltaValue value={num(bot.floatProfit)}>{signedUsd(num(bot.floatProfit))}</DeltaValue>
             </dd>
-            <dd className="sub">la posición abierta, sin cobrar</dd>
+            <dd className="sub">la posición que mantiene, a precio de ahora: parte del resultado, aún sin cobrar</dd>
           </div>
           <div>
             <dt>
@@ -257,7 +269,9 @@ export function GridBotCard({
             </dt>
             <dd>{usd(Math.abs(num(bot.fee)))}</dd>
             <dd className="sub">
-              {feeShare !== null ? `equivalen al ${share(feeShare, 0)} de lo ganado por la rejilla` : 'nada pagado aún'}
+              {feeShare !== null
+                ? `ya descontadas del resultado · equivalen al ${share(feeShare, 0)} de lo ganado por la rejilla`
+                : 'nada pagado aún'}
               {num(bot.fundingFee) !== 0 && ` · financiación ${signedUsd(num(bot.fundingFee))}`}
             </dd>
           </div>

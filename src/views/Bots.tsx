@@ -12,7 +12,7 @@ import {
   Help,
 } from '../components/ui'
 import { IconAlert } from '../components/icons'
-import { fuelUsed, gridLiquidationRoom, gridPlace, liquidationRoom, NEARLY_DRY, rangePosition } from '../lib/bots'
+import { fuelUsed, gridLiquidationRoom, gridPlace, liquidationRoom, NEARLY_DRY, rangePosition, stopNow } from '../lib/bots'
 import { LIQ_DANGER, LIQ_WATCH } from '../lib/guards'
 import type { DcaBot, DcaPosition, GridBot } from '../lib/types'
 import { GridBotCard } from '../components/GridBotCard'
@@ -36,6 +36,7 @@ export function Bots({ embedded = false }: { embedded?: boolean }) {
   const fees = useTradeFee('FUTURES')
   // OKX signs fees from the account's side: negative is charged.
   const maker = -num(fees.data?.[0]?.maker) || 0.0002
+  const taker = -num(fees.data?.[0]?.taker) || 0.0005
 
   const nearlyDry = bots.filter((b) => fuelUsed(b, positions.data?.[b.algoId]) >= NEARLY_DRY)
 
@@ -54,6 +55,10 @@ export function Bots({ embedded = false }: { embedded?: boolean }) {
   const pnl = bots.reduce((s, b) => s + num(b.totalPnl), 0) + grids.reduce((s, g) => s + num(g.totalPnl), 0)
   const invested =
     bots.reduce((s, b) => s + num(b.investmentAmt), 0) + grids.reduce((s, g) => s + num(g.investment), 0)
+  // Stopping now: each grid's result less closing its position at market. A
+  // DCA bot's PnL is taken as it stands.
+  const closeCost = grids.reduce((s, g) => s + stopNow(g, gridPositions.byAlgo[g.algoId], taker).closeCost, 0)
+  const ifStopped = pnl - closeCost
   const gridProfit = grids.reduce((s, g) => s + num(g.gridProfit), 0)
   const gridFees = grids.reduce((s, g) => s - num(g.fee), 0)
   // The tightest liquidation across every bot, from the live price where known:
@@ -85,11 +90,11 @@ export function Bots({ embedded = false }: { embedded?: boolean }) {
 
       <div className="kpi-row">
         <Stat
-          label="Resultado de los bots"
-          help={HELP.botPnl}
+          label="Si los paras ahora"
+          help={HELP.gridStopNow}
           hero
           loading={isLoading}
-          value={<DeltaValue value={pnl}>{signedUsd(pnl)}</DeltaValue>}
+          value={<DeltaValue value={ifStopped}>{signedUsd(ifStopped)}</DeltaValue>}
           badge={
             count > 0 ? (
               <Badge variant="live" pulse>
@@ -97,7 +102,13 @@ export function Bots({ embedded = false }: { embedded?: boolean }) {
               </Badge>
             ) : undefined
           }
-          foot={<span>{count ? `sobre ${usd(invested)} invertidos` : 'ningún bot en marcha'}</span>}
+          foot={
+            <span>
+              {count
+                ? `resultado ${signedUsd(pnl)}${closeCost > 0 ? ` − ${usd(closeCost)} de cerrar a mercado` : ''} · sobre ${usd(invested)} invertidos`
+                : 'ningún bot en marcha'}
+            </span>
+          }
         />
         <Stat
           label="Ganado por las rejillas"
@@ -135,7 +146,14 @@ export function Bots({ embedded = false }: { embedded?: boolean }) {
       )}
 
       {grids.map((g) => (
-        <GridBotCard key={g.algoId} bot={g} position={gridPositions.byAlgo[g.algoId]} mark={marks[g.instId]} makerFee={maker} />
+        <GridBotCard
+          key={g.algoId}
+          bot={g}
+          position={gridPositions.byAlgo[g.algoId]}
+          mark={marks[g.instId]}
+          makerFee={maker}
+          takerFee={taker}
+        />
       ))}
 
       {bots.length > 0 && <DcaCard bots={bots} dca={dca} positions={positions} marks={marks} />}

@@ -56,16 +56,32 @@ export const HELP = {
   ),
   gridFloat: (
     <p>
-      La ganancia o pérdida de la posición que el bot mantiene abierta ahora mismo, a precio de mercado. Cambia con
-      cada movimiento y no está cobrada. Resultado total = rejilla + flotante.
+      La ganancia o pérdida de la posición que el bot mantiene abierta ahora mismo, a precio de mercado. No es lo
+      que llevas ganado: es la parte del resultado que todavía no está cobrada. Un bot largo compra mientras el
+      precio baja, así que tras una caída tiene monedas compradas más caras que el precio actual y el flotante sale
+      negativo; si el precio vuelve, las vende nivel a nivel y esa pérdida se convierte en beneficio de la rejilla.
     </p>
   ),
   gridFees: (
     <p>
-      Lo pagado en comisiones por todas las órdenes del bot. Un bot con muchos niveles hace muchas operaciones
-      pequeñas, y cada una paga comisión: si se comen buena parte de lo que gana la rejilla, los niveles están
-      demasiado juntos para lo que se mueve el precio.
+      Lo pagado en comisiones por todas las órdenes del bot. Ya está descontado del resultado: no hay que restarlo
+      otra vez. Se muestra aparte porque un bot con muchos niveles hace muchas operaciones pequeñas, y si las
+      comisiones se comen buena parte de lo que gana la rejilla, los niveles están demasiado juntos para lo que se
+      mueve el precio.
     </p>
+  ),
+  gridStopNow: (
+    <>
+      <p>
+        Lo que habrías ganado o perdido con el bot si lo detuvieras en este momento: lo ganado por la rejilla, más el
+        flotante de la posición que mantiene, ya con las comisiones pagadas descontadas, y menos lo que cuesta cerrar
+        esa posición a mercado (la comisión taker sobre su tamaño).
+      </p>
+      <p>
+        No incluye el deslizamiento: al cerrar a mercado una posición grande el precio de ejecución puede ser algo
+        peor que el actual.
+      </p>
+    </>
   ),
   gridPerArbitrage: (
     <p>

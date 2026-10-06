@@ -434,8 +434,20 @@ when it left on the winning side (idle). OKX's fills list names the contract
 family as the fee currency (`USD_UM_XPERP`) and orders them by placement, so the
 view relabels the one and sorts by fill time. En curso keeps a one-line-per-bot
 summary that links here. `totalPnl = gridProfit + floatProfit`, checked on the
-NEAR grid to the cent; whether `gridProfit` is net of `fee` is not documented,
-so the fee is shown beside it as a share, never subtracted.
+NEAR grid to the cent, and **it is already net of the fees paid**: OKX does not
+document it, and rebuilding it from the fills did not close (the base position
+a grid buys at start is sold across several levels), so it was settled against
+`orders-algo-details`, whose `eq` (the bot's own equity) equals `investment +
+totalPnl` to the fourth decimal on all three grids — with the fees outside,
+NEAR's would have been 2,84 US$ lower. The endpoint was allowed for that check
+and removed again, since nothing reads it. So the fee is shown as "ya
+descontadas" with its share of the grid profit, never subtracted again. **Each
+card and the strip lead with "Si lo paras ahora"** (`stopNow()`), the user's
+choice: the result less closing the position at market (taker on its notional)
+when `stopType` is 1; a bot that keeps its position on stop costs nothing to
+stop and says its float stays open. Slippage is not included, and the "?" says
+so. "Flotante" is labelled as *part of* the result: read alone it was taken for
+what the bot had made.
 
 A subaccount named in the account (`/users/subaccount/list`) is not where the
 bots are unless it holds money — this account has one with 0.0007 USD in it,

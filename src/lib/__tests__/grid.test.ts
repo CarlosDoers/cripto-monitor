@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { feeShareOfGrid, gridLiquidationRoom, gridPlace, gridStep, nextLevels, netPerArbitrage, rangePosition } from '../bots'
+import { feeShareOfGrid, gridLiquidationRoom, gridPlace, gridStep, nextLevels, netPerArbitrage, rangePosition, stopNow } from '../bots'
 import type { GridBot, GridSubOrder } from '../types'
 
 // The NEAR bot as OKX listed it on 2026-10-06.
@@ -51,5 +51,26 @@ describe('grid bots', () => {
   it('compares fees with what the arbitrages made', () => {
     expect(feeShareOfGrid(near)!).toBeCloseTo(2.2688928 / 3.0657636)
     expect(feeShareOfGrid({ ...near, gridProfit: '0' })).toBeNull()
+  })
+})
+
+describe('stopNow', () => {
+  const bot = { ...near, totalPnl: '1.4865', stopType: '1' } as GridBot
+
+  it('takes the market exit off the result: taker on the whole position', () => {
+    const s = stopNow(bot, { notionalUsd: '1044.23' }, 0.0005)
+    expect(s.closeCost).toBeCloseTo(0.522, 3)
+    expect(s.value).toBeCloseTo(1.4865 - 0.522, 3)
+    expect(s.keepsPosition).toBe(false)
+  })
+
+  it('costs nothing to stop a bot that keeps its position', () => {
+    const s = stopNow({ ...bot, stopType: '2' }, { notionalUsd: '1044.23' }, 0.0005)
+    expect(s.closeCost).toBe(0)
+    expect(s.keepsPosition).toBe(true)
+  })
+
+  it('works before the position has loaded', () => {
+    expect(stopNow(bot, undefined, 0.0005).value).toBeCloseTo(1.4865)
   })
 })

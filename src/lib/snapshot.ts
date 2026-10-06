@@ -384,7 +384,10 @@ export function renderBots(s: AccountSnapshot): string {
     s.dcaBots.length || s.gridBots.length ? '' : '_(ninguno)_',
     s.dcaBots.length ? table(['DCA', 'Dirección', 'Invertido', 'Precio medio', 'Liquidación', 'Órdenes de seguridad usadas', 'PnL'], dca) : '',
     s.gridBots.length
-      ? table(['Rejilla', 'Dirección', 'Invertido', 'Rango', 'Precio ahora', 'Liquidación', 'Ganado por la rejilla', 'Flotante', 'Comisiones', 'Stop', 'PnL total'], grid)
+      ? [
+          table(['Rejilla', 'Dirección', 'Invertido', 'Rango', 'Precio ahora', 'Liquidación', 'Ganado por la rejilla', 'Flotante', 'Comisiones pagadas', 'Stop', 'Resultado'], grid),
+          '_Resultado = ganado por la rejilla + flotante, ya neto de las comisiones pagadas (no restarlas otra vez). Pararlo cuesta además cerrar su posición a mercado._',
+        ].join('\n\n')
       : '',
   ]
     .filter(Boolean)

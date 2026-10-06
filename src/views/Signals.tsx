@@ -121,8 +121,9 @@ function LiveSignal({
           </li>
         )}
         <li>
-          <span className="metric-label">Stop Loss</span>
-          <span className="metric-value delta--down">{price(signal.stop)}</span>
+          {/* A trailing stop moves after the entry: say where it stands now, not where it began. */}
+          <span className="metric-label">{signal.stopNow !== undefined && signal.stopNow !== signal.stop ? 'Stop actual' : 'Stop Loss'}</span>
+          <span className="metric-value delta--down">{price(signal.stopNow ?? signal.stop)}</span>
         </li>
         <li>
           <span className="metric-label">{goal !== undefined ? 'Ratio Beneficio/Riesgo' : 'R Acumulado'}</span>
@@ -508,25 +509,29 @@ export function Signals({ section }: { section: 'analysis' | 'strategies' }) {
     }
   }
 
-  function pickStrategy(key: string) {
+  /** `wanted` is a preset a link asked for; any other value falls back to the strategy's first. */
+  function pickStrategy(key: string, wanted?: string | null) {
     if (key === ANALYSIS) {
       setStrategyKey(key)
       return
     }
-    const first = strategyByKey(key).presets[0].key
+    const presets = strategyByKey(key).presets
+    const first = presets.find((p) => p.key === wanted)?.key ?? presets[0].key
     setStrategyKey(key)
     setPresetKey(first)
     retarget(key, first)
   }
 
-  // A link can also name the strategy (`?s=ema200`): the Screener's watch list
-  // opens the chart of the contract on the strategy that put it there.
+  // A link can also name the strategy and its preset (`?s=donchian&p=trend`): the
+  // Screener's watch lists open the chart of the contract on the very strategy
+  // that put it there.
   const linkedStrategy = useRouteParam('s')
+  const linkedPreset = useRouteParam('p')
   useEffect(() => {
-    if (!analysis && linkedStrategy && STRATEGIES.some((x) => x.key === linkedStrategy)) pickStrategy(linkedStrategy)
+    if (!analysis && linkedStrategy && STRATEGIES.some((x) => x.key === linkedStrategy)) pickStrategy(linkedStrategy, linkedPreset)
     // pickStrategy only reads state it also sets; the link is what should re-run this.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [linkedStrategy, analysis])
+  }, [linkedStrategy, linkedPreset, analysis])
 
   function pickPreset(key: string) {
     setPresetKey(key)

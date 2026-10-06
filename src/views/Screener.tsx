@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useMarkets } from '../lib/markets'
 import { useClosedPositions, useDailyBoard, usePositions } from '../lib/queries'
 import { EmaScanner } from '../components/EmaScanner'
+import { DonchianWatch } from '../components/DonchianWatch'
 import { EmaWatch } from '../components/EmaWatch'
 import {
   compareRows,
@@ -264,8 +265,10 @@ export function Screener() {
 
   return (
     <>
-      {/* On demand: what to watch under the one EMA strategy that measured, then
-          the touches of the daily EMA the user follows, as context. */}
+      {/* On demand: what to watch under the two trend strategies that measured on 4 h
+          — the breakout the EMA 200 allows, then the EMA 200 cross itself — and
+          then the touches of the daily EMA the user follows, as context. */}
+      <DonchianWatch markets={markets} />
       <EmaWatch markets={markets} />
       <EmaScanner markets={markets} />
 

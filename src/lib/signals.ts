@@ -58,8 +58,10 @@ export function useSignals(
   const strategy = strategyKey ? strategyByKey(strategyKey) : null
   const query = useCandleHistory(instId, bar)
   // Deep history for the strategies that need more than /market/candles will
-  // ever return. The two overlap; the merge below dedupes on timestamp.
-  const archive = useCandleArchive(instId, bar, strategy?.archiveBars ?? 0)
+  // ever return — or, when a preset leans on a long average its siblings do not,
+  // for that preset alone. The two overlap; the merge below dedupes on timestamp.
+  const preset = strategy?.presets.find((p) => p.key === presetKey)
+  const archive = useCandleArchive(instId, bar, preset?.archiveBars ?? strategy?.archiveBars ?? 0)
 
   const candles = useMemo(
     () => toCandles([...(archive.data ?? []), ...(query.data ?? [])]),

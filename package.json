@@ -23,6 +23,8 @@
     "emasweep": "node --experimental-strip-types --import ./scripts/_hook.mjs scripts/ema-sweep.mjs",
     "ematouch": "node --experimental-strip-types --import ./scripts/_hook.mjs scripts/ema-touch-research.mjs",
     "funding": "node --experimental-strip-types --import ./scripts/_hook.mjs scripts/funding-research.mjs",
+    "battery": "node --experimental-strip-types --import ./scripts/_hook.mjs scripts/battery.mjs",
+    "ideas": "node --experimental-strip-types --import ./scripts/_hook.mjs scripts/ideas-research.mjs",
     "test": "vitest run"
   },
   "dependencies": {

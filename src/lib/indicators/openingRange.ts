@@ -52,6 +52,16 @@ export interface OpeningRangeSettings {
   relVolumeLookback: number
   /** Skip Saturdays and Sundays, when New York has no open to borrow. */
   weekdaysOnly: boolean
+  /**
+   * A candle that reaches both ends of the range is a loss: whichever came first,
+   * the other end is the stop. Off — the shipped behaviour — drops that day
+   * instead, which flatters the result: on the audit's cache it removes 107 of
+   * 4 283 opens, every one a certain −1 R, and the headline is +0.25 R rather
+   * than +0.22 (on BTC, ETH and SOL spot alone, 87 of 3 654 and +0.25 against
+   * +0.21; `npm run ideas orb`). Left off so the declared figures and the audit
+   * still agree; turning it on means re-declaring them.
+   */
+  doubleTouchLoss?: boolean
   feeRate: number
 }
 
@@ -214,12 +224,18 @@ export function analyseOpeningRange(
       const bar = candles[i]
 
       if (!signal) {
-        const up = bar.high >= range.high
-        const down = bar.low <= range.low
-        // Both sides in one candle: there is no way to know which was touched
-        // first, so the day is dropped rather than resolved the flattering way.
-        if (up && down) break
-        if (!up && !down) continue
+        const reachedUp = bar.high >= range.high
+        const reachedDown = bar.low <= range.low
+        // Both sides in one candle: which came first is unknowable, so by default
+        // the day is dropped. That is not the cautious choice — see
+        // `doubleTouchLoss`. When counted, the side whose level is nearer the
+        // open is taken as first and the stop, hit on this same candle, is a loss.
+        if (reachedUp && reachedDown && !settings.doubleTouchLoss) break
+        if (!reachedUp && !reachedDown) continue
+        const up =
+          reachedUp && reachedDown
+            ? Math.abs(bar.open - range.high) <= Math.abs(bar.open - range.low)
+            : reachedUp
 
         const side = up ? 'long' : 'short'
         const level = up ? range.high : range.low

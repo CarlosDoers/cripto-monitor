@@ -1,5 +1,5 @@
 import { analyseTraps, TUNED_SETTINGS } from './reversalTrap'
-import { analyseDonchian, DONCHIAN_SETTINGS } from './donchianBreakout'
+import { analyseDonchian, DONCHIAN_SETTINGS, DONCHIAN_TREND_SETTINGS } from './donchianBreakout'
 import { analyseOpeningRange, OPENING_RANGE_SETTINGS } from './openingRange'
 import { analyseEmaCross, EMA_CROSS_SETTINGS } from './emaCross'
 import type { Candle, Overlay, StrategyResult, StrategySignal } from './types'
@@ -159,6 +159,12 @@ export interface StrategyPreset {
   note: string
   /** Overrides the strategy's profile — two presets can behave very differently. */
   backtest?: StrategyBacktest
+  /**
+   * Deep history for this preset alone, overriding the strategy's `archiveBars`.
+   * A preset that leans on a long average needs far more bars than its siblings,
+   * and should not make them pay for it.
+   */
+  archiveBars?: number
 }
 
 export interface StrategyDef {
@@ -268,8 +274,23 @@ export const STRATEGIES: StrategyDef[] = [
         label: 'Canal 20',
         note: 'Canal de 20 velas, stop de 2 ATR y trailing de 8, solo en 4 h: +0,33 R por señal, y aguanta las dos mitades del histórico (+0,43 / +0,25). Como todo seguidor de tendencia vive de pocas operaciones grandes: sin sus cinco mejores baja a +0,17 R, y sin las diez a +0,07. Y su ventaja aguantaría como mucho 14 variantes probadas (Sharpe deflactado): para llegar a esta configuración se probaron canales, stops y trailings, así que parte de ella puede ser fruto de la búsqueda. En diario no se ofrece: su media de +0,67 R es casi entera una sola operación de SOL en 2023 (+68 R), y sin ella se queda en +0,17 con la primera mitad en negativo.',
       },
+      {
+        key: 'trend',
+        label: 'Canal 20 + EMA 200',
+        archiveBars: 1800,
+        note: 'Las mismas rupturas de 20 velas, pero solo a favor de la EMA 200: largos con el precio por encima de ella, cortos por debajo. En 4 h, sobre 30 criptos desde 2022, mide +0,36 R por operación en 3 287 (+0,48 / +0,26 en las dos mitades) frente a +0,21 R sin el filtro, y mejora cada uno de los cinco años (de +0,12 a +0,64). Con la EMA entre 100 y 300 sale parecido, y en 2018–2021, un periodo en que no se tocó nada, +1,07 R frente a +0,46. Lo que conviene saber: acierta una de cada cuatro y sin sus diez mejores operaciones queda en +0,19 R; los largos ganan +0,61 R y los cortos solo +0,12; y quita más de un tercio de las entradas y se parece al cruce de la EMA 200 (correlación mensual 0,66), así que tomarlas todas no mejora el resultado mensual: sirve para elegir qué rupturas coger, no para ganar más en conjunto. En 1 h la ventaja es marginal: +0,13 R en las 30 criptos (+0,15 / +0,11 en las mitades), que con el doble de comisión se queda en +0,08, frente a +0,02 R de esa misma ruptura sin el filtro. En la caché de la auditoría (BTC, ETH, SOL y X-Perps) mide en 4 h +0,41 R sobre 489 operaciones, con la segunda mitad en +0,11, y ahí su ventaja aguantaría como mucho 4 variantes probadas: se probaron cinco longitudes de EMA, y con 30 criptos aguanta miles.',
+        backtest: {
+          byTimeframe: { '15m': 0.0, '1H': 0.16, '4H': 0.41, '1D': 1.67 },
+          halves: { '1H': [0.15, 0.19], '4H': [0.76, 0.11], '1D': [-0.89, 1.25] },
+          nativeTimeframe: '4H',
+          outOfSample: 0.11,
+          sampleSize: 489,
+          winRate: 0.278,
+          confidence: 'weak',
+        },
+      },
     ],
-    run: (candles) => analyseDonchian(candles, DONCHIAN_SETTINGS),
+    run: (candles, preset) => analyseDonchian(candles, preset === 'trend' ? DONCHIAN_TREND_SETTINGS : DONCHIAN_SETTINGS),
     backtest: {
       byTimeframe: { '15m': -0.10, '1H': 0.08, '4H': 0.33, '1D': 0.67 },
       halves: { '4H': [0.43, 0.25], '1D': [-0.09, 0.17] },

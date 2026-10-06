@@ -4,6 +4,7 @@ import { instTypeOf } from './instruments'
 import { BASE_FUNDING_APR, CARRY_EVIDENCE, CARRY_RULE, carryStatus, trailingApr } from './carry'
 import { emaTouchSummary } from './emaTouch'
 import { activeCurrency, convert } from './currency'
+import { compareDonchianWatch, watchDonchianTrend, type DonchianWatch } from './donchianWatch'
 import { compareWatch, watchEmaCross, type EmaWatch } from './emaWatch'
 import { duration, num, pct, plural, price, qty, ratio, share, signedUsd, usd } from './format'
 import { guardsFor, isShort, liquidationDistance, PARTIAL_STOP, positionSize, stopCoverage, stopOf, targetOf } from './guards'
@@ -413,18 +414,23 @@ export function renderHoldings(s: AccountSnapshot): string {
  * when a strategy is re-measured.
  */
 export function renderMethod(): string {
-  const strategies = STRATEGIES.map((st) => {
-    const preset = st.presets[0]
-    const profile = profileOf(st, preset.key)
-    const tfs = tradableTimeframes(profile)
-    const native = profile.nativeTimeframe ?? '1D'
-    return `- **${st.label}** (${st.tagline}): ${tfs.length ? `operable en ${tfs.join(', ')}` : 'ninguna temporalidad operable'}, ${signedR(profile.byTimeframe[native] ?? 0)} R por operación en ${native}, mitad del histórico fuera de muestra ${signedR(profile.outOfSample)} R, acierto ${share(profile.winRate, 0)}, confianza ${profile.confidence === 'weak' ? 'débil' : 'razonable'}. ${preset.note}`
-  })
+  // One line per preset: a strategy with two ways of running it is two lines, each
+  // with the figures of its own profile, or Claude would never hear of the second.
+  const strategies = STRATEGIES.flatMap((st) =>
+    st.presets.map((preset) => {
+      const profile = profileOf(st, preset.key)
+      const tfs = tradableTimeframes(profile)
+      const native = profile.nativeTimeframe ?? '1D'
+      const name = st.presets.length > 1 ? `${st.label} · ${preset.label}` : st.label
+      return `- **${name}** (${st.tagline}): ${tfs.length ? `operable en ${tfs.join(', ')}` : 'ninguna temporalidad operable'}, ${signedR(profile.byTimeframe[native] ?? 0)} R por operación en ${native}, mitad del histórico fuera de muestra ${signedR(profile.outOfSample)} R, acierto ${share(profile.winRate, 0)}, confianza ${profile.confidence === 'weak' ? 'débil' : 'razonable'}. ${preset.note}`
+    }),
+  )
+  const variants = STRATEGIES.filter((st) => st.presets.length > 1).map((st) => `${st.label} en ${st.presets.length} variantes`)
   const touch = emaTouchSummary()
   return [
     '## Cómo leer esto (reglas de la app)',
     '- Todas las cifras salen de la app, que las calcula con los datos de OKX. No las recalcules ni las redondees de otra forma.',
-    `- Solo hay ${STRATEGIES.length} estrategias que la app ofrece, cada una medida con años de datos, costes incluidos, en las dos mitades del histórico (umbral +${ratio(MIN_TRADABLE_R)} R). **No propongas señales, niveles ni entradas que no salgan de ellas**: la app ha medido decenas de ideas que parecían buenas (soportes y resistencias, rebotes en EMAs, cruces de MACD, ir contra la financiación extrema) y ninguna ganaba dinero.`,
+    `- Solo hay ${STRATEGIES.length} estrategias que la app ofrece${variants.length ? ` (${variants.join(', ')})` : ''}, cada una medida con años de datos, costes incluidos, en las dos mitades del histórico (umbral +${ratio(MIN_TRADABLE_R)} R). **No propongas señales, niveles ni entradas que no salgan de ellas**: la app ha medido decenas de ideas que parecían buenas (soportes y resistencias, rebotes en EMAs, cruces de MACD, ir contra la financiación extrema) y ninguna ganaba dinero.`,
     '- R es lo que se arriesga en una operación (de la entrada al stop). Acertar mucho no es ganar: manda la esperanza en R.',
     ...strategies,
     `- **Financiación (carry):** tener la moneda y un corto igual en su perpetuo, entrando cuando los últimos 7 días pagaron más del ${share(CARRY_RULE.enter, 0)} anual y saliendo cuando dejan de pagar: ${pct(CARRY_EVIDENCE.ownApr, 1)} anual medido desde 2022. El tipo por defecto de OKX es ${share(BASE_FUNDING_APR, 2)} anual.`,
@@ -512,6 +518,8 @@ export async function signalsText(get: Get, market: RawMarket, opts: { reversal:
     return all.sort((a, b) => Number(a[0]) - Number(b[0]))
   })
   const ema: EmaWatch[] = emaSet.map((x, i) => watchEmaCross(fourHour[i], x.last, x.instId, x.symbol)).sort(compareWatch)
+  // The same candles: the second watch costs no request.
+  const trend: DonchianWatch[] = emaSet.map((x, i) => watchDonchianTrend(fourHour[i], x.last, x.instId, x.symbol)).sort(compareDonchianWatch)
 
   const rev = live.map(({ x, scan }) => {
     const o = scan!.kind === 'signal' ? scan!.opportunity : null
@@ -527,12 +535,38 @@ export async function signalsText(get: Get, market: RawMarket, opts: { reversal:
     fuera: 'sin posición',
     corto: 'historial corto',
   }
+  const trendStatus: Record<DonchianWatch['status'], string> = {
+    nueva: 'SEÑAL NUEVA',
+    rompiendo: 'rompiendo ahora',
+    cerca: 'cerca de romper',
+    tendencia: 'en tendencia',
+    fuera: 'sin posición',
+    corto: 'historial corto',
+  }
+  const hoursOf = (age: number) => (age * 4 < 48 ? `${age * 4} h` : `${Math.round(age / 6)} días`)
   return [
     `# Señales en vivo — ${when(Date.now())}`,
     `## Reversión diaria (${reversalSet.length} X-Perp de cripto más negociados)`,
     'Una señal sigue siendo válida hasta 7 días si el precio no ha tocado stop ni objetivo (medido).',
     table(['Activo', 'Lado', 'Recompensa/riesgo que queda', 'Entrada', 'Precio ahora', 'Stop', 'Objetivo', 'Señal'], rev),
     watching.length ? `A vigilar (fuera de su banda; si la próxima vela diaria cierra dentro, salta la señal): ${watching.map((w) => w.x.symbol).join(', ')}` : '',
+    '',
+    `## Ruptura + EMA 200 en 4 h (${emaSet.length} más negociados)`,
+    'Largo si cierra sobre el máximo de 20 velas y sobre la EMA 200; corto bajo el mínimo y bajo la EMA. Solo la "señal nueva" es la entrada medida; entrar en una tendencia ya empezada no está medido. El stop es el vigente: el trailing de 8 ATR cuando ha pasado al inicial.',
+    table(
+      ['Activo', 'Estado', 'Lado', 'Desde', 'Precio', 'Ruptura en', 'Distancia', 'Stop'],
+      trend.map((w) => [
+        w.symbol,
+        // Before a breakout there is no side yet, but the EMA already says which one it would be.
+        `${trendStatus[w.status]}${w.status === 'rompiendo' || w.status === 'cerca' ? ` (${w.bias === 'long' ? 'largo' : 'corto'})` : ''}`,
+        w.side === 'long' ? 'Largo' : w.side === 'short' ? 'Corto' : '—',
+        w.side ? hoursOf(w.age) : '—',
+        price(w.price),
+        Number.isFinite(w.level) ? price(w.level) : '—',
+        Number.isFinite(w.distance) ? `${pct(w.distance)} (${ratio(w.distanceAtr, 1)} ATR)` : '—',
+        w.stop !== undefined ? price(w.stop) : '—',
+      ]),
+    ),
     '',
     `## EMA 200 en 4 h (${emaSet.length} más negociados)`,
     'Solo la "señal nueva" es la entrada medida; entrar en una tendencia ya empezada no está medido.',

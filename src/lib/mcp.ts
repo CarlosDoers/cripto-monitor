@@ -113,12 +113,12 @@ const TOOLS: Tool[] = [
     name: 'senales',
     title: 'Señales en vivo',
     description:
-      'Señales vivas de las estrategias medidas en los X-Perp de cripto más negociados: la reversión diaria (con la recompensa/riesgo que queda) y la EMA 200 en 4 h (señal nueva, cruzando, cerca). Tarda unos segundos.',
+      'Señales vivas de las estrategias medidas en los X-Perp de cripto más negociados: la reversión diaria (con la recompensa/riesgo que queda), la ruptura de 20 velas a favor de la EMA 200 en 4 h (señal nueva, rompiendo, cerca) y el cruce de la EMA 200 en 4 h (señal nueva, cruzando, cerca). Tarda unos segundos.',
     inputSchema: {
       type: 'object',
       properties: {
         reversion_top: { type: 'integer', minimum: 10, maximum: 80, default: 40, description: 'Cuántos contratos revisar para la reversión diaria.' },
-        ema_top: { type: 'integer', minimum: 5, maximum: 20, default: 10, description: 'Cuántos contratos revisar para la EMA 200 en 4 h.' },
+        ema_top: { type: 'integer', minimum: 5, maximum: 20, default: 10, description: 'Cuántos contratos revisar para las dos estrategias de 4 h (ruptura a favor de la EMA 200 y cruce de la EMA 200).' },
       },
     },
     async run(args, get) {

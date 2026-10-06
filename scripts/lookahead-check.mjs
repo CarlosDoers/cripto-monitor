@@ -54,6 +54,9 @@ for (const f of readdirSync(DIR)) {
   series[bar][inst] = JSON.parse(readFileSync(`${DIR}/${f}`, 'utf8'))
 }
 
+/** Deep history a preset asks for, falling back to its strategy's — what `useSignals` fetches. */
+const archiveOf = (strategy, preset) => preset.archiveBars ?? strategy.archiveBars ?? 0
+
 const same = (a, b) =>
   a.time === b.time &&
   a.side === b.side &&
@@ -95,7 +98,7 @@ for (const strategy of STRATEGIES) {
       let repaint = 0
       const examples = []
       for (const [inst, full] of Object.entries(series[bar] ?? {})) {
-        const cs = full.slice(-(LOOKAHEAD_WINDOW + (strategy.archiveBars ?? 0)))
+        const cs = full.slice(-(LOOKAHEAD_WINDOW + archiveOf(strategy, preset)))
         const reference = strategy.run(cs, preset.key).signals
         for (const s of spread(reference, SAMPLES_PER_SERIES)) {
           const truncated = strategy.run(cs.slice(0, s.index + 1), preset.key).signals
@@ -164,7 +167,7 @@ for (const strategy of STRATEGIES) {
       let worst = { gap: 0, label: '' }
       let stopDrift = 0
       for (const [inst, cs] of Object.entries(series[bar] ?? {})) {
-        const bars = BROWSER_BARS + (strategy.archiveBars ?? 0)
+        const bars = BROWSER_BARS + archiveOf(strategy, preset)
         if (cs.length <= bars + RECENT) continue
         const deep = strategy.run(cs, preset.key)
         const browser = strategy.run(cs.slice(-bars), preset.key)

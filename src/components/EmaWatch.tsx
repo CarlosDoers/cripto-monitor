@@ -1,13 +1,12 @@
-import { useMemo, useState } from 'react'
+import { useMemo } from 'react'
 import { compareWatch, watchEmaCross, type EmaWatch as Watch, type WatchStatus } from '../lib/emaWatch'
 import { pct, plural, price, ratio } from '../lib/format'
-import { MIN_LIQUID_VOLUME, type Market } from '../lib/markets'
-import { useCandleBoard } from '../lib/queries'
+import { type Market } from '../lib/markets'
 import { profileOf, strategyByKey } from '../lib/indicators/registry'
 import { routeHref } from '../lib/router'
+import { hoursOf as hours, useWatchScan } from '../lib/useWatchScan'
 import { Badge, Card, Help, TableSkeleton, TableWrap } from './ui'
-
-const SIZES = [10, 20] as const
+import { WatchControls } from './WatchControls'
 
 const STATUS: Record<WatchStatus, { label: string; variant: 'live' | 'buy' | 'warn' | 'neutral' }> = {
   nueva: { label: 'Señal nueva', variant: 'live' },
@@ -16,11 +15,6 @@ const STATUS: Record<WatchStatus, { label: string; variant: 'live' | 'buy' | 'wa
   tendencia: { label: 'En tendencia', variant: 'neutral' },
   fuera: { label: 'Sin posición', variant: 'neutral' },
   corto: { label: 'Historial corto', variant: 'neutral' },
-}
-
-const hours = (bars: number) => {
-  const h = bars * 4
-  return h < 48 ? `${h} h` : `${Math.round(h / 24)} días`
 }
 
 function what(w: Watch): string {
@@ -47,22 +41,10 @@ function what(w: Watch): string {
  * like the touch scan below it.
  */
 export function EmaWatch({ markets }: { markets: Market[] }) {
-  const [size, setSize] = useState<(typeof SIZES)[number]>(10)
-  const [cryptoOnly, setCryptoOnly] = useState(true)
-  const [ids, setIds] = useState<string[] | null>(null)
-  const board = useCandleBoard(ids ?? [], '4H')
-  const byId = useMemo(() => new Map(markets.map((m) => [m.instId, m])), [markets])
+  const scan = useWatchScan(markets)
+  const { ids, board, byId } = scan
   const strategy = strategyByKey('ema200')
   const profile = profileOf(strategy, strategy.presets[0].key)
-
-  const run = () =>
-    setIds(
-      markets
-        .filter((m) => m.volumeUsd >= MIN_LIQUID_VOLUME && (!cryptoOnly || m.category === 'cripto'))
-        .sort((a, b) => b.volumeUsd - a.volumeUsd)
-        .slice(0, size)
-        .map((m) => m.instId),
-    )
 
   const rows = useMemo(
     () =>
@@ -109,26 +91,7 @@ export function EmaWatch({ markets }: { markets: Market[] }) {
       }
       flush
     >
-      <div className="table-controls-bar ema-controls">
-        <div className="seg-control" aria-label="Cuántos contratos">
-          {SIZES.map((n) => (
-            <button key={n} type="button" aria-pressed={size === n} onClick={() => setSize(n)}>
-              Top {n}
-            </button>
-          ))}
-        </div>
-        <div className="seg-control" aria-label="Qué contratos">
-          <button type="button" aria-pressed={cryptoOnly} onClick={() => setCryptoOnly(true)}>
-            Cripto
-          </button>
-          <button type="button" aria-pressed={!cryptoOnly} onClick={() => setCryptoOnly(false)}>
-            Todo
-          </button>
-        </div>
-        <button type="button" className="btn btn--primary" onClick={run} disabled={markets.length === 0}>
-          {ids ? 'Volver a escanear' : 'Qué vigilo'}
-        </button>
-      </div>
+      <WatchControls scan={scan} empty={markets.length === 0} />
 
       {!ids ? null : rows.length === 0 ? (
         <TableSkeleton rows={Math.min(total, 6)} cols={7} />
@@ -165,7 +128,7 @@ export function EmaWatch({ markets }: { markets: Market[] }) {
                         {s.label}
                       </Badge>
                     </td>
-                    <td className="sub">{what(w)}</td>
+                    <td className="sub watch-what">{what(w)}</td>
                     <td className="num">{price(w.price)}</td>
                     <td className="num">{Number.isFinite(w.ema) ? price(w.ema) : '—'}</td>
                     <td className="num">

@@ -4454,6 +4454,12 @@ table.data td.num {
   margin-left: auto;
 }
 
+/* The watch lists' "qué pasa" is a sentence, not a figure: it may wrap — in the
+   table and in the phone's cards, where a nowrap cell ran off its card's edge. */
+table.data td.watch-what {
+  white-space: normal;
+}
+
 .ema-length {
   display: inline-flex;
   align-items: center;

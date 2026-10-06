@@ -114,3 +114,41 @@ export function highest(values: number[], length: number): number[] {
     i < length - 1 ? NaN : Math.max(...values.slice(i - length + 1, i + 1)),
   )
 }
+
+/** `ta.stdev` — the biased (population) deviation, which is what Pine computes. */
+export function stdev(values: number[], length: number): number[] {
+  const out = new Array<number>(values.length).fill(NaN)
+  for (let i = length - 1; i < values.length; i++) {
+    let sum = 0
+    for (let k = i - length + 1; k <= i; k++) sum += values[k]
+    const mean = sum / length
+    let squares = 0
+    for (let k = i - length + 1; k <= i; k++) squares += (values[k] - mean) ** 2
+    out[i] = Math.sqrt(squares / length)
+  }
+  return out
+}
+
+/**
+ * `ta.linreg(source, length, 0)` — the least-squares line through the last
+ * `length` values, read at the newest one. A NaN inside the window makes the
+ * result NaN, which is how a warm-up shows through.
+ */
+export function linreg(values: number[], length: number): number[] {
+  const out = new Array<number>(values.length).fill(NaN)
+  const sx = ((length - 1) * length) / 2
+  const sxx = ((length - 1) * length * (2 * length - 1)) / 6
+  const denom = length * sxx - sx * sx
+  for (let i = length - 1; i < values.length; i++) {
+    let sy = 0
+    let sxy = 0
+    for (let k = 0; k < length; k++) {
+      const y = values[i - length + 1 + k]
+      sy += y
+      sxy += k * y
+    }
+    const slope = (length * sxy - sx * sy) / denom
+    out[i] = (sy - slope * sx) / length + slope * (length - 1)
+  }
+  return out
+}

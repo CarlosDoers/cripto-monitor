@@ -51,6 +51,39 @@ export const DONCHIAN_SETTINGS: DonchianSettings = {
   feeRate: 0.001,
 }
 
+/**
+ * The same breakout with a trend filter: long only above the EMA 200, short
+ * only below it. The `trendLen` setting was already here (the old EMA 100 preset
+ * failed on BTC, ETH and SOL daily); on 4 h over 30 coins it is the better way
+ * to take the same breakouts. Entries wait for three lengths of history, like
+ * every EMA the app draws, so the average has settled before it decides anything.
+ */
+export const DONCHIAN_TREND_SETTINGS: DonchianSettings = { ...DONCHIAN_SETTINGS, trendLen: 200 }
+
+/**
+ * What `npm run ideas trend` measures for that preset — the figures the preset's
+ * note and the Screener's help quote, and the ones that script checks and fails
+ * on when they drift. Net R per trade after a 0.1 % round trip.
+ */
+export const DONCHIAN_TREND_EVIDENCE = {
+  /** 30 coins, 4 h, 2022–2026. */
+  board: {
+    n: 3287,
+    net: 0.36,
+    halves: [0.48, 0.26] as [number, number],
+    /** The same breakouts without the filter. */
+    plain: 0.21,
+    longs: 0.61,
+    shorts: 0.12,
+    /** Without its ten best trades; the trend followers live on a few. */
+    withoutBest10: 0.19,
+  },
+  /** The same rule on 14 coins in 2018–2021, a period nothing was tuned on. */
+  old: { n: 1009, net: 1.07, plain: 0.46 },
+  /** The same preset on 1 h over the 30 coins, 2022–2026: marginal, and it does not take twice the fee. */
+  hourly: { n: 14892, net: 0.13, halves: [0.15, 0.11] as [number, number], plain: 0.02, doubleFee: 0.08 },
+}
+
 export function analyseDonchian(
   candles: Candle[],
   settings: DonchianSettings = DONCHIAN_SETTINGS,
@@ -66,7 +99,8 @@ export function analyseDonchian(
   const lower = lowest(low, channelLen)
   const trend = trendLen ? ema(close, trendLen) : null
 
-  const warmup = Math.max(channelLen, atrLen, trendLen) + 20
+  // An EMA carries its SMA seed for a long time; three lengths leave nothing of it.
+  const warmup = Math.max(channelLen, atrLen, trendLen * 3) + 20
   const signals: StrategySignal[] = []
 
   /** Tracks the live trade; `signal` is the same object stored in `signals`. */
@@ -158,7 +192,12 @@ export function analyseDonchian(
     { key: 'upper', label: `Máximo ${channelLen}`, values: upper, colour: 'var(--good)' },
     { key: 'lower', label: `Mínimo ${channelLen}`, values: lower, colour: 'var(--critical)', fillTo: 'upper' },
   ]
+  // The filter is drawn, but off the price scale: a trend can run far above its
+  // average, and an EMA 200 on the scale would flatten every candle.
+  if (trend) overlays.push({ key: 'trend', label: `EMA ${trendLen}`, values: trend, colour: 'var(--series-2)', context: true })
 
   const live: Position | null = position
+  // The trail has moved since the entry: say where the stop stands now.
+  if (live && trailAtr) live.signal.stopNow = live.stopNow
   return summarise(signals, overlays, warmup, live ? live.signal : null)
 }

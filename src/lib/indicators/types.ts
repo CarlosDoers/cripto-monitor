@@ -36,6 +36,12 @@ export interface StrategySignal {
   closedIndex?: number
   closedTime?: number
   closedPrice?: number
+  /**
+   * Only on a trade still open that trails its stop: where the stop stands after
+   * the last candle, which is what the next candle will be tested against. `stop`
+   * stays the initial one — it is what defines 1 R.
+   */
+  stopNow?: number
   /** Round-trip cost in R: cost / (stop distance). */
   feeR: number
   /** Reward-to-risk at entry, only meaningful with a fixed target. */

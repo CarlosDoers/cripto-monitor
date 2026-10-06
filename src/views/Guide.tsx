@@ -2,7 +2,8 @@ import { useRef, type ReactNode } from 'react'
 import { Card } from '../components/ui'
 import { HELP } from '../lib/glossary'
 import { CARRY_EVIDENCE } from '../lib/carry'
-import { pct } from '../lib/format'
+import { pct, ratio } from '../lib/format'
+import { DONCHIAN_TREND_EVIDENCE as TREND } from '../lib/indicators/donchianBreakout'
 
 /**
  * The Guía: how to read each section, how to use SMC and the Screener, what
@@ -67,15 +68,19 @@ type Verdict = 'si' | 'no' | 'ojo'
 /** What the measurements say, in plain words. Each line traces to a script in CLAUDE.md. */
 const FINDINGS: { verdict: Verdict; what: string; detail: ReactNode }[] = [
   {
-    verdict: 'si',
+    verdict: 'ojo',
     what: 'Reversión en diario',
     detail: (
       <>
-        La que más gana por operación: <strong>+0,43 R</strong> por señal, positiva en BTC, ETH y SOL
-        por separado, en todos los años y en largos y cortos. Pero menos sólida de lo que parecía: el
-        ancho de banda elegido es un pico (con 2 o 3 ATR la segunda mitad del histórico queda en cero),
-        y su ventaja aguantaría solo 6 variantes probadas. Hasta octubre de 2026 la app decía +0,61 R
-        porque el backtest no contaba el stop tocado el día después de la entrada.
+        En BTC, ETH y SOL desde 2022 es la que más gana por operación: <strong>+0,43 R</strong> por
+        señal, positiva en cada una por separado, en todos los años y en largos y cortos. Pero menos
+        sólida de lo que parecía: el ancho de banda elegido es un pico (con 2 o 3 ATR la segunda mitad
+        del histórico queda en cero), y su ventaja aguantaría solo 6 variantes probadas. Y no se sale de
+        ahí: en las otras 26 monedas del tablero mide <strong>−0,03 R</strong> sobre 759 señales
+        (ninguna ventaja demostrada), y antes de 2022 pierde (−0,16 R en 2018–2021, −0,35 R en BTC,
+        ETH y SOL). Es una estrategia de mercado lateral con la ventaja demostrada solo en esas tres
+        monedas. Hasta octubre de 2026 la app decía +0,61 R porque el backtest no contaba el stop
+        tocado el día después de la entrada.
       </>
     ),
   },
@@ -87,7 +92,13 @@ const FINDINGS: { verdict: Verdict; what: string; detail: ReactNode }[] = [
         <strong>+0,33 R</strong> por señal, pero vive de pocas operaciones grandes: sin sus diez mejores
         de 899 queda en +0,07. Y es la que peor aguanta la búsqueda que la encontró: seguiría siendo
         real solo si se hubieran probado menos de 14 variantes, y se probaron más. Espera rachas
-        largas de pérdidas y úsala con tamaño pequeño.
+        largas de pérdidas y úsala con tamaño pequeño. Con el filtro de la EMA 200 (el preset «Canal 20 +
+        EMA 200», que tiene su propio «Qué vigilo» en el Screener) mide{' '}
+        <strong>+{ratio(TREND.board.net)} R</strong> sobre {new Intl.NumberFormat('es-ES').format(TREND.board.n)}{' '}
+        operaciones, frente a +{ratio(TREND.board.plain)} sin él, y mejora cada uno de los cinco años: los largos
+        ganan +{ratio(TREND.board.longs)} R y los cortos +{ratio(TREND.board.shorts)}. Sube lo que gana cada
+        operación pero quita muchas y se parece al cruce de la EMA 200, así que sirve para elegir qué rupturas
+        coger, no para ganar más en conjunto.
       </>
     ),
   },
@@ -227,6 +238,24 @@ const FINDINGS: { verdict: Verdict; what: string; detail: ReactNode }[] = [
         sus meses se mueven con los de la Ruptura (correlación 0,92) y sumarla no mejora el conjunto.
         Sin sus diez mejores operaciones se quedan en casi nada. Ninguno se ofrece: repiten una ventaja
         que la app ya tiene.
+      </>
+    ),
+  },
+  {
+    verdict: 'no',
+    what: 'Patrones populares de TradingView: squeeze, Ichimoku, NR7, Turtle Soup, UT Bot, velas',
+    detail: (
+      <>
+        Se midieron tal como se cuentan, con las reglas fijadas antes y en 30 monedas desde 2022.
+        Pierden o empatan el NR7 y la barra interior, el barrido de liquidez (Turtle Soup), el clímax de
+        volumen, la divergencia del RSI, el UT Bot, la envolvente de Nadaraya-Watson, las velas de
+        reversión en extremos, el ratio altcoin/BTC (pierde −0,2 R, con dos comisiones) y las ventanas
+        horarias. Los que ganan algo —squeeze en 4 h, +0,12 R; Ichimoku en diario, +0,20 R— son
+        tendencia otra vez: sus meses se mueven con los de la Ruptura (0,62) y con los de la EMA 200
+        (0,90), y sin sus diez mejores operaciones se quedan en casi nada. El hueco de valor justo
+        (FVG) en diario es lo único con algo propio, +0,11 R y positivo con todos sus vecinos, pero con
+        un intervalo que incluye el cero y sin repetirse con claridad antes de 2022 (+0,07 R, casi todo
+        de 2021). Ninguno se ofrece.
       </>
     ),
   },
@@ -444,6 +473,12 @@ export function Guide() {
             <strong>Atajos</strong> (la tira de arriba): un clic pone los filtros y el orden. Los más
             útiles: <em>Reversión</em> (dónde vigila o ha dado señal la estrategia), <em>CHoCH reciente</em>{' '}
             (qué ha cambiado de tendencia) y <em>Volumen inusual</em> (dónde entra dinero).
+          </li>
+          <li>
+            <strong>Qué vigilo</strong> (las dos tarjetas de arriba del todo): una por cada estrategia de
+            tendencia que pasó el listón en 4 h —la ruptura de 20 velas a favor de la EMA 200 y el cruce de
+            la EMA 200—. Escanean los 10 o 20 contratos más negociados y dicen cuáles tienen la señal nueva,
+            la están rompiendo ahora o están cerca. Entrar con una tendencia ya empezada no está medido.
           </li>
           <li>
             <strong>Filtros</strong>: combínalos para buscar algo concreto, por ejemplo «acciones en

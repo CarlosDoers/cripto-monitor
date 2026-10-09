@@ -265,12 +265,13 @@ export function Screener() {
 
   return (
     <>
-      {/* On demand: what to watch under the two trend strategies that measured on 4 h
-          — the breakout the EMA 200 allows, then the EMA 200 cross itself — and
-          then the touches of the daily EMA the user follows, as context. */}
+      {/* On demand, three buttons: first the touches of the daily EMA the user
+          follows over the last 3 candles (context, and the one used most), then
+          what to watch under the two trend strategies that measured on 4 h — the
+          breakout the EMA 200 allows, then the EMA 200 cross itself. */}
+      <EmaScanner markets={markets} />
       <DonchianWatch markets={markets} />
       <EmaWatch markets={markets} />
-      <EmaScanner markets={markets} />
 
       {/* Finviz's Signal menu: one tap sets the filters and the order. */}
       <div className="tabs screen-presets" role="tablist" aria-label="Atajos">

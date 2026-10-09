@@ -4460,6 +4460,16 @@ table.data td.watch-what {
   white-space: normal;
 }
 
+/* The scanner's closing line: who did not touch, and who has too little history. */
+.ema-rest {
+  margin: 0;
+  padding: 10px 14px;
+  border-top: 1px solid var(--border);
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--ink-muted);
+}
+
 .ema-length {
   display: inline-flex;
   align-items: center;
@@ -4999,4 +5009,111 @@ table.data td.watch-what {
     padding-left: 14px;
     border-left: 1px solid var(--border-subtle);
   }
+}
+
+/* ---------- Screener: EMA touch scan, second pass ---------- */
+
+.ema-length-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* What changed since the last scan, and the filter by the side a touch came from. */
+.ema-changes,
+.ema-filter {
+  margin: 0;
+  padding: 8px 14px;
+  border-top: 1px solid var(--border);
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--ink-muted);
+}
+
+.ema-changes strong {
+  color: var(--ink-primary);
+}
+
+.ema-filter {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+/* The phone's version of the table: one line per contract, the rest on tap. */
+.ema-list {
+  border-top: 1px solid var(--border);
+}
+
+.ema-item {
+  border-bottom: 1px solid var(--border);
+}
+
+.ema-item:last-child {
+  border-bottom: none;
+}
+
+.ema-item summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  min-height: 44px;
+  padding: 8px 14px;
+  list-style: none;
+  cursor: pointer;
+}
+
+.ema-item summary::-webkit-details-marker {
+  display: none;
+}
+
+.ema-item summary .num {
+  margin-left: auto;
+}
+
+/* Says "there is more": a chevron that turns when it is open. */
+.ema-item summary::after {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-right: 1.5px solid var(--ink-faint);
+  border-bottom: 1.5px solid var(--ink-faint);
+  transform: rotate(45deg);
+  margin: 0 2px 3px 4px;
+}
+
+.ema-item[open] summary::after {
+  transform: rotate(-135deg);
+  margin-bottom: -3px;
+}
+
+.ema-item dl {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 6px 14px;
+  margin: 0;
+  padding: 2px 14px 10px;
+  font-size: 12px;
+}
+
+.ema-item dt {
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  color: var(--ink-faint);
+}
+
+.ema-item dd {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.ema-item-link {
+  display: inline-block;
+  padding: 0 14px 12px;
 }

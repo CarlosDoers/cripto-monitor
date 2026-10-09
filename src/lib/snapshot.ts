@@ -2,7 +2,7 @@ import { accountAlerts, type AccountAlert } from './alerts'
 import { feeShareOfGrid, fuelUsed, gridLiquidationRoom, gridPlace, liquidationRoom, rangePosition } from './bots'
 import { instTypeOf } from './instruments'
 import { BASE_FUNDING_APR, CARRY_EVIDENCE, CARRY_RULE, carryStatus, trailingApr } from './carry'
-import { emaTouchSummary } from './emaTouch'
+import { analyseEmaTouch, compareTouches, dayLabel, EMA_TOUCH_EVIDENCE, emaTouchSummary, structureText, touchesWithin, touchStory, type EmaTouch } from './emaTouch'
 import { activeCurrency, convert } from './currency'
 import { compareDonchianWatch, watchDonchianTrend, type DonchianWatch } from './donchianWatch'
 import { compareWatch, watchEmaCross, type EmaWatch } from './emaWatch'
@@ -493,7 +493,7 @@ export function liquidCrypto(m: RawMarket, top: number) {
     .slice(0, top)
 }
 
-export async function signalsText(get: Get, market: RawMarket, opts: { reversal: number; ema: number }) {
+export async function signalsText(get: Get, market: RawMarket, opts: { reversal: number; ema: number; touch?: number }) {
   const reversalSet = liquidCrypto(market, opts.reversal)
   const emaSet = liquidCrypto(market, opts.ema)
 
@@ -544,6 +544,7 @@ export async function signalsText(get: Get, market: RawMarket, opts: { reversal:
     corto: 'historial corto',
   }
   const hoursOf = (age: number) => (age * 4 < 48 ? `${age * 4} h` : `${Math.round(age / 6)} días`)
+  const touchSection = opts.touch ? await emaTouchText(get, liquidCrypto(market, opts.touch)) : ''
   return [
     `# Señales en vivo — ${when(Date.now())}`,
     `## Reversión diaria (${reversalSet.length} X-Perp de cripto más negociados)`,
@@ -583,6 +584,59 @@ export async function signalsText(get: Get, market: RawMarket, opts: { reversal:
         w.stop !== undefined ? price(w.stop) : '—',
       ]),
     ),
+    '',
+    touchSection,
+  ]
+    .filter((x) => x !== '')
+    .join('\n\n')
+}
+
+/** The last 3 candles: today (still forming), yesterday and the day before — the card's default. */
+const TOUCH_WINDOW = 3
+
+/**
+ * Which of the most traded X-Perps touched the daily EMA 25 in the last three
+ * candles — the Screener's card, as text. Same function, same candles (the UTC
+ * close, TradingView's, which is the card's default), so Claude is told what
+ * the screen shows. It is context and says so first: the section exists so
+ * Claude can answer "¿cuáles han tocado la EMA?" without inventing a reason to
+ * trade one. A failure here costs this section and nothing else.
+ */
+async function emaTouchText(get: Get, set: ReturnType<typeof liquidCrypto>): Promise<string> {
+  const title = `## Toques a la EMA ${EMA_TOUCH_EVIDENCE.length} diaria (${set.length} más negociados, últimas ${TOUCH_WINDOW} velas, cierre UTC)`
+  if (!set.length) return ''
+  let touches: EmaTouch[]
+  try {
+    const daily = await paced(set, (x) => get<Candle>('/api/v5/market/candles', { instId: x.instId, bar: '1Dutc', limit: 200 }))
+    touches = set.map((x, i) => analyseEmaTouch(daily[i], EMA_TOUCH_EVIDENCE.length, x.last, x.instId, x.symbol)).sort(compareTouches)
+  } catch (err) {
+    return `${title}\n_No se pudo leer: ${err instanceof Error ? err.message : String(err)}._`
+  }
+  const hits = touches.filter((t) => !t.short && touchesWithin(t, TOUCH_WINDOW).length > 0)
+  const rest = touches.filter((t) => !t.short && !hits.includes(t)).map((t) => t.symbol)
+  const shorts = touches.filter((t) => t.short).map((t) => t.symbol)
+  const volume = (t: EmaTouch) => (t.volumePartial ? 'en curso' : Number.isFinite(t.volume) ? `${ratio(t.volume, 1)}×` : '—')
+  return [
+    title,
+    `Contexto, no señal: ${emaTouchSummary().text}. Una vela cuenta como toque si su rango incluye la EMA de ese día; la de hoy sigue abierta y usa el precio en vivo. «Vino desde» es el lado en que cerró la vela anterior al último toque; «antes N días sin tocarla» cuenta las velas sin toque previas a él.`,
+    hits.length
+      ? table(
+          ['Activo', 'Cuándo', 'Qué pasó', 'Estructura', 'Volumen', 'Precio', `EMA ${EMA_TOUCH_EVIDENCE.length}`, 'Distancia', 'Pendiente'],
+          hits.map((t) => [
+            t.symbol,
+            touchesWithin(t, TOUCH_WINDOW).map(dayLabel).join(', '),
+            touchStory(t, TOUCH_WINDOW),
+            structureText(t),
+            volume(t),
+            price(t.price),
+            price(t.ema),
+            pct(t.distance),
+            t.slope,
+          ]),
+        )
+      : `Ninguno de los ${touches.length - shorts.length} contratos ha tocado la EMA en las últimas ${TOUCH_WINDOW} velas.`,
+    rest.length && hits.length ? `Sin toque: ${rest.join(', ')}.` : '',
+    shorts.length ? `Historial corto (menos de ${EMA_TOUCH_EVIDENCE.length * 3} velas diarias): ${shorts.join(', ')}.` : '',
   ]
     .filter((x) => x !== '')
     .join('\n\n')
@@ -673,7 +727,7 @@ export async function fullSnapshot(okx: Get, opts: { signals: boolean; funding: 
       parts.push(`_${label}: no se pudo leer de OKX (${err instanceof Error ? err.message : String(err)})._`)
     }
   }
-  if (opts.signals) await extra('Señales en vivo', () => signalsText(get, market!, { reversal: 40, ema: 10 }))
+  if (opts.signals) await extra('Señales en vivo', () => signalsText(get, market!, { reversal: 40, ema: 10, touch: 20 }))
   if (opts.funding) await extra('Financiación', () => fundingText(get, account, market!))
   return parts.join('\n\n---\n\n')
 }

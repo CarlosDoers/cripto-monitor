@@ -50,7 +50,7 @@ export const EMA_TOUCH_EVIDENCE = {
 export const HIGH_VOLUME = 1.5
 const VOL_LOOKBACK = 20
 
-/** How far back a touch is still reported. */
+/** How far back a touch is still found; the card then looks at the last 3 or 10 candles of it. */
 export const LOOKBACK = 10
 /** Bars over which the slope is judged, and the move under which it is flat. */
 const SLOPE_BARS = 10
@@ -65,6 +65,17 @@ export interface EmaTouch {
   distance: number
   /** Candles back to the latest touch: 0 is today's, still forming. Null if none in `LOOKBACK`. */
   ago: number | null
+  /** Every candle back, within `LOOKBACK`, whose range held the EMA — newest first, 0 being today's. */
+  days: number[]
+  /**
+   * Consecutive candles, ending at the latest touch, whose range held the EMA:
+   * 1 is a single touch, 3 is price hugging the line. 0 with no touch.
+   */
+  run: number
+  /** Candles price had stayed clear of the EMA before that run began. Null with no touch. */
+  away: number | null
+  /** The history ran out before an earlier touch turned up, so `away` is a floor. */
+  awayOpen: boolean
   /** Which side the previous close was on: where the touch came from. */
   from: 'arriba' | 'abajo' | null
   /** The touching candle closed on the other side of the EMA from the one before. */
@@ -108,25 +119,36 @@ export function analyseEmaTouch(
   const base = { instId, symbol, price: live || close[last], bars: sorted.length }
   const none = { structure: null, favour: null, volume: NaN, volumePartial: false, held: null }
   if (sorted.length < length * SEED_FACTOR) {
-    return { ...base, ...none, ema: NaN, distance: NaN, ago: null, from: null, crossed: false, slope: 'plana', short: true }
+    return { ...base, ...none, ema: NaN, distance: NaN, ago: null, days: [], run: 0, away: null, awayOpen: false, from: null, crossed: false, slope: 'plana', short: true }
   }
 
   const line = ema(close, length)
   const touches = (i: number) => low[i] <= line[i] && line[i] <= high[i]
-  let ago: number | null = null
-  for (let k = 0; k <= LOOKBACK && last - k > 0; k++) {
-    if (touches(last - k)) {
-      ago = k
-      break
-    }
-  }
+  const days: number[] = []
+  for (let k = 0; k <= LOOKBACK && last - k > 0; k++) if (touches(last - k)) days.push(k)
+  const ago: number | null = days.length ? days[0] : null
   let from: EmaTouch['from'] = null
   let crossed = false
+  let run = 0
+  let away: number | null = null
+  let awayOpen = false
   if (ago !== null) {
     const i = last - ago
     const before = close[i - 1] > line[i - 1]
     from = before ? 'arriba' : 'abajo'
     crossed = close[i] > line[i] !== before
+
+    // How long it had stayed away, counted only where the EMA has settled: the
+    // run of touching candles first (price hugging the line), then the clear
+    // candles before it.
+    const settled = length * SEED_FACTOR - 1
+    let j = i
+    while (j > settled && touches(j - 1)) j--
+    run = i - j + 1
+    let k = j - 1
+    while (k >= settled && !touches(k)) k--
+    away = j - 1 - k
+    awayOpen = k < settled
   }
 
   // Structure from finished candles only: the forming one could still break.
@@ -169,6 +191,10 @@ export function analyseEmaTouch(
     ema: line[last],
     distance: price / line[last] - 1,
     ago,
+    days,
+    run,
+    away,
+    awayOpen,
     from,
     crossed,
     slope,
@@ -178,6 +204,57 @@ export function analyseEmaTouch(
     volumePartial: ago === 0 && forming,
     held: ago === null ? null : !crossed,
     short: false,
+  }
+}
+
+/** The touches inside the last `window` candles, newest first: 3 is today, yesterday and the day before. */
+export function touchesWithin(t: EmaTouch, window: number): number[] {
+  return t.days.filter((k) => k < window)
+}
+
+/** How a candle `k` back is named: "hoy", "ayer", "anteayer", "hace 4 días". */
+export function dayLabel(k: number): string {
+  return k === 0 ? 'hoy' : k === 1 ? 'ayer' : k === 2 ? 'anteayer' : `hace ${k} días`
+}
+
+/**
+ * What price was doing before the latest touch, in words: a first visit after
+ * a long time away, or a candle in a run of them with the line (chop). `listed`
+ * is how many touching days the caller has already named, so a run of three that
+ * "tocó hoy, ayer, anteayer" has just said is not said again. It is
+ * description. Whether a first touch holds better than the fifth was not
+ * separated from what the other filters showed — nothing here ranks by it.
+ */
+export function priorText(t: EmaTouch, listed = 0): string {
+  if (t.ago === null || t.away === null) return ''
+  const days = `${t.awayOpen ? 'al menos ' : ''}${t.away} ${t.away === 1 ? 'día' : 'días'}`
+  // With no earlier history at all there is nothing to say about "before".
+  const clear = t.away === 0 ? '' : `${days} sin tocarla`
+  // The run is only news when it reaches past the days the sentence already named.
+  if (t.run > Math.max(1, listed)) return clear ? `${t.run} velas seguidas en ella, antes ${clear}` : `${t.run} velas seguidas en ella`
+  return clear ? `antes ${clear}` : ''
+}
+
+/** The sentence about one contract: which days touched, how the last went, what came before. */
+export function touchStory(t: EmaTouch, window: number): string {
+  const touched = touchesWithin(t, window)
+  const days =
+    touched.length > 1
+      ? `tocó ${touched.map(dayLabel).join(', ')} · el último toque vino desde ${t.from}`
+      : `vino desde ${t.from}`
+  const hold = t.crossed ? 'la cruzó' : t.ago === 0 ? 'de momento aguanta' : 'aguantó'
+  return [days, hold, priorText(t, touched.length)].filter(Boolean).join(' · ')
+}
+
+/** The internal structure and whether it points the way the touch came from. */
+export const structureText = (t: EmaTouch) =>
+  t.structure === null ? '—' : `${t.structure}${t.favour !== null ? ` · ${t.favour ? 'a favor' : 'en contra'}` : ''}`
+
+/** How many of these touches came from above and from below. */
+export function countSides(list: EmaTouch[]): { arriba: number; abajo: number } {
+  return {
+    arriba: list.filter((t) => t.from === 'arriba').length,
+    abajo: list.filter((t) => t.from === 'abajo').length,
   }
 }
 

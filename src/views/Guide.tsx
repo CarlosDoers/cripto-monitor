@@ -475,7 +475,16 @@ export function Guide() {
             (qué ha cambiado de tendencia) y <em>Volumen inusual</em> (dónde entra dinero).
           </li>
           <li>
-            <strong>Qué vigilo</strong> (las dos tarjetas de arriba del todo): una por cada estrategia de
+            <strong>Toques a la EMA 25 diaria</strong> (la primera tarjeta): pulsa «Buscar toques» y mira cuáles de
+            los 20 X-Perp con más volumen han tocado su EMA 25 en las últimas 3 velas diarias —hoy, ayer y
+            anteayer—, con el día de cada toque, por qué lado venía el precio (desde arriba o desde abajo) y
+            cuántos días llevaba sin tocarla. Con una segunda búsqueda con los mismos ajustes marca los{' '}
+            <em>nuevos</em> y los que <em>ya no tocan</em> (se recuerda solo en este navegador). Es contexto, no
+            una señal: el «?» de la tarjeta dice qué se midió. También sale en «Copiar para Claude» y en la
+            herramienta de señales del conector.
+          </li>
+          <li>
+            <strong>Qué vigilo</strong> (las dos tarjetas siguientes): una por cada estrategia de
             tendencia que pasó el listón en 4 h —la ruptura de 20 velas a favor de la EMA 200 y el cruce de
             la EMA 200—. Escanean los 10 o 20 contratos más negociados y dicen cuáles tienen la señal nueva,
             la están rompiendo ahora o están cerca. Entrar con una tendencia ya empezada no está medido.

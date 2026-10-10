@@ -8,7 +8,12 @@
 //
 // Needs `npm run dev` up; the proxy signs the request and applies the allowlist.
 // Pass DEV_URL if Vite picked a different port.
-import { writeFileSync, existsSync, mkdirSync } from 'node:fs'
+//
+// Incremental: a file that exists is extended from its last candle to now, so a
+// monthly refresh costs a few hundred requests instead of the hour the full
+// history takes. The audit measures what this cache holds, so a stale cache
+// cannot see a strategy decaying. Delete a file to rebuild it from 2022.
+import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs'
 
 const B = process.env.DEV_URL ?? 'http://localhost:5174'
 const DIR = './.candles'
@@ -37,10 +42,12 @@ const get = async (p) => {
 for (const instId of INSTRUMENTS) {
   for (const [bar, maxPages] of Object.entries(BARS)) {
     const file = `${DIR}/${instId.replace(/\W/g, '_')}__${bar}.json`
-    if (existsSync(file)) { console.log(`${instId.padEnd(26)} ${bar.padEnd(4)} ya está`); continue }
+    const stored = existsSync(file) ? JSON.parse(readFileSync(file, 'utf8')) : []
+    // Page back from now until the last stored candle, or to 2022 for a new file.
+    const stopAt = stored.length ? stored.at(-1).time : SINCE
     const all = []
     let after = Date.now()
-    for (let p = 0; p < maxPages && after > SINCE; p++) {
+    for (let p = 0; p < maxPages && after > stopAt; p++) {
       const rows = await get(
         `/api/v5/market/history-candles?instId=${instId}&bar=${bar}&after=${after}&limit=100`,
       )
@@ -50,14 +57,15 @@ for (const instId of INSTRUMENTS) {
       after = +rows.at(-1)[0]
       await sleep(110)
     }
-    const seen = new Set()
-    const candles = all
+    const seen = new Set(stored.map((c) => c.time))
+    const fresh = all
       // Volume is only used by the opening range, for its abnormal-volume filter.
       .map((c) => ({ time: +c[0], open: +c[1], high: +c[2], low: +c[3], close: +c[4], vol: +c[5], confirmed: c[8] === '1' }))
       .filter((c) => c.confirmed && !seen.has(c.time) && seen.add(c.time))
-      .sort((a, b) => a.time - b.time)
+    const candles = [...stored, ...fresh].sort((a, b) => a.time - b.time)
     writeFileSync(file, JSON.stringify(candles))
-    console.log(`${instId.padEnd(26)} ${bar.padEnd(4)} ${String(candles.length).padStart(6)}  ${candles.length ? new Date(candles[0].time).toISOString().slice(0, 10) : '—'}`)
+    const span = candles.length ? `${new Date(candles[0].time).toISOString().slice(0, 10)} → ${new Date(candles.at(-1).time).toISOString().slice(0, 10)}` : '—'
+    console.log(`${instId.padEnd(26)} ${bar.padEnd(4)} ${String(candles.length).padStart(6)}  ${span}  (+${fresh.length})`)
   }
 }
 console.log('LISTO')

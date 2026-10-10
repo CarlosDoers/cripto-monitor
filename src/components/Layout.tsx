@@ -147,11 +147,12 @@ function LastUpdated() {
     return () => clearInterval(id)
   }, [])
 
-  // The text folds away on narrow phones (see app.css), so it is also the
-  // pill's accessible name and tooltip.
+  // On narrow phones the text is hidden visually but not from screen readers
+  // (see app.css): an aria-label on a role-less span is ignored, so it cannot
+  // be the pill's name. The title is the tooltip.
   if (isFetching > 0) {
     return (
-      <span className="update-status update-status--live" title="Actualizando" aria-label="Actualizando">
+      <span className="update-status update-status--live" title="Actualizando">
         <span className="dot-live" />
         <span className="update-status-text">Actualizando</span>
       </span>
@@ -159,8 +160,9 @@ function LastUpdated() {
   }
   const ago = timeAgo(lastDone)
   return (
-    <span className="update-status" title={`Actualizado ${ago}`} aria-label={`Actualizado ${ago}`}>
+    <span className="update-status" title={`Actualizado ${ago}`}>
       <span className="update-status-dot" />
+      <span className="sr-only">Actualizado </span>
       <span className="update-status-text">{ago}</span>
     </span>
   )

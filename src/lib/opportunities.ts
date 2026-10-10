@@ -129,7 +129,8 @@ export function scanReversal(candles: Candle[], price: number): Scan {
 }
 
 export function useOpportunities() {
-  const { markets, isLoading: marketsLoading } = useMarkets()
+  // Price, volume and type are all it reads: no open interest or indices.
+  const { markets, isLoading: marketsLoading } = useMarkets([], { lite: true })
   const positions = usePositions()
 
   const universe = useMemo(

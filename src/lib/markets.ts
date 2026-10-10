@@ -94,12 +94,18 @@ function movementScore(rangePct: number): number {
   return Math.max(0.1, 0.55 - (rangePct - 15) / 40)
 }
 
-export function useMarkets(tradedInstIds: string[] = []) {
+/**
+ * `lite` skips open interest and the indices: a caller that only needs price,
+ * volume and asset type (the Resumen's opportunity scan) saves two requests
+ * every 30 s. Its liquidity score then rests on volume alone, and its premium
+ * is NaN — neither of which it reads.
+ */
+export function useMarkets(tradedInstIds: string[] = [], { lite = false }: { lite?: boolean } = {}) {
   const instruments = useInstruments('FUTURES')
   const tickers = useTickers('FUTURES')
-  const openInterest = useOpenInterest('FUTURES')
+  const openInterest = useOpenInterest('FUTURES', !lite)
   // One request covers every index, so the premium costs nothing per row.
-  const indices = useIndexTickers('USD')
+  const indices = useIndexTickers('USD', !lite)
 
   const traded = useMemo(() => new Set(tradedInstIds), [tradedInstIds])
 

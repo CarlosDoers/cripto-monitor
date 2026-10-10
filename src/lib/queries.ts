@@ -429,6 +429,7 @@ export function useDcaBots() {
       return families.flat()
     },
     refetchInterval: LIVE,
+    staleTime: LIVE,
   })
 }
 
@@ -477,6 +478,7 @@ export function useGridBots() {
       return families.flat()
     },
     refetchInterval: LIVE,
+    staleTime: LIVE,
   })
 }
 
@@ -546,10 +548,8 @@ export function useBotHistory() {
  * a premium pays it back on convergence — and asking per contract would be 171
  * requests for the X-PERP board. `quoteCcy` returns the lot, so it is one.
  */
-export function useIndexTickers(quoteCcy = 'USD') {
-  return useOkx<IndexTicker>(['index-tickers', quoteCcy], '/api/v5/market/index-tickers', {
-    quoteCcy,
-  })
+export function useIndexTickers(quoteCcy = 'USD', enabled = true) {
+  return useOkx<IndexTicker>(['index-tickers', quoteCcy], '/api/v5/market/index-tickers', { quoteCcy }, { enabled })
 }
 
 /**
@@ -588,10 +588,8 @@ export function useEconomicCalendar(importance = '3') {
 }
 
 /** Open interest across a product type — half of any liquidity picture. */
-export function useOpenInterest(instType: string) {
-  return useOkx<OpenInterest>(['open-interest', instType], '/api/v5/public/open-interest', {
-    instType,
-  })
+export function useOpenInterest(instType: string, enabled = true) {
+  return useOkx<OpenInterest>(['open-interest', instType], '/api/v5/public/open-interest', { instType }, { enabled })
 }
 
 const DAY = 24 * 60 * 60 * 1000
@@ -658,6 +656,7 @@ export function useAlgoOrders() {
       return [...conditional, ...oco]
     },
     refetchInterval: LIVE,
+    staleTime: LIVE,
   })
 }
 

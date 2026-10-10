@@ -121,9 +121,15 @@ export function Funding() {
         {c.isLoading ? (
           <TableSkeleton rows={4} cols={8} />
         ) : holdings.length === 0 ? (
+          // With every coin folded as dust, "none has an X-Perp" was false: they
+          // have one, they just weigh too little to hedge.
           <EmptyState
-            title="Ninguna moneda tuya tiene X-Perp"
-            hint="El carry necesita la moneda en spot y su perpetuo. Mira abajo los contratos que pagan bien si compraras el spot."
+            title={dust > 0 ? 'Tus monedas con X-Perp son saldos residuales' : 'Ninguna moneda tuya tiene X-Perp'}
+            hint={
+              dust > 0
+                ? `Tienes ${dust} con X-Perp, pero ${dust === 1 ? 'pesa' : 'cada una pesa'} menos del 0,5 % de la cartera. Mira abajo los contratos que pagan bien si compraras el spot.`
+                : 'El carry necesita la moneda en spot y su perpetuo. Mira abajo los contratos que pagan bien si compraras el spot.'
+            }
           />
         ) : (
           <TableWrap>

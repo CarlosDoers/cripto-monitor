@@ -8,8 +8,8 @@ import { compareDonchianWatch, watchDonchianTrend, type DonchianWatch } from './
 import { compareWatch, watchEmaCross, type EmaWatch } from './emaWatch'
 import { duration, num, pct, plural, price, qty, ratio, share, signedUsd, usd } from './format'
 import { guardsFor, isShort, liquidationDistance, PARTIAL_STOP, positionSize, stopCoverage, stopOf, targetOf } from './guards'
-import { MIN_TRADABLE_R, profileOf, STRATEGIES, tradableTimeframes } from './indicators/registry'
-import { scanReversal } from './opportunities'
+import { measuredThroughText, MIN_TRADABLE_R, profileOf, STRATEGIES, tradableTimeframes } from './indicators/registry'
+import { measuredContracts, scanReversal } from './opportunities'
 import { computePerformance, MIN_SAMPLE, type Performance } from './performance'
 import { buildPortfolio, type PortfolioCore } from './portfolioCore'
 import { toCandles } from './signals'
@@ -426,11 +426,15 @@ export function renderMethod(): string {
     }),
   )
   const variants = STRATEGIES.filter((st) => st.presets.length > 1).map((st) => `${st.label} en ${st.presets.length} variantes`)
+  // A strategy whose every timeframe is blocked is listed (Claude should know why
+  // it is gone) but not counted as offered: the opening range since 2026-10-10.
+  const offered = STRATEGIES.filter((st) => st.presets.some((p) => tradableTimeframes(profileOf(st, p.key)).length > 0))
+  const retired = STRATEGIES.filter((st) => !offered.includes(st)).map((st) => st.label)
   const touch = emaTouchSummary()
   return [
     '## Cómo leer esto (reglas de la app)',
     '- Todas las cifras salen de la app, que las calcula con los datos de OKX. No las recalcules ni las redondees de otra forma.',
-    `- Solo hay ${STRATEGIES.length} estrategias que la app ofrece${variants.length ? ` (${variants.join(', ')})` : ''}, cada una medida con años de datos, costes incluidos, en las dos mitades del histórico (umbral +${ratio(MIN_TRADABLE_R)} R). **No propongas señales, niveles ni entradas que no salgan de ellas**: la app ha medido decenas de ideas que parecían buenas (soportes y resistencias, rebotes en EMAs, cruces de MACD, ir contra la financiación extrema) y ninguna ganaba dinero.`,
+    `- Solo hay ${offered.length} estrategias que la app ofrece${variants.length ? ` (${variants.join(', ')})` : ''}, cada una medida con años de datos hasta el ${measuredThroughText()}, costes incluidos, en las dos mitades del histórico (umbral +${ratio(MIN_TRADABLE_R)} R).${retired.length ? ` ${retired.join(', ')} se midió y se retiró: no se sostiene en las dos mitades.` : ''} **No propongas señales, niveles ni entradas que no salgan de ellas**: la app ha medido decenas de ideas que parecían buenas (soportes y resistencias, rebotes en EMAs, cruces de MACD, ir contra la financiación extrema) y ninguna ganaba dinero.`,
     '- R es lo que se arriesga en una operación (de la entrada al stop). Acertar mucho no es ganar: manda la esperanza en R.',
     ...strategies,
     `- **Financiación (carry):** tener la moneda y un corto igual en su perpetuo, entrando cuando los últimos 7 días pagaron más del ${share(CARRY_RULE.enter, 0)} anual y saliendo cuando dejan de pagar: ${pct(CARRY_EVIDENCE.ownApr, 1)} anual medido desde 2022. El tipo por defecto de OKX es ${share(BASE_FUNDING_APR, 2)} anual.`,
@@ -493,8 +497,9 @@ export function liquidCrypto(m: RawMarket, top: number) {
     .slice(0, top)
 }
 
-export async function signalsText(get: Get, market: RawMarket, opts: { reversal: number; ema: number; touch?: number }) {
-  const reversalSet = liquidCrypto(market, opts.reversal)
+export async function signalsText(get: Get, market: RawMarket, opts: { ema: number; touch?: number }) {
+  // Only where the reversal's edge was measured, like the Resumen's panel.
+  const reversalSet = measuredContracts(liquidCrypto(market, 400))
   const emaSet = liquidCrypto(market, opts.ema)
 
   const daily = await paced(reversalSet, (x) => get<Candle>('/api/v5/market/candles', { instId: x.instId, bar: '1D', limit: 300 }))
@@ -547,8 +552,8 @@ export async function signalsText(get: Get, market: RawMarket, opts: { reversal:
   const touchSection = opts.touch ? await emaTouchText(get, liquidCrypto(market, opts.touch)) : ''
   return [
     `# Señales en vivo — ${when(Date.now())}`,
-    `## Reversión diaria (${reversalSet.length} X-Perp de cripto más negociados)`,
-    'Una señal sigue siendo válida hasta 7 días si el precio no ha tocado stop ni objetivo (medido).',
+    `## Reversión diaria (${reversalSet.map((x) => x.symbol).join(', ')}: las monedas donde está medida)`,
+    'Una señal sigue siendo válida hasta 7 días si el precio no ha tocado stop ni objetivo (medido). En el resto del tablero la misma regla se midió y no tiene ventaja, por eso no se busca allí.',
     table(['Activo', 'Lado', 'Recompensa/riesgo que queda', 'Entrada', 'Precio ahora', 'Stop', 'Objetivo', 'Señal'], rev),
     watching.length ? `A vigilar (fuera de su banda; si la próxima vela diaria cierra dentro, salta la señal): ${watching.map((w) => w.x.symbol).join(', ')}` : '',
     '',
@@ -727,7 +732,7 @@ export async function fullSnapshot(okx: Get, opts: { signals: boolean; funding: 
       parts.push(`_${label}: no se pudo leer de OKX (${err instanceof Error ? err.message : String(err)})._`)
     }
   }
-  if (opts.signals) await extra('Señales en vivo', () => signalsText(get, market!, { reversal: 40, ema: 10, touch: 20 }))
+  if (opts.signals) await extra('Señales en vivo', () => signalsText(get, market!, { ema: 10, touch: 20 }))
   if (opts.funding) await extra('Financiación', () => fundingText(get, account, market!))
   return parts.join('\n\n---\n\n')
 }

@@ -130,7 +130,7 @@ export function ClaudeExport() {
               <input type="checkbox" checked={signals} onChange={(e) => setSignals(e.target.checked)} />
               <span>
                 Señales en vivo
-                <span className="sub">reversión diaria en los 40 X-Perp más negociados, y ruptura + EMA 200 y cruce de la EMA 200 en 4 h · unos 5 s</span>
+                <span className="sub">reversión diaria en BTC, ETH y SOL; ruptura + EMA 200 y cruce de la EMA 200 en 4 h; toques a la EMA 25 diaria · unos 5 s</span>
               </span>
             </label>
             <label>

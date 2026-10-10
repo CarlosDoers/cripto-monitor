@@ -348,8 +348,8 @@ export const HELP = {
   opportunities: (
     <>
       <p>
-        Los X-Perp de cripto con más de 1 M$ al día donde la Reversión diaria, la estrategia más
-        sólida que se ha medido, tiene ahora una señal viva: disparó en los últimos 7 días y el precio
+        Los X-Perp de BTC, ETH y SOL donde la Reversión diaria, la estrategia con más ganancia por
+        operación de las medidas, tiene ahora una señal viva: disparó en los últimos 7 días y el precio
         aún no ha tocado ni su stop ni su objetivo.
       </p>
       <p>
@@ -359,7 +359,8 @@ export const HELP = {
         recorrido le queda, mejor ha salido de media, y con menos de 1:1 es donde menos se gana.
       </p>
       <p>
-        Medido en BTC, ETH y SOL; en otras monedas es la misma regla sin la misma evidencia. Ninguna
+        Solo se buscan esas tres monedas porque solo en ellas se midió una ventaja: en las otras 26 del
+        tablero la misma regla no gana nada, y antes de 2022 perdía también en estas. Ninguna
         señal es segura: aproximadamente la mitad acaban en el stop. Lo que la hace rentable es que
         las que ganan pagan más de lo que cuestan las que pierden.
       </p>

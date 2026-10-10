@@ -113,18 +113,16 @@ const TOOLS: Tool[] = [
     name: 'senales',
     title: 'Señales en vivo',
     description:
-      'Señales vivas de las estrategias medidas en los X-Perp de cripto más negociados: la reversión diaria (con la recompensa/riesgo que queda), la ruptura de 20 velas a favor de la EMA 200 en 4 h (señal nueva, rompiendo, cerca) y el cruce de la EMA 200 en 4 h (señal nueva, cruzando, cerca). Al final añade qué contratos han tocado la EMA 25 diaria en las últimas 3 velas: es contexto, no una señal medida. Tarda unos segundos.',
+      'Señales vivas de las estrategias medidas: la reversión diaria en BTC, ETH y SOL, las monedas donde está medida (con la recompensa/riesgo que queda), y en los X-Perp de cripto más negociados la ruptura de 20 velas a favor de la EMA 200 en 4 h (señal nueva, rompiendo, cerca) y el cruce de la EMA 200 en 4 h (señal nueva, cruzando, cerca). Al final añade qué contratos han tocado la EMA 25 diaria en las últimas 3 velas: es contexto, no una señal medida. Tarda unos segundos.',
     inputSchema: {
       type: 'object',
       properties: {
-        reversion_top: { type: 'integer', minimum: 10, maximum: 80, default: 40, description: 'Cuántos contratos revisar para la reversión diaria.' },
         ema_top: { type: 'integer', minimum: 5, maximum: 20, default: 10, description: 'Cuántos contratos revisar para las dos estrategias de 4 h (ruptura a favor de la EMA 200 y cruce de la EMA 200).' },
         toques_top: { type: 'integer', minimum: 0, maximum: 30, default: 20, description: 'Cuántos contratos revisar para los toques a la EMA 25 diaria (0 los omite).' },
       },
     },
     async run(args, get) {
       return signalsText(get, await collectMarket(get), {
-        reversal: intArg(args, 'reversion_top', 40, 10, 80),
         ema: intArg(args, 'ema_top', 10, 5, 20),
         touch: intArg(args, 'toques_top', 20, 0, 30),
       })

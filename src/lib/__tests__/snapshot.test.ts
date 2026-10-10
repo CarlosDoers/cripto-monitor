@@ -37,7 +37,7 @@ const candles =
     return rows(closes(bar === '1D' ? 300 : bar === '1Dutc' ? 200 : 100), bar) as unknown as T[]
   }
 
-const opts = { reversal: 10, ema: 5 }
+const opts = { ema: 5 }
 
 describe('the live signals text: EMA 25 touches', () => {
   it('names who touched, with the context-not-signal warning first', async () => {

@@ -72,10 +72,10 @@ const FINDINGS: { verdict: Verdict; what: string; detail: ReactNode }[] = [
     what: 'Reversión en diario',
     detail: (
       <>
-        En BTC, ETH y SOL desde 2022 es la que más gana por operación: <strong>+0,43 R</strong> por
+        En BTC, ETH y SOL desde 2022 es la que más gana por operación: <strong>+0,41 R</strong> por
         señal, positiva en cada una por separado, en todos los años y en largos y cortos. Pero menos
         sólida de lo que parecía: el ancho de banda elegido es un pico (con 2 o 3 ATR la segunda mitad
-        del histórico queda en cero), y su ventaja aguantaría solo 6 variantes probadas. Y no se sale de
+        del histórico queda en cero), y su ventaja aguantaría solo 5 variantes probadas. Y no se sale de
         ahí: en las otras 26 monedas del tablero mide <strong>−0,03 R</strong> sobre 759 señales
         (ninguna ventaja demostrada), y antes de 2022 pierde (−0,16 R en 2018–2021, −0,35 R en BTC,
         ETH y SOL). Es una estrategia de mercado lateral con la ventaja demostrada solo en esas tres
@@ -89,9 +89,9 @@ const FINDINGS: { verdict: Verdict; what: string; detail: ReactNode }[] = [
     what: 'Ruptura (Donchian) en 4 h',
     detail: (
       <>
-        <strong>+0,33 R</strong> por señal, pero vive de pocas operaciones grandes: sin sus diez mejores
-        de 899 queda en +0,07. Y es la que peor aguanta la búsqueda que la encontró: seguiría siendo
-        real solo si se hubieran probado menos de 14 variantes, y se probaron más. Espera rachas
+        <strong>+0,32 R</strong> por señal, pero vive de pocas operaciones grandes: sin sus diez mejores
+        de 946 queda en +0,08. Y es la que peor aguanta la búsqueda que la encontró: seguiría siendo
+        real solo si se hubieran probado menos de 15 variantes, y se probaron más. Espera rachas
         largas de pérdidas y úsala con tamaño pequeño. Con el filtro de la EMA 200 (el preset «Canal 20 +
         EMA 200», que tiene su propio «Qué vigilo» en el Screener) mide{' '}
         <strong>+{ratio(TREND.board.net)} R</strong> sobre {new Intl.NumberFormat('es-ES').format(TREND.board.n)}{' '}
@@ -126,13 +126,17 @@ const FINDINGS: { verdict: Verdict; what: string; detail: ReactNode }[] = [
     ),
   },
   {
-    verdict: 'si',
+    verdict: 'no',
     what: 'Apertura de Nueva York en 15 m, días laborables',
     detail: (
       <>
-        <strong>+0,25 R</strong> por señal, sobre más de 4.000 operaciones: aguantaría haber sido la
-        mejor de cien mil variantes. Su ventaja se ha ido estrechando año a año, y cada entrada es una
-        orden stop: el deslizamiento importa.
+        Ya no se ofrece (octubre de 2026). Daba <strong>+0,25 R</strong> por señal porque el backtest
+        descartaba los días en que una vela toca los dos extremos del rango, que son siempre una
+        pérdida; contándolos, y con los datos hasta hoy, mide +0,22 R, pero la segunda mitad del
+        histórico se queda en <strong>+0,08 R</strong>, por debajo del listón. Lo que se ha gastado es
+        BTC, ETH y SOL: +0,38 R hasta mediados de 2024 y +0,05 R desde entonces. La regla sigue
+        ganando a una entrada al azar; su margen ya no cubre con holgura las comisiones y el
+        deslizamiento de una orden stop.
       </>
     ),
   },
@@ -341,8 +345,8 @@ export function Guide() {
         <ul>
           <li>
             <strong>Resumen</strong>: ¿cómo voy? Lo que has ganado desde que empezaste, lo que tienes en
-            marcha, cualquier aviso de riesgo y las <em>oportunidades ahora</em>: los X-Perp donde la
-            Reversión tiene una señal viva que todavía merece la pena. Si solo miras una sección, que sea
+            marcha, cualquier aviso de riesgo y las <em>oportunidades ahora</em>: BTC, ETH y SOL cuando la
+            Reversión tiene en ellos una señal viva que todavía merece la pena. Si solo miras una sección, que sea
             esta.
           </li>
           <li>
@@ -383,8 +387,9 @@ export function Guide() {
             estructura SMC y medias, en cualquier temporalidad. Para leer, no para operar.
           </li>
           <li>
-            <strong>Estrategias</strong>: las cuatro estrategias que se han medido con años de datos, con
-            su señal actual y su historial. Solo se ofrecen en las temporalidades donde ganan. Debajo del
+            <strong>Estrategias</strong>: las estrategias que se han medido con años de datos, con su señal
+            actual y su historial. Solo se ofrecen en las temporalidades donde ganan en las dos mitades del
+            histórico, y las cifras se vuelven a medir cada mes: la Apertura se retiró en octubre de 2026. Debajo del
             gráfico, aquí y en Análisis, <em>Tamaño de la operación</em> calcula cuántos contratos abrir para
             arriesgar lo que elijas si salta el stop, y si tu margen libre lo aguanta.
           </li>
@@ -419,8 +424,8 @@ export function Guide() {
             movimiento general o de unos pocos.
           </li>
           <li>
-            <strong>Oportunidades ahora</strong>, en el Resumen: las señales vivas de la Reversión,
-            ordenadas por el recorrido que les queda. Ábrelas en Estrategias para ver el gráfico, y decide
+            <strong>Oportunidades ahora</strong>, en el Resumen: las señales vivas de la Reversión en BTC,
+            ETH y SOL, las únicas monedas donde está medida, ordenadas por el recorrido que les queda. Ábrelas en Estrategias para ver el gráfico, y decide
             tú el tamaño: aproximadamente la mitad acaban en el stop.
           </li>
           <li>

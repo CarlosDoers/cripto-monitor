@@ -5133,3 +5133,22 @@ table.data td.watch-what {
   clip-path: inset(50%);
   white-space: nowrap;
 }
+
+/* Pinch zoom is allowed (the labels are 9.5 px). iOS zooms into any field under
+   16 px on focus, and with zoom no longer locked that would now happen: touch
+   screens get 16 px fields instead. `!important` because several fields set
+   their own size with a class (`.ema-length input` is 12 px), and every one of
+   them must lose to this. */
+@media (pointer: coarse) {
+  input,
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+}
+
+/* A strategy measured and retired keeps its tab, marked, so it can still be read. */
+.tab-retired {
+  font-weight: 400;
+  color: var(--ink-faint);
+}

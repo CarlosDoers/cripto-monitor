@@ -39,6 +39,14 @@ import type {
  */
 const LIVE = 30_000
 const SLOW = 300_000
+/**
+ * The bot lists and the stop orders: a minute, not 30 s. They are four of the
+ * Resumen's ~13 polled requests and change when something is placed or a level
+ * fills, not with every tick; a bot's PnL a minute old reads the same. Halving
+ * them took the open Resumen from ~26 to ~18 requests a minute — each a
+ * serverless invocation.
+ */
+const MINUTE = 60_000
 
 type Options<T> = Omit<UseQueryOptions<T[], ApiError>, 'queryKey' | 'queryFn'>
 
@@ -428,8 +436,8 @@ export function useDcaBots() {
       )
       return families.flat()
     },
-    refetchInterval: LIVE,
-    staleTime: LIVE,
+    refetchInterval: MINUTE,
+    staleTime: MINUTE,
   })
 }
 
@@ -477,8 +485,8 @@ export function useGridBots() {
       )
       return families.flat()
     },
-    refetchInterval: LIVE,
-    staleTime: LIVE,
+    refetchInterval: MINUTE,
+    staleTime: MINUTE,
   })
 }
 
@@ -655,8 +663,8 @@ export function useAlgoOrders() {
       ])
       return [...conditional, ...oco]
     },
-    refetchInterval: LIVE,
-    staleTime: LIVE,
+    refetchInterval: MINUTE,
+    staleTime: MINUTE,
   })
 }
 

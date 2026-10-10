@@ -313,7 +313,7 @@ export const PRESETS: Preset[] = [
   { key: 'volatiles', label: 'Más volátiles', note: 'Más de 1 M$ de volumen, por su rango diario medio de 30 días.', filters: { minVolume: LIQUID }, sort: 'volatility', desc: true },
   { key: 'tendencia', label: 'Tendencia alcista', note: 'Precio por encima de su media de 20 días, y esta por encima de la de 50.', filters: { trend: 'alcista' }, sort: 'perf30', desc: true },
   { key: 'choch', label: 'CHoCH reciente', note: 'Un cambio de carácter (SMC) en las últimas 5 sesiones.', filters: { structure: 'choch5' }, sort: 'volume', desc: true },
-  { key: 'reversion', label: 'Reversión', note: 'La estrategia Reversión tiene una señal abierta o está vigilando una en diario.', filters: { reversal: 'any' }, sort: 'volume', desc: true },
+  { key: 'reversion', label: 'Reversión', note: 'La estrategia Reversión tiene una señal abierta o está vigilando una en diario. Solo en BTC, ETH y SOL tiene ventaja medida.', filters: { reversal: 'any' }, sort: 'volume', desc: true },
 ]
 
 export function sortValue(row: ScreenRow, key: SortKey): number | string {

@@ -31,8 +31,10 @@
   /* Ink */
   --ink-primary: #0b1220;
   --ink-secondary: #4d5b73;
-  --ink-muted: #64748b;
-  --ink-faint: #8b98ad;
+  /* Muted and faint clear 4.5:1 on every surface (the 9.5 px labels are faint);
+     at #64748b / #8b98ad they read 4.35:1 and 2.9:1 on the grey surfaces. */
+  --ink-muted: #58667a;
+  --ink-faint: #687181;
 
   /* Chrome */
   --border: rgba(15, 23, 42, 0.11);
@@ -109,7 +111,7 @@
     --ink-primary: #e9eef8;
     --ink-secondary: #9dabc2;
     --ink-muted: #7787a0;
-    --ink-faint: #5d6b83;
+    --ink-faint: #758196;
 
     --border: rgba(148, 163, 184, 0.15);
     --border-subtle: rgba(148, 163, 184, 0.08);
@@ -168,7 +170,7 @@
   --ink-primary: #e9eef8;
   --ink-secondary: #9dabc2;
   --ink-muted: #7787a0;
-  --ink-faint: #5d6b83;
+  --ink-faint: #758196;
 
   --border: rgba(148, 163, 184, 0.15);
   --border-subtle: rgba(148, 163, 184, 0.08);

@@ -134,8 +134,8 @@ export function Opportunities() {
       title="Oportunidades ahora"
       subtitle={
         o.isLoading
-          ? 'Revisando los X-Perp de cripto más líquidos…'
-          : `Señales vivas de la Reversión diaria · ${o.scanned} de ${o.total} X-Perp de cripto con más de 1 M$ al día${scanning ? ' (revisando)' : ''}`
+          ? 'Revisando BTC, ETH y SOL…'
+          : `Señales vivas de la Reversión diaria en BTC, ETH y SOL, las monedas donde está medida${scanning ? ` · revisando ${o.scanned} de ${o.total}` : ''}`
       }
       action={<Help label="Cómo se eligen">{HELP.opportunities}</Help>}
       className="opps-card"
@@ -144,7 +144,7 @@ export function Opportunities() {
         <Skeleton height={190} />
       ) : o.top.length === 0 ? (
         <p className="opp-empty">
-          Ninguna señal viva de la Reversión en los {o.scanned} contratos revisados
+          Ninguna señal viva de la Reversión en BTC, ETH ni SOL
           {o.maxAge ? ` (se cuentan las de los últimos ${o.maxAge} días que no han tocado stop ni objetivo)` : ''}.
           Es lo normal: la Reversión dispara pocas veces, y es mejor no operar que forzar una señal.
         </p>
@@ -204,8 +204,8 @@ export function Opportunities() {
       <p className="opp-note">
         Medida en BTC, ETH y SOL: {signedRatio(EVIDENCE.expectancy)} R por señal, y entrar hasta {EVIDENCE.maxAge}{' '}
         días tarde sigue dando al menos {signedRatio(EVIDENCE.lateFloor)} R mientras el precio no toque stop ni
-        objetivo. En otras monedas es la misma regla, no la misma
-        evidencia. Es la regla aplicada hoy, no un consejo: el tamaño de la posición lo decides tú.
+        objetivo. En el resto del tablero se midió y no tiene ventaja, así que no se busca allí. Es la regla
+        aplicada hoy, no un consejo: el tamaño de la posición lo decides tú.
       </p>
     </Card>
   )

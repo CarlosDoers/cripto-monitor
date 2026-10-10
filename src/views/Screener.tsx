@@ -19,6 +19,7 @@ import { Sparkline } from '../components/Sparkline'
 import { useSize } from '../lib/useSize'
 import { Badge, Card, DeltaValue, EmptyState, ErrorNotice, Help, SearchInput, TableSkeleton, TableWrap } from '../components/ui'
 import { HELP } from '../lib/glossary'
+import { MEASURED_COINS } from '../lib/opportunities'
 
 /** Contracts that get daily candles, by volume. Past this the book is too thin for an RSI to mean much. */
 const TECH_UNIVERSE = 80
@@ -113,7 +114,24 @@ function structureLabel(t: NonNullable<ScreenRow['tech']>): ReactNode {
   )
 }
 
-function reversalBadge(t: NonNullable<ScreenRow['tech']>): ReactNode {
+const REVERSAL_LABEL = {
+  'long-activa': 'Long abierta',
+  'short-activa': 'Short abierta',
+  'vigila-long': 'Vigila long',
+  'vigila-short': 'Vigila short',
+} as const
+
+function reversalBadge(t: NonNullable<ScreenRow['tech']>, symbol: string): ReactNode {
+  // The rule runs on every contract, but its edge was only measured on BTC, ETH
+  // and SOL: elsewhere it measured −0.03 R. So the state is shown as a fact in
+  // grey, never in the green or red of a signal worth taking.
+  if (t.reversal && !MEASURED_COINS.includes(symbol)) {
+    return (
+      <span title="La Reversión solo tiene ventaja medida en BTC, ETH y SOL; en esta moneda la misma regla no gana">
+        <Badge variant="neutral">{REVERSAL_LABEL[t.reversal]}</Badge> <span className="sub">sin ventaja medida</span>
+      </span>
+    )
+  }
   switch (t.reversal) {
     case 'long-activa':
       return <Badge variant="buy">Long abierta</Badge>
@@ -610,7 +628,7 @@ export function Screener() {
                           </td>
                           <td className="sub">{t ? t.trend[0].toUpperCase() + t.trend.slice(1) : '—'}</td>
                           <td>{t ? structureLabel(t) : <span className="sub">—</span>}</td>
-                          <td>{t ? reversalBadge(t) : <span className="sub">—</span>}</td>
+                          <td>{t ? reversalBadge(t, r.symbol) : <span className="sub">—</span>}</td>
                         </>
                       )}
                       {view === 'rendimiento' && (

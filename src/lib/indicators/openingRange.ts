@@ -54,12 +54,11 @@ export interface OpeningRangeSettings {
   weekdaysOnly: boolean
   /**
    * A candle that reaches both ends of the range is a loss: whichever came first,
-   * the other end is the stop. Off — the shipped behaviour — drops that day
-   * instead, which flatters the result: on the audit's cache it removes 107 of
-   * 4 283 opens, every one a certain −1 R, and the headline is +0.25 R rather
-   * than +0.22 (on BTC, ETH and SOL spot alone, 87 of 3 654 and +0.25 against
-   * +0.21; `npm run ideas orb`). Left off so the declared figures and the audit
-   * still agree; turning it on means re-declaring them.
+   * the other end is the stop. Off drops that day instead, which flatters the
+   * result — on the audit's cache it removed 107 of 4 283 opens, every one a
+   * certain −1 R, and read +0.25 R where the honest count was +0.22 (on BTC, ETH
+   * and SOL spot alone, 87 of 3 654 and +0.25 against +0.21; `npm run ideas
+   * orb`). On since 2026-10-10, and the profile re-declared to match.
    */
   doubleTouchLoss?: boolean
   feeRate: number
@@ -80,6 +79,7 @@ export const OPENING_RANGE_SETTINGS: OpeningRangeSettings = {
   minRelVolume: 0,
   relVolumeLookback: 14,
   weekdaysOnly: true,
+  doubleTouchLoss: true,
   feeRate: 0.001,
 }
 

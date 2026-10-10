@@ -4,6 +4,7 @@ import { useRouteParam } from '../lib/router'
 import {
   appliesTo,
   blockReason,
+  measuredThroughText,
   MIN_TRADABLE_R,
   profileOf,
   STRATEGIES,
@@ -505,7 +506,10 @@ export function Signals({ section }: { section: 'analysis' | 'strategies' }) {
     const next = strategyByKey(key)
     const nextProfile = profileOf(next, nextPreset)
     if (timeframeVerdict(nextProfile, timeframe) === 'blocked') {
-      setTimeframe((tradableTimeframes(nextProfile)[0] ?? '1D') as Timeframe)
+      // With nothing tradable left (the opening range since 2026-10-10), its own
+      // timeframe still shows the chart and why it is blocked; the daily would
+      // show a strategy that cannot even be computed there.
+      setTimeframe((tradableTimeframes(nextProfile)[0] ?? nextProfile.nativeTimeframe ?? '1D') as Timeframe)
     }
   }
 
@@ -560,7 +564,13 @@ export function Signals({ section }: { section: 'analysis' | 'strategies' }) {
             onClick={() => pickStrategy(item.key)}
           >
             <div className="tab-inner">
-              <span className="tab-label">{item.label}</span>
+              <span className="tab-label">
+                {item.label}
+                {/* Measured and retired: every timeframe blocked (the opening range since 2026-10-10). */}
+                {!item.presets.some((p) => tradableTimeframes(profileOf(item, p.key)).length > 0) && (
+                  <span className="tab-retired"> · no se ofrece</span>
+                )}
+              </span>
               <span className="tab-tagline">{item.tagline}</span>
             </div>
           </button>
@@ -695,6 +705,25 @@ export function Signals({ section }: { section: 'analysis' | 'strategies' }) {
               {selected} solo tiene {plural(s.candles.length, 'vela cerrada', 'velas cerradas')} en{' '}
               {currentTf?.label}. Hacen falta giros de precio suficientes para encontrar soportes y
               líneas de tendencia; prueba una temporalidad más corta o un instrumento con más historia.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Only reachable when nothing is tradable: the view falls back to the
+          strategy's own timeframe so the reason stays visible. Without this the
+          chart and a green in-view expectancy read like an offer. */}
+      {!analysis && currentVerdict === 'blocked' && tradableTimeframes(profile).length === 0 && (
+        <div className="notice notice--warning">
+          <IconAlert />
+          <div className="notice-body">
+            <p className="notice-title">{strategy.label}: medida y retirada, no se ofrece</p>
+            <p className="notice-text">
+              {blockReason(profile, timeframe) === 'unstable'
+                ? `En ${currentTf?.label} mide ${ratio(profile.byTimeframe[timeframe] ?? 0)} R de media, pero ${ratio(Math.min(...(profile.halves[timeframe] ?? [0])))} R en una de las dos mitades del histórico, por debajo del listón de ${ratio(MIN_TRADABLE_R)} R.`
+                : `En ${currentTf?.label} mide ${ratio(profile.byTimeframe[timeframe] ?? 0)} R por señal, por debajo del listón de ${ratio(MIN_TRADABLE_R)} R.`}{' '}
+              Se muestra para que veas qué hace y por qué se retiró; las señales y la esperanza de abajo son de
+              las velas en pantalla, no una ventaja medida.
             </p>
           </div>
         </div>
@@ -1035,8 +1064,8 @@ export function Signals({ section }: { section: 'analysis' | 'strategies' }) {
             <div className="prose">
               <p>
                 Barrido sobre hasta 10 instrumentos, puntuado por esperanza en R neta de comisiones
-                (0,1 %). En diario solo BTC, ETH y SOL tienen años de historia; los contratos X-Perp
-                cuentan en las temporalidades cortas:
+                (0,1 %), con datos hasta el {measuredThroughText()}. En diario solo BTC, ETH y SOL tienen
+                años de historia; los contratos X-Perp cuentan en las temporalidades cortas:
               </p>
               <ul className="bt-list">
                 {TIMEFRAMES.map((t) => {

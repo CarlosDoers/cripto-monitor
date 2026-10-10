@@ -127,13 +127,26 @@ function safeEqual(a: string, b: string): boolean {
 }
 
 /**
- * Optional shared-secret gate. When APP_ACCESS_TOKEN is set, every request must
- * carry it in `x-app-token`. Strongly recommended: a Vercel URL is public, and
- * without this anyone who finds it can read your portfolio.
+ * Shared-secret gate. When APP_ACCESS_TOKEN is set, every request must carry it
+ * in `x-app-token`. A Vercel URL is public, so a deployment without it would
+ * serve the portfolio to anyone who finds the URL: there it fails closed, with
+ * a 503 that names the missing variable. Locally it stays optional, which is
+ * what `APP_ACCESS_TOKEN="" npm run dev` relies on.
  */
 export function checkAccess(request: Request): Response | null {
   const expected = process.env.APP_ACCESS_TOKEN
-  if (!expected) return null
+  if (!expected) {
+    const deployed = process.env.VERCEL_ENV === 'production' || process.env.VERCEL_ENV === 'preview'
+    return deployed
+      ? json(
+          {
+            error: 'not_configured',
+            message: 'Falta APP_ACCESS_TOKEN en este despliegue: sin contraseña, la URL pública expondría la cuenta.',
+          },
+          503,
+        )
+      : null
+  }
   const provided = request.headers.get('x-app-token') ?? ''
   if (!safeEqual(provided, expected)) {
     return json({ error: 'unauthorized', message: 'Token de acceso inválido.' }, 401)

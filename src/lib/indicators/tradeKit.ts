@@ -15,8 +15,8 @@ import { feeInR, type Candle, type SignalSide, type StrategySignal } from './typ
  * - **Two stop orders reached by one bar is a loss, not a skipped day.** The
  *   other level is the stop, so the outcome is known even if the order of events
  *   is not; dropping those bars deletes certain −1 R trades. It turned an NR7 of
- *   −0.07 R into +0.32 R, and the shipped opening range is +0.22 R, not +0.25,
- *   once those days are counted.
+ *   −0.07 R into +0.32 R, and it had the shipped opening range at +0.25 R where
+ *   the honest count is +0.22 — counted since 2026-10-10, which blocked it.
  * - **A limit order against the move is not credited its target on its fill bar**
  *   (`limitFill`): see `Entry`.
  */

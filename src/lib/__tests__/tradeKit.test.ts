@@ -115,7 +115,7 @@ describe('a bar that reaches both stop orders is a loss, not a skipped day', () 
     expect(result.signals[0].resultR).toBe(-1)
   })
 
-  it('the opening range drops the day by default and counts it when asked', () => {
+  it('the opening range counts the day as a loss by default, and drops it only when told to', () => {
     // 2026-01-12 is a Monday in winter: the New York open is 14:30 UTC. The range is built from the
     // two 15 m candles from 14:30; the third reaches both of its ends.
     const T = Date.UTC(2026, 0, 12, 14, 30)
@@ -137,8 +137,9 @@ describe('a bar that reaches both stop orders is a loss, not a skipped day', () 
     // The candle right after the range spans both ends.
     candles[10] = { ...candles[10], high: 102, low: 98 }
 
-    const dropped = analyseOpeningRange(candles).signals
-    const counted = analyseOpeningRange(candles, { ...OPENING_RANGE_SETTINGS, doubleTouchLoss: true }).signals
+    // Counted since 2026-10-10: dropping these days read +0.25 R where the honest count is +0.22.
+    const counted = analyseOpeningRange(candles).signals
+    const dropped = analyseOpeningRange(candles, { ...OPENING_RANGE_SETTINGS, doubleTouchLoss: false }).signals
     expect(dropped).toHaveLength(0)
     expect(counted).toHaveLength(1)
     expect(counted[0].outcome).toBe('loss')

@@ -10,7 +10,7 @@ import { feeInR, type Candle } from './indicators/types'
 const ROUND_TRIP_FEE = 0.001
 
 /**
- * *Oportunidades ahora*: the X-Perps where the reversal — the highest
+ * *Oportunidades ahora*: the BTC, ETH and SOL X-Perps where the reversal — the highest
  * expectancy the app has measured — has a live daily signal still worth taking.
  *
  * What makes it a ranking and not a screen is two measurements, both in
@@ -28,14 +28,33 @@ const ROUND_TRIP_FEE = 0.001
  *   the most room is clearly the best bucket and every bucket is positive in
  *   both halves. The number shown is that ratio, not an invented score.
  *
- * Two limits the panel states. The edge was measured on BTC, ETH and SOL; on
- * any other coin it is the same rule, not the same evidence. And only crypto
- * contracts with a liquid book are scanned — the X-Perp board also carries
- * equities and commodities, which the reversal was never measured on.
+ * And it only looks where the edge was measured. It used to scan the 40 most
+ * traded crypto X-Perps, saying other coins were "the same rule, not the same
+ * evidence" — until the evidence was measured (`npm run ideas reversal`, the
+ * 2026-10-06 search): on the other 26 coins of the 30-coin board the reversal
+ * makes −0.03 R over 759 signals, and before 2022 it lost on BTC, ETH and SOL
+ * too. The edge is a property of these three coins in 2022–26, not of the rule,
+ * so a DOGE tile beside "+0,43 R por señal" was a recommendation with no
+ * backing. Since 2026-10-10 the panel scans BTC, ETH and SOL only — three
+ * requests an hour instead of forty.
  */
 
-/** Most-traded liquid crypto X-Perps scanned. One daily request each, hourly. */
-const SCANNED = 40
+/** The coins the reversal's edge was measured on, and the only ones it is offered on. */
+export const MEASURED_COINS = ['BTC', 'ETH', 'SOL']
+
+/**
+ * The most liquid contract of each measured coin, most traded first. Shared by
+ * the panel and the Claude text, so both look at the same three contracts.
+ */
+export function measuredContracts<T extends { symbol: string; volumeUsd: number }>(list: T[]): T[] {
+  const best = new Map<string, T>()
+  for (const x of list) {
+    if (!MEASURED_COINS.includes(x.symbol)) continue
+    const prev = best.get(x.symbol)
+    if (!prev || x.volumeUsd > prev.volumeUsd) best.set(x.symbol, x)
+  }
+  return [...best.values()].sort((a, b) => b.volumeUsd - a.volumeUsd)
+}
 
 export interface Opportunity {
   instId: string
@@ -134,11 +153,7 @@ export function useOpportunities() {
   const positions = usePositions()
 
   const universe = useMemo(
-    () =>
-      markets
-        .filter((m) => m.category === 'cripto' && m.volumeUsd >= MIN_LIQUID_VOLUME)
-        .sort((a, b) => b.volumeUsd - a.volumeUsd)
-        .slice(0, SCANNED),
+    () => measuredContracts(markets.filter((m) => m.category === 'cripto' && m.volumeUsd >= MIN_LIQUID_VOLUME)),
     [markets],
   )
   const ids = useMemo(() => universe.map((m) => m.instId), [universe])

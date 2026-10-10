@@ -111,6 +111,22 @@ export interface StrategyBacktest {
  */
 export const MIN_TRADABLE_R = 0.1
 
+/**
+ * The last day of data every declared figure below was measured on: the end of
+ * `./.candles` when they were last re-declared. `npm run audit` fails when the
+ * cache ends elsewhere — a refresh without re-declaring would leave the UI
+ * quoting numbers from data it no longer holds. The policy since 2026-10-10:
+ * refresh monthly (`npm run candles`), re-declare whatever the audit measures,
+ * up or down, and move this date. Estrategias and the Claude text print it.
+ */
+export const MEASURED_THROUGH = '2026-10-10'
+
+/** "10 de octubre de 2026". */
+export const measuredThroughText = () =>
+  new Intl.DateTimeFormat('es-ES', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' }).format(
+    new Date(`${MEASURED_THROUGH}T00:00:00Z`),
+  )
+
 /** Above this the edge is solid rather than merely positive. */
 const STRONG_R = 0.25
 
@@ -243,16 +259,16 @@ export const STRATEGIES: StrategyDef[] = [
       {
         key: 'tuned',
         label: 'Ajustada',
-        note: 'Bandas de 2,5 ATR y stop de 0,25. La que más gana por operación de la app: +0,43 R en diario, positiva en BTC, ETH y SOL por separado, en todos los años desde 2022 y en largos y cortos, aunque los cortos ganan mucho menos (+0,16 R frente a +0,64). Sin sus diez mejores operaciones queda en +0,11 R. Dos avisos: el ancho de 2,5 ATR es un pico —con 2 o 3 ATR la segunda mitad del histórico se queda en torno a cero—, y su ventaja aguantaría como mucho 6 variantes probadas, así que parte de ella puede venir de haber elegido estos parámetros. En 4 h mide −0,06 R, así que ese timeframe no se ofrece.',
+        note: 'Bandas de 2,5 ATR y stop de 0,25. La que más gana por operación de la app: +0,41 R en diario, positiva en BTC, ETH y SOL por separado, en todos los años desde 2022 y en largos y cortos, aunque los cortos ganan mucho menos (+0,12 R frente a +0,64). Sin sus diez mejores operaciones queda en +0,09 R. Dos avisos: el ancho de 2,5 ATR es un pico —con 2 o 3 ATR la segunda mitad del histórico se queda en torno a cero—, y su ventaja aguantaría como mucho 5 variantes probadas, así que parte de ella puede venir de haber elegido estos parámetros. En 4 h mide −0,07 R, así que ese timeframe no se ofrece.',
       },
     ],
     run: runReversal,
     backtest: {
-      byTimeframe: { '15m': -0.28, '1H': -0.10, '4H': -0.06, '1D': 0.43 },
-      halves: { '1D': [0.51, 0.21] },
-      outOfSample: 0.21,
-      sampleSize: 141,
-      winRate: 0.468,
+      byTimeframe: { '15m': -0.28, '1H': -0.10, '4H': -0.07, '1D': 0.41 },
+      halves: { '1D': [0.48, 0.18] },
+      outOfSample: 0.18,
+      sampleSize: 143,
+      winRate: 0.462,
       // Was 'reasonable' while the daily read +0.61 R and the neighbourhood
       // looked flat. Measured honestly (see `reversalTrap.ts`, step 5) the
       // band width of 2.5 is a peak and the edge survives only 6 variants.
@@ -272,32 +288,32 @@ export const STRATEGIES: StrategyDef[] = [
       {
         key: 'fast',
         label: 'Canal 20',
-        note: 'Canal de 20 velas, stop de 2 ATR y trailing de 8, solo en 4 h: +0,33 R por señal, y aguanta las dos mitades del histórico (+0,43 / +0,25). Como todo seguidor de tendencia vive de pocas operaciones grandes: sin sus cinco mejores baja a +0,17 R, y sin las diez a +0,07. Y su ventaja aguantaría como mucho 14 variantes probadas (Sharpe deflactado): para llegar a esta configuración se probaron canales, stops y trailings, así que parte de ella puede ser fruto de la búsqueda. En diario no se ofrece: su media de +0,67 R es casi entera una sola operación de SOL en 2023 (+68 R), y sin ella se queda en +0,17 con la primera mitad en negativo.',
+        note: 'Canal de 20 velas, stop de 2 ATR y trailing de 8, solo en 4 h: +0,32 R por señal, y aguanta las dos mitades del histórico (+0,38 / +0,26). Como todo seguidor de tendencia vive de pocas operaciones grandes: sin sus cinco mejores baja a +0,17 R, y sin las diez a +0,08. Y su ventaja aguantaría como mucho 15 variantes probadas (Sharpe deflactado): para llegar a esta configuración se probaron canales, stops y trailings, así que parte de ella puede ser fruto de la búsqueda. En diario no se ofrece: su media de +0,70 R es casi entera una sola operación de SOL en 2023 (+68 R), y sin ella se queda en +0,19 con la primera mitad en negativo.',
       },
       {
         key: 'trend',
         label: 'Canal 20 + EMA 200',
         archiveBars: 1800,
-        note: 'Las mismas rupturas de 20 velas, pero solo a favor de la EMA 200: largos con el precio por encima de ella, cortos por debajo. En 4 h, sobre 30 criptos desde 2022, mide +0,36 R por operación en 3 287 (+0,48 / +0,26 en las dos mitades) frente a +0,21 R sin el filtro, y mejora cada uno de los cinco años (de +0,12 a +0,64). Con la EMA entre 100 y 300 sale parecido, y en 2018–2021, un periodo en que no se tocó nada, +1,07 R frente a +0,46. Lo que conviene saber: acierta una de cada cuatro y sin sus diez mejores operaciones queda en +0,19 R; los largos ganan +0,61 R y los cortos solo +0,12; y quita más de un tercio de las entradas y se parece al cruce de la EMA 200 (correlación mensual 0,66), así que tomarlas todas no mejora el resultado mensual: sirve para elegir qué rupturas coger, no para ganar más en conjunto. En 1 h la ventaja es marginal: +0,13 R en las 30 criptos (+0,15 / +0,11 en las mitades), que con el doble de comisión se queda en +0,08, frente a +0,02 R de esa misma ruptura sin el filtro. En la caché de la auditoría (BTC, ETH, SOL y X-Perps) mide en 4 h +0,41 R sobre 489 operaciones, con la segunda mitad en +0,11, y ahí su ventaja aguantaría como mucho 4 variantes probadas: se probaron cinco longitudes de EMA, y con 30 criptos aguanta miles.',
+        note: 'Las mismas rupturas de 20 velas, pero solo a favor de la EMA 200: largos con el precio por encima de ella, cortos por debajo. En 4 h, sobre 30 criptos desde 2022, mide +0,36 R por operación en 3 287 (+0,48 / +0,26 en las dos mitades) frente a +0,21 R sin el filtro, y mejora cada uno de los cinco años (de +0,12 a +0,64). Con la EMA entre 100 y 300 sale parecido, y en 2018–2021, un periodo en que no se tocó nada, +1,07 R frente a +0,46. Lo que conviene saber: acierta una de cada cuatro y sin sus diez mejores operaciones queda en +0,19 R; los largos ganan +0,61 R y los cortos solo +0,12; y quita más de un tercio de las entradas y se parece al cruce de la EMA 200 (correlación mensual 0,66), así que tomarlas todas no mejora el resultado mensual: sirve para elegir qué rupturas coger, no para ganar más en conjunto. En 1 h la ventaja es marginal: +0,13 R en las 30 criptos (+0,15 / +0,11 en las mitades), que con el doble de comisión se queda en +0,08, frente a +0,02 R de esa misma ruptura sin el filtro. En la caché de la auditoría (BTC, ETH, SOL y X-Perps, datos hasta octubre de 2026) mide en 4 h +0,56 R sobre 517 operaciones, con las mitades en +0,70 / +0,34; hasta septiembre medía +0,41, y el salto son unas pocas tendencias fuertes de los X-Perp de ETH y SOL en el último mes, el tipo de racha de la que vive y que no hay que esperar cada mes. Ahí aguantaría 21 variantes probadas (se probaron cinco longitudes de EMA), y con 30 criptos, miles.',
         backtest: {
-          byTimeframe: { '15m': 0.0, '1H': 0.16, '4H': 0.41, '1D': 1.67 },
-          halves: { '1H': [0.15, 0.19], '4H': [0.76, 0.11], '1D': [-0.89, 1.25] },
+          byTimeframe: { '15m': 0.0, '1H': 0.15, '4H': 0.56, '1D': 1.67 },
+          halves: { '1H': [0.14, 0.14], '4H': [0.70, 0.34], '1D': [-0.89, 1.25] },
           nativeTimeframe: '4H',
-          outOfSample: 0.11,
-          sampleSize: 489,
-          winRate: 0.278,
+          outOfSample: 0.34,
+          sampleSize: 517,
+          winRate: 0.292,
           confidence: 'weak',
         },
       },
     ],
     run: (candles, preset) => analyseDonchian(candles, preset === 'trend' ? DONCHIAN_TREND_SETTINGS : DONCHIAN_SETTINGS),
     backtest: {
-      byTimeframe: { '15m': -0.10, '1H': 0.08, '4H': 0.33, '1D': 0.67 },
-      halves: { '4H': [0.43, 0.25], '1D': [-0.09, 0.17] },
+      byTimeframe: { '15m': -0.10, '1H': 0.06, '4H': 0.32, '1D': 0.70 },
+      halves: { '4H': [0.38, 0.26], '1D': [-0.09, 0.23] },
       nativeTimeframe: '4H',
-      outOfSample: 0.25,
-      sampleSize: 899,
-      winRate: 0.300,
+      outOfSample: 0.26,
+      sampleSize: 946,
+      winRate: 0.301,
       confidence: 'weak',
     },
   },
@@ -307,7 +323,7 @@ export const STRATEGIES: StrategyDef[] = [
     label: 'Apertura',
     tagline: 'Rotura del rango de apertura de Wall Street',
     description:
-      'Toma los primeros 30 minutos desde que abre la bolsa de Nueva York, y entra cuando el precio rompe ese rango por cualquiera de los dos lados, con el stop en el extremo contrario. Cierra la posición 24 horas después, gane o pierda. Solo opera de lunes a viernes: el fin de semana Nueva York no abre y no hay apertura que tomar prestada. Acierta poco —un tercio de las veces— porque los perdedores valen exactamente 1 R y a los ganadores se les deja correr todo el día. No depende del régimen: gana en mercado lateral (+0,26 R) y en mixto (+0,20 R).',
+      'Toma los primeros 30 minutos desde que abre la bolsa de Nueva York, y entra cuando el precio rompe ese rango por cualquiera de los dos lados, con el stop en el extremo contrario. Cierra la posición 24 horas después, gane o pierda. Solo opera de lunes a viernes: el fin de semana Nueva York no abre y no hay apertura que tomar prestada. Acierta poco —un tercio de las veces— porque los perdedores valen exactamente 1 R y a los ganadores se les deja correr todo el día. No depende del régimen: gana en mercado lateral (+0,23 R) y en mixto (+0,14 R).',
     // Measured across regimes on BTC/ETH/SOL (`npm run orb`): +0.255 R ranging,
     // +0.197 mixed, +0.007 trending on n=20 — too few to call. It never needs
     // a trend, so the view's regime warning would be misinformation.
@@ -319,18 +335,22 @@ export const STRATEGIES: StrategyDef[] = [
       {
         key: 'laborables',
         label: 'Días laborables',
-        note: 'Cada apertura de lunes a viernes, sin filtro de volumen. Positiva en todos los años desde 2022, en 9 de los 10 instrumentos, y sin sus diez mejores operaciones sigue en +0,19 R. Resiste hasta 0,2 % de ida y vuelta (+0,14 R), que importa porque cada entrada es una orden stop que paga el deslizamiento. Lo que conviene vigilar: la ventaja se ha ido estrechando, de +0,42 R en 2022 a +0,08 en 2025.',
+        note: 'Cada apertura de lunes a viernes, sin filtro de volumen. Bloqueada desde octubre de 2026: contando como pérdida las velas que tocan los dos extremos del rango (antes se descartaban, y eso la dejaba en +0,25 R) y con los datos hasta hoy, la segunda mitad del histórico mide +0,08 R, por debajo del listón. Lo que se ha gastado es BTC, ETH y SOL al contado: +0,38 R en la primera mitad de su historia y +0,05 R desde mediados de 2024 (por años, 2022 +0,39, 2023 +0,23, 2024 +0,18, 2025 +0,06, 2026 +0,20). Los X-Perp aguantan +0,25 R en sus seis meses, demasiado poco para sostenerla. Sigue ganando a una entrada al azar (+0,28 R) y resiste 0,2 % de ida y vuelta (+0,10 R): la regla no está rota, su margen se ha estrechado.',
       },
     ],
     run: (candles) => analyseOpeningRange(candles, OPENING_RANGE_SETTINGS),
     backtest: {
-      byTimeframe: { '15m': 0.25, '1H': 0, '4H': 0, '1D': 0 },
-      halves: { '15m': [0.38, 0.13] },
+      byTimeframe: { '15m': 0.22, '1H': 0, '4H': 0, '1D': 0 },
+      // The second half is under MIN_TRADABLE_R, so the 15 m is blocked as
+      // unstable and the strategy is offered nowhere (2026-10-10). It is BTC,
+      // ETH and SOL spot that decayed: +0.38 R in their first halves, +0.05 R
+      // since mid-2024; the X-Perps' six months hold at +0.25 R in both.
+      halves: { '15m': [0.36, 0.08] },
       nativeTimeframe: '15m',
       exclusive: true,
-      outOfSample: 0.13,
-      sampleSize: 4176,
-      winRate: 0.329,
+      outOfSample: 0.08,
+      sampleSize: 4533,
+      winRate: 0.323,
       confidence: 'weak',
     },
   },
@@ -356,12 +376,12 @@ export const STRATEGIES: StrategyDef[] = [
     ],
     run: (candles) => analyseEmaCross(candles, EMA_CROSS_SETTINGS),
     backtest: {
-      byTimeframe: { '15m': -0.07, '1H': 0.07, '4H': 0.28, '1D': 0.59 },
-      halves: { '4H': [0.48, 0.17], '1D': [-0.36, 2.09] },
+      byTimeframe: { '15m': -0.08, '1H': 0.06, '4H': 0.40, '1D': 0.59 },
+      halves: { '4H': [0.46, 0.34], '1D': [-0.36, 2.09] },
       nativeTimeframe: '4H',
-      outOfSample: 0.17,
-      sampleSize: 974,
-      winRate: 0.164,
+      outOfSample: 0.34,
+      sampleSize: 996,
+      winRate: 0.173,
       confidence: 'weak',
     },
   },

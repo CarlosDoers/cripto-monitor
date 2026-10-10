@@ -17,6 +17,7 @@ import { readFileSync, readdirSync } from 'node:fs'
 // Use the registry's own run() — that is exactly what the app executes, and it
 // is where resultR gets filled in for the reversal adapter.
 import {
+  MEASURED_THROUGH,
   MIN_TRADABLE_R,
   profileOf,
   STRATEGIES,
@@ -55,8 +56,16 @@ const f = (x, d = 2) => x.toFixed(d).padStart(6)
 const BARS = ['15m', '1H', '4H', '1D']
 const TOL = 0.08
 
+// The declared figures carry the day their data ended. A cache that ends on
+// another day is measuring something they were not declared from.
+let cacheEnd = 0
+for (const bySeries of Object.values(series)) for (const cs of Object.values(bySeries)) cacheEnd = Math.max(cacheEnd, cs.at(-1)?.time ?? 0)
+const cacheEndDay = new Date(cacheEnd).toISOString().slice(0, 10)
+const dayGap = Math.round((Date.parse(cacheEndDay) - Date.parse(MEASURED_THROUGH)) / 86_400_000)
+
 console.log('AUDITORÍA · esperanza NETA en R medida frente a la declarada en la interfaz')
-console.log(`Tolerancia ${TOL} R. Umbral de operabilidad ${MIN_TRADABLE_R} R.\n`)
+console.log(`Tolerancia ${TOL} R. Umbral de operabilidad ${MIN_TRADABLE_R} R.`)
+console.log(`Caché hasta ${cacheEndDay} · cifras declaradas con datos hasta ${MEASURED_THROUGH} (MEASURED_THROUGH).\n`)
 
 // Two lists, because they are two different kinds of wrong. A declared figure
 // that does not match the data is a lie the UI tells next to real money, and it
@@ -64,6 +73,13 @@ console.log(`Tolerancia ${TOL} R. Umbral de operabilidad ${MIN_TRADABLE_R} R.\n`
 // the history is a judgement about what is worth offering — surfaced here, but
 // deciding to drop it belongs to whoever owns the product.
 const problems = []
+if (Math.abs(dayGap) > 1) {
+  problems.push(
+    dayGap > 0
+      ? `el caché llega a ${cacheEndDay} y las cifras se declararon con datos hasta ${MEASURED_THROUGH}: redeclara lo que mida este audit y mueve MEASURED_THROUGH`
+      : `el caché acaba en ${cacheEndDay}, antes de ${MEASURED_THROUGH}: falta refrescarlo (npm run candles) para comprobar lo declarado`,
+  )
+}
 const weak = []
 for (const strategy of STRATEGIES) {
   for (const p of strategy.presets) {

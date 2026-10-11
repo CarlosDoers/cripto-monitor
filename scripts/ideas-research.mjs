@@ -10,6 +10,8 @@
 //   npm run ideas listing      do newly listed coins underperform BTC
 //   npm run ideas rsi          RSI + support/resistance + reversal candle (a 2026-10-11 video), and what each
 //                              of the three adds. On request only: it is the slowest section.
+//   npm run ideas ifvg         liquidity sweep + inverted fair value gap at New York's open on 1 m BTC and ETH
+//                              (a 2026-10-11 video). Needs `fetch-board.mjs 1m` (see scalp-research.mjs).
 //
 // The families that simply lose (squeeze, NR7, Turtle Soup, climax, RSI
 // divergence, UT Bot, Nadaraya-Watson, candles, alt/BTC ratio, volatility
@@ -41,6 +43,7 @@ import {
   FVG_SETTINGS,
 } from '../src/lib/indicators/fvg.ts'
 import { analyseRsiZoneReversal, RSI_ZONE_SETTINGS } from '../src/lib/indicators/rsiZoneReversal.ts'
+import { analyseSweepIfvg, SWEEP_IFVG_SETTINGS } from '../src/lib/indicators/sweepIfvg.ts'
 import { resolveTrade } from '../src/lib/indicators/tradeKit.ts'
 import { atr } from '../src/lib/indicators/ta.ts'
 import { feeInR } from '../src/lib/indicators/types.ts'
@@ -407,5 +410,52 @@ if (section === 'rsi') {
       line('· solo vela de giro (el control: misma geometría)', cell({ ...base, need: { rsi: false, zone: false, candle: true } }, coins))
     }
     console.log()
+  }
+}
+
+// ── 7. liquidity sweep + inverted fair value gap at New York's open ─────────
+if (section === 'ifvg') {
+  console.log('\n=== TOMA DE LIQUIDEZ + IFVG EN LA APERTURA DE NUEVA YORK (vídeo de 2026-10-11) ===')
+  const coins = load('./.candles-board-1m', 100_000)
+  if (!coins) {
+    missing('./.candles-board-1m', 'BOARD_SINCE=2024-10-11 BOARD_COINS=BTC,ETH node scripts/fetch-board.mjs 1m (≈25 min por moneda)')
+  } else {
+    const FEES = [['taker 0,10 %', 0.001], ['mezcla de la cuenta 0,066 %', 0.00066], ['maker 0,04 %', 0.0004]]
+    const VARIANTS = [
+      ['tal como se describe: 09:30–11:00 NY, objetivo = la otra liquidez (≥ 1 R)', {}],
+      ['cambio 1: objetivo fijo de 1 R (sus ejemplos son 1 : 1 y 1 : 1,3)', { target: 'rr', rr: 1 }],
+      ['cambio 2: solo a favor de la EMA 50 de 1 h', { trend: true }],
+      ['cambio 3: la sesión asiática, 20:00–21:30 NY', { windowFrom: 1200, windowTo: 1290 }],
+      ['control: solo la toma de liquidez (sin IFVG), objetivo 1 R', { gap: false, target: 'rr', rr: 1 }],
+    ]
+    const span = coins.map(([c, cs]) => `${c} ${cs.length} velas de 1 m`).join(' · ')
+    console.log(`  ${span}\n`)
+    for (const [label, patch] of VARIANTS) {
+      console.log(`  ── ${label}`)
+      for (const [fee, feeRate] of FEES) {
+        const settings = { ...SWEEP_IFVG_SETTINGS, ...patch, feeRate }
+        const trades = coins.flatMap(([coin, cs]) =>
+          closed((c) => analyseSweepIfvg(c, settings), cs).map((t) => ({ ...t, coin })),
+        )
+        if (!trades.length) {
+          console.log(`     ${fee.padEnd(30)} sin operaciones`)
+          continue
+        }
+        const hit = trades.filter((t) => t.gross > 0).length / trades.length
+        const first = trades.filter((t) => t.first)
+        const second = trades.filter((t) => !t.first)
+        const sorted = [...trades].sort((a, b) => b.r - a.r)
+        console.log(
+          `     ${fee.padEnd(30)} n=${String(trades.length).padStart(4)}  acierto ${(100 * hit).toFixed(1)} %  bruto ${f(mean(trades.map((t) => t.gross)))}  NETO ${f(mean(trades.map((t) => t.r)))} R ${ci(trades)}  mitades ${f(mean(first.map((t) => t.r)))} / ${f(mean(second.map((t) => t.r)))}  sin las 10 mejores ${f(mean(sorted.slice(10).map((t) => t.r)))}  coste medio ${f(mean(trades.map((t) => t.fee)))} R`,
+        )
+        if (feeRate === 0.001) {
+          for (const [coin] of coins) {
+            const c = trades.filter((t) => t.coin === coin)
+            console.log(`          ${coin.padEnd(4)} n=${String(c.length).padStart(4)}  bruto ${f(mean(c.map((t) => t.gross)))}  neto ${f(mean(c.map((t) => t.r)))}`)
+          }
+        }
+      }
+      console.log()
+    }
   }
 }

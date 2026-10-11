@@ -281,6 +281,21 @@ const FINDINGS: { verdict: Verdict; what: string; detail: ReactNode }[] = [
   },
   {
     verdict: 'no',
+    what: 'Toma de liquidez + IFVG en la apertura de Nueva York (Smart Money)',
+    detail: (
+      <>
+        Es la receta de moda: esperar a que el precio barra un máximo o un mínimo, buscar un hueco de valor
+        razonable que se invalida y entrar en el cierre que lo invierte, en los primeros 90 minutos de la
+        apertura. Medida tal como se cuenta, en 1 minuto sobre dos años de BTC y ETH (503 operaciones):{' '}
+        <strong>−0,04 R</strong> antes de comisiones y <strong>−0,37 R</strong> netos; incluso ejecutando
+        todo como maker quedan −0,12 R. La toma de liquidez sola y el hueco invertido dan lo mismo antes de
+        costes: el IFVG solo retrasa la entrada, así que el stop queda más lejos y la comisión pesa menos.
+        Lo más cercano a algo es la sesión asiática (+0,11 R bruto), y tampoco compensa el coste.
+      </>
+    ),
+  },
+  {
+    verdict: 'no',
     what: 'RSI en sobrecompra o sobreventa + soporte o resistencia + vela de giro',
     detail: (
       <>

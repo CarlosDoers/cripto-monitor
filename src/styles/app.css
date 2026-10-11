@@ -5026,6 +5026,24 @@ table.data td.watch-what {
 }
 
 /* What changed since the last scan, and the filter by the side a touch came from. */
+/* The relative-strength card: each third under its own heading. */
+.rs-leg {
+  margin: 0;
+  padding: 9px 14px 7px;
+  border-top: 1px solid var(--border);
+  background: var(--surface-1);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+table.data tr.rs-leg-row > td {
+  padding: 9px 14px 7px;
+  background: var(--surface-1);
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: normal;
+}
+
 .ema-changes,
 .ema-filter {
   margin: 0;

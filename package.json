@@ -25,6 +25,7 @@
     "funding": "node --experimental-strip-types --import ./scripts/_hook.mjs scripts/funding-research.mjs",
     "battery": "node --experimental-strip-types --import ./scripts/_hook.mjs scripts/battery.mjs",
     "ideas": "node --experimental-strip-types --import ./scripts/_hook.mjs scripts/ideas-research.mjs",
+    "research": "node --experimental-strip-types --import ./scripts/_hook.mjs scripts/literature-research.mjs",
     "scalp": "node --experimental-strip-types --import ./scripts/_hook.mjs scripts/scalp-research.mjs",
     "transcript": "node scripts/yt-transcript.mjs",
     "test": "vitest run"

@@ -4,6 +4,7 @@ import { useClosedPositions, useDailyBoard, usePositions } from '../lib/queries'
 import { EmaScanner } from '../components/EmaScanner'
 import { DonchianWatch } from '../components/DonchianWatch'
 import { EmaWatch } from '../components/EmaWatch'
+import { RelativeStrength } from '../components/RelativeStrength'
 import {
   compareRows,
   NO_FILTERS,
@@ -290,6 +291,9 @@ export function Screener() {
       <EmaScanner markets={markets} />
       <DonchianWatch markets={markets} />
       <EmaWatch markets={markets} />
+      {/* Not on demand: it reads the daily candles this page already fetches. And not a
+          strategy — a measured ordering (nearness to the 90-day high), with its limits. */}
+      <RelativeStrength markets={markets} />
 
       {/* Finviz's Signal menu: one tap sets the filters and the order. */}
       <div className="tabs screen-presets" role="tablist" aria-label="Atajos">

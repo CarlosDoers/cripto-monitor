@@ -42,3 +42,6 @@ dist-ssr
 
 # claude.ai connector bundle, written by `npm run build` (scripts/build-mcp.mjs)
 api/_mcp.js
+
+# Public-API data fetched by scripts/literature-research.mjs
+.research

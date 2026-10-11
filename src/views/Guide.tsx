@@ -313,6 +313,50 @@ const FINDINGS: { verdict: Verdict; what: string; detail: ReactNode }[] = [
   },
   {
     verdict: 'no',
+    what: 'Canales Donchian combinados con volatilidad objetivo (artículo académico de 2025)',
+    detail: (
+      <>
+        Nueve ventanas de 5 a 360 días, solo largos, tamaño para una volatilidad del 25 % anual. En BTC desde
+        2018 baja la caída máxima de −76 % a −28 % y sube el Sharpe de 0,84 a 1,01, pero mantener{' '}
+        <strong>la misma exposición media</strong> ya da 0,84 y −35 %: el timing aporta +0,17 de Sharpe con
+        un intervalo que incluye el cero, y en la cesta de 14 monedas aporta 0,00. Lo que reduce el riesgo es
+        estar menos tiempo y con menos tamaño; la parte de tendencia es el Donchian que ya hay.
+      </>
+    ),
+  },
+  {
+    verdict: 'ojo',
+    what: 'Fuerza relativa semanal entre las monedas más negociadas (largo-corto)',
+    detail: (
+      <>
+        Con las monedas muertas dentro (581 pares de Binance, 2018–2026), comprar cada domingo el tercio de
+        los 30 más negociados más cercano a su máximo de 90 días y vender en corto el más lejano gana{' '}
+        <strong>+1,7 % por semana</strong> (t 5,0, positivo en los nueve años). El momentum de 1 a 4 semanas
+        que se veía en la cesta actual (t 5) era supervivencia: sin ella queda en t 2 a 3 y falla en 2022 y
+        2026. Tres límites: entre monedas que llevan años cotizando <strong>no existe</strong> (mediana −0,08 %
+        en cestas al azar); dentro de una misma edad tampoco, porque en buena parte es{' '}
+        <strong>la edad</strong> (las listadas hace poco, en caída, frente a las veteranas); y solo largo
+        rinde lo mismo que BTC con una caída del −84 %. No hay historial de X-Perps para medirlo en OKX. En el Screener
+        hay una tarjeta de solo lectura que ordena los contratos así, con estos límites a la vista.
+      </>
+    ),
+  },
+  {
+    verdict: 'no',
+    what: 'Fear & Greed, «el gap del CME se cierra», oferta de stablecoins y MVRV',
+    detail: (
+      <>
+        Comprar con miedo extremo no rinde más que un día cualquiera (90 días después, −2 % frente a +14 %), y
+        las reglas pierden contra mantener a la misma exposición. El gap del CME se toca el 72–81 % de las
+        veces en una semana, pero el nivel simétrico al otro lado se toca igual o más, y operarlo en contra
+        pierde −0,28 R; continuar el movimiento del fin de semana ganó +0,18 R en 2022–26 y 0,00 R en 2017–21.
+        La oferta de stablecoins coincide con el precio, no lo anticipa; y el MVRV bajo acierta 6 de 8 veces,
+        pero una regla con él no bate a mantener a la misma exposición: son ocho ciclos.
+      </>
+    ),
+  },
+  {
+    verdict: 'no',
     what: 'Flechas de compra y venta con Klinger y «más del 90 % de acierto»',
     detail: (
       <>

@@ -357,6 +357,46 @@ const FINDINGS: { verdict: Verdict; what: string; detail: ReactNode }[] = [
   },
   {
     verdict: 'no',
+    what: 'Base de los futuros con vencimiento y estructura de plazos',
+    detail: (
+      <>
+        Comprar spot y vender el futuro hasta el vencimiento fija la base: en BTC, 26 contratos desde 2020,
+        <strong> +7,4 % anual bruto y +6,2 % neto</strong>, con 12 de 26 por debajo del 5 % y solo +1,2 % en
+        2022. La financiación del perpetuo dio +4 a +12 % en esos mismos años, así que el vencimiento no mejora
+        el carry de Financiación; solo lo hace seguro. Y la base no anticipa el precio: tenerla alta equivale a
+        estar sobre la media de 200 días el 91 % de las veces. Es la tendencia, no el carry.
+      </>
+    ),
+  },
+  {
+    verdict: 'no',
+    what: 'Pares cointegrados (arbitraje estadístico entre criptos)',
+    detail: (
+      <>
+        Elegir cada mes los cinco pares más cointegrados entre las 30 monedas más negociadas, con las muertas
+        dentro, y operar el spread en 2 desviaciones: <strong>−0,77 % al mes</strong>, el 38 % de los meses en
+        positivo y 41 de cada 100 operaciones cortadas por el stop. Cinco pares al azar con la misma regla
+        pierden menos (−0,34 %): lo que parecía cointegrado en los últimos 180 días deja de serlo. Las nueve
+        celdas vecinas son negativas.
+      </>
+    ),
+  },
+  {
+    verdict: 'ojo',
+    what: 'Volatilidad implícita (DVOL de Deribit) y prima de varianza',
+    detail: (
+      <>
+        La opción se paga por encima de lo que luego se mueve el precio: en BTC, 60 puntos de DVOL frente a 51
+        de volatilidad realizada (<strong>+9 puntos</strong>), y vender varianza ganó en el 76 % de los 67
+        periodos de 30 días. Pero perdió 68 puntos de golpe a partir de enero de 2026, la prima se ha ido
+        encogiendo (+22 en 2021, −5 en 2026) y en ETH ya no existe en la segunda mitad. El DVOL sí sabe algo que
+        la volatilidad pasada no sabe, pero no anticipa la dirección. La app no lee opciones ni la cuenta las
+        opera: es contexto, y la prima que enseñaría es la que ha dejado de pagar.
+      </>
+    ),
+  },
+  {
+    verdict: 'no',
     what: 'Flechas de compra y venta con Klinger y «más del 90 % de acierto»',
     detail: (
       <>

@@ -208,6 +208,22 @@ const FINDINGS: { verdict: Verdict; what: string; detail: ReactNode }[] = [
   },
   {
     verdict: 'no',
+    what: 'Scalping de 1 minuto con la EMA 50 y tres gráficos (1 h, 5 m, 1 m)',
+    detail: (
+      <>
+        Se midió la regla de un vídeo de trading en directo: dirección en 1 h, estructura de impulso y
+        pullback en 5 m, entrada en 1 m, stop pegado y objetivo 1:1. Sobre 2,1 millones de velas de 1 m de
+        BTC y ETH (dos años), <strong>acierta el 50,7 %</strong> —casi lo que él cuenta—, pero antes de
+        comisiones gana +0,02 R por operación: el acierto es la geometría 1:1, no una ventaja. Con un stop
+        de 0,17 % del precio, una ida y vuelta cuesta 0,6 R, y el resultado neto es{' '}
+        <strong>−0,57 R</strong> (−0,40 R aunque todo se ejecutara como maker). Alinear 1 h y 5 m aporta
+        +0,02 R, y entrar con orden límite en la media es peor todavía. Cuatro operaciones de un día
+        bueno no dicen nada del método.
+      </>
+    ),
+  },
+  {
+    verdict: 'no',
     what: 'Medias de 50 y 200 como soporte',
     detail: <>No reaccionan más que una copia desplazada al azar. Contexto, no señal.</>,
   },

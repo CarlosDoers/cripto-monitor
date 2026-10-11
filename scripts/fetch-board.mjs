@@ -3,8 +3,14 @@
 //
 //   node scripts/fetch-board.mjs 4H        → ./.candles-board-4H/<SYM>.json
 //   node scripts/fetch-board.mjs 1D        → ./.candles-board-1D/<SYM>.json  (OKX's daily, as the app reads it)
+//   BOARD_SINCE=2024-10-11 BOARD_COINS=BTC node scripts/fetch-board.mjs 1m   → ./.candles-board-1m/BTC.json
 //
-// Two switches, both environment variables:
+// 1m and 5m are for scalping ideas (the 2026-10-11 video). They are heavy: a
+// year of 1m is 525 600 bars, 5 256 requests and ~12 min a coin, ~105 MB of
+// JSON per two years — so they need BOARD_SINCE and are fetched a coin at a time.
+//
+// Switches, all environment variables:
+//   BOARD_SINCE=2024-10-11     start date; without it the board's 2022-01-01
 //   BOARD_COINS=XRP,DOGE,ADA   only these coins (15 m is 1 670 requests a coin, ~4 min each)
 //   BOARD_OLD=1                the years BEFORE the board's own first candle, into
 //                              ./.candles-board-<BAR>old, for the 14 coins that already
@@ -15,11 +21,12 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 
 const BAR = process.argv[2] ?? '4H'
-const MS = { '15m': 900_000, '1H': 3_600_000, '4H': 14_400_000, '1D': 86_400_000 }[BAR]
+const MS = { '1m': 60_000, '5m': 300_000, '15m': 900_000, '1H': 3_600_000, '4H': 14_400_000, '1D': 86_400_000 }[BAR]
 if (!MS) throw new Error(`bar no soportado: ${BAR}`)
 const OLD = process.env.BOARD_OLD === '1'
 const DIR = `./.candles-board-${BAR}${OLD ? 'old' : ''}`
-const SINCE = Date.parse(OLD ? '2017-10-01T00:00:00Z' : '2022-01-01T00:00:00Z')
+const SINCE = Date.parse(OLD ? '2017-10-01T00:00:00Z' : `${process.env.BOARD_SINCE ?? '2022-01-01'}T00:00:00Z`)
+if (['1m', '5m'].includes(BAR) && !process.env.BOARD_SINCE) throw new Error(`${BAR} necesita BOARD_SINCE: desde 2022 son millones de velas`)
 /** The coins that were already listed in 2018–2021. */
 const OLDER = ['BTC', 'ETH', 'LTC', 'XRP', 'BCH', 'DOGE', 'ADA', 'LINK', 'DOT', 'UNI', 'AAVE', 'AVAX', 'SOL', 'NEAR']
 mkdirSync(DIR, { recursive: true })

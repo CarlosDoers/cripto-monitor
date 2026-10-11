@@ -8,6 +8,8 @@
 //   npm run ideas fvg          the fair value gap against a control with random dates
 //   npm run ideas orb          the opening range on altcoins, and the double-touch rule
 //   npm run ideas listing      do newly listed coins underperform BTC
+//   npm run ideas rsi          RSI + support/resistance + reversal candle (a 2026-10-11 video), and what each
+//                              of the three adds. On request only: it is the slowest section.
 //
 // The families that simply lose (squeeze, NR7, Turtle Soup, climax, RSI
 // divergence, UT Bot, Nadaraya-Watson, candles, alt/BTC ratio, volatility
@@ -38,6 +40,7 @@ import {
   analyseFvgWindow40,
   FVG_SETTINGS,
 } from '../src/lib/indicators/fvg.ts'
+import { analyseRsiZoneReversal, RSI_ZONE_SETTINGS } from '../src/lib/indicators/rsiZoneReversal.ts'
 import { resolveTrade } from '../src/lib/indicators/tradeKit.ts'
 import { atr } from '../src/lib/indicators/ta.ts'
 import { feeInR } from '../src/lib/indicators/types.ts'
@@ -359,5 +362,50 @@ if (want('listing')) {
       console.log(`  día ${String(from).padStart(2)} → ${String(to).padStart(3)}: n=${rel.length}  media frente a BTC ${pct(mean(rel))}  mediana ${pct(med(rel))}  peor que BTC ${rel.filter((x) => x < 0).length}/${rel.length}`)
     }
     console.log('  La mediana pierde frente a BTC pero la media no: unas pocas multiplican por varios. No es un corto operable.')
+  }
+}
+
+// ── 6. RSI + level + reversal candle, and what each of the three adds ───────
+if (section === 'rsi') {
+  console.log('\n=== RSI + SOPORTE/RESISTENCIA + VELA DE GIRO (vídeo de 2026-10-11) ===')
+  const boards = [
+    ['1 h (la del vídeo)', './.candles-board-1H', 'node scripts/fetch-board.mjs 1H'],
+    ['4 h', './.candles-board-4H', 'node scripts/fetch-board.mjs 4H'],
+    ['diario (OKX)', './.candles-board-1D', 'node scripts/fetch-board.mjs 1D'],
+  ]
+  const line = (label, trades) => {
+    if (!trades.length) return console.log(`  ${label.padEnd(44)} sin operaciones`)
+    const hit = trades.filter((t) => t.gross > 0).length / trades.length
+    const sorted = [...trades].sort((a, b) => b.r - a.r)
+    const first = trades.filter((t) => t.first)
+    const second = trades.filter((t) => !t.first)
+    const longs = trades.filter((t) => t.side === 'long')
+    const shorts = trades.filter((t) => t.side === 'short')
+    console.log(
+      `  ${label.padEnd(44)} n=${String(trades.length).padStart(5)}  acierto ${(100 * hit).toFixed(1)} %  bruto ${f(mean(trades.map((t) => t.gross)))}  NETO ${f(mean(trades.map((t) => t.r)))} R ${ci(trades)}  mitades ${f(mean(first.map((t) => t.r)))} / ${f(mean(second.map((t) => t.r)))}  largos ${f(mean(longs.map((t) => t.r)))} cortos ${f(mean(shorts.map((t) => t.r)))}  sin las 10 mejores ${f(mean(sorted.slice(10).map((t) => t.r)))}`,
+    )
+  }
+  const cell = (settings, coins) => coins.flatMap(([, cs]) => closed((c) => analyseRsiZoneReversal(c, settings), cs))
+  const base = RSI_ZONE_SETTINGS
+  console.log('  Break-even de un objetivo de 2 R: acierto del 33,3 % antes de comisiones.\n')
+  for (const [label, dir, hint] of boards) {
+    const coins = load(dir, 700)
+    if (!coins) {
+      missing(dir, hint)
+      continue
+    }
+    console.log(`  ── ${label} · ${coins.length} monedas`)
+    line('tal como se describe (RSI 30/70, nivel, vela, 2 R)', cell(base, coins))
+    if (dir.includes('1H')) {
+      line('cambio 1: umbrales 20/80 («filtrar aún más»)', cell({ ...base, oversold: 20, overbought: 80 }, coins))
+      console.log('     qué aporta cada condición (todas = la de arriba):')
+      line('· sin el RSI (nivel + vela)', cell({ ...base, need: { rsi: false, zone: true, candle: true } }, coins))
+      line('· sin el nivel (RSI + vela)', cell({ ...base, need: { rsi: true, zone: false, candle: true } }, coins))
+      line('· sin la vela de giro (RSI + nivel)', cell({ ...base, need: { rsi: true, zone: true, candle: false } }, coins))
+      line('· solo RSI extremo', cell({ ...base, need: { rsi: true, zone: false, candle: false } }, coins))
+      line('· solo nivel', cell({ ...base, need: { rsi: false, zone: true, candle: false } }, coins))
+      line('· solo vela de giro (el control: misma geometría)', cell({ ...base, need: { rsi: false, zone: false, candle: true } }, coins))
+    }
+    console.log()
   }
 }

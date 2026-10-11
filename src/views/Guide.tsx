@@ -281,6 +281,19 @@ const FINDINGS: { verdict: Verdict; what: string; detail: ReactNode }[] = [
   },
   {
     verdict: 'no',
+    what: 'RSI en sobrecompra o sobreventa + soporte o resistencia + vela de giro',
+    detail: (
+      <>
+        Es la receta habitual para «arreglar» el RSI: pedirle además un nivel y una vela de giro. Medida tal
+        como se cuenta, en 1 h sobre 31 monedas desde 2022 (2.065 operaciones, objetivo 2 R):{' '}
+        <strong>−0,18 R</strong> por operación, con las dos mitades iguales. Y lo revelador es la
+        descomposición: la vela de giro sola, sin RSI ni nivel, da −0,03 R; cada condición que se le añade la
+        deja igual o peor, y la peor es el propio RSI. Un RSI extremo en un giro suele ser una continuación.
+      </>
+    ),
+  },
+  {
+    verdict: 'no',
     what: 'Sobreventa (RSI < 30) para comprar el rebote',
     detail: <>No anticipa ningún rebote frente al resto del mercado la semana siguiente.</>,
   },

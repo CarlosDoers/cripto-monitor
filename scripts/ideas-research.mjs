@@ -10,6 +10,10 @@
 //   npm run ideas listing      do newly listed coins underperform BTC
 //   npm run ideas rsi          RSI + support/resistance + reversal candle (a 2026-10-11 video), and what each
 //                              of the three adds. On request only: it is the slowest section.
+//   npm run ideas fib          phases + Fibonacci levels + a time rule (a live class, 2026-10-11), both events,
+//                              2022-26, 2018-21 and 4 h, and what each piece adds
+//   npm run ideas support     buying a confirmed swing low at a support (a live session that argues against doing it
+//                              unconfirmed), and what the support adds over any swing
 //   npm run ideas kvo          the measurable half of a 5 m "win rate above 90 %" video: Klinger + swing stop + 1.5 R
 //   npm run ideas ifvg         liquidity sweep + inverted fair value gap at New York's open on 1 m BTC and ETH
 //                              (a 2026-10-11 video). Needs `fetch-board.mjs 1m` (see scalp-research.mjs).
@@ -46,6 +50,8 @@ import {
 import { analyseRsiZoneReversal, RSI_ZONE_SETTINGS } from '../src/lib/indicators/rsiZoneReversal.ts'
 import { analyseSweepIfvg, SWEEP_IFVG_SETTINGS } from '../src/lib/indicators/sweepIfvg.ts'
 import { analyseKlingerScalp, KLINGER_SETTINGS } from '../src/lib/indicators/klingerScalp.ts'
+import { analyseFibPhases, FIB_PHASE_SETTINGS } from '../src/lib/indicators/fibPhases.ts'
+import { analyseSupportPivot, SUPPORT_PIVOT_SETTINGS } from '../src/lib/indicators/supportPivot.ts'
 import { aggregate } from '../src/lib/indicators/scalpPullback.ts'
 import { resolveTrade } from '../src/lib/indicators/tradeKit.ts'
 import { atr } from '../src/lib/indicators/ta.ts'
@@ -499,5 +505,106 @@ if (section === 'kvo') {
     }
     console.log('  Un objetivo de 1,5 R, con un precio sin deriva, se alcanza antes que el stop el 40 % de las veces (1 / (1 + 1,5)).')
     console.log('  Para un 90 % de acierto la expectativa bruta tendría que ser +1,25 R por operación.')
+  }
+}
+
+// ── 9. phases + Fibonacci levels + a time rule ──────────────────────────────
+if (section === 'fib') {
+  console.log('\n=== FASES, NIVELES DE FIBONACCI Y REGLA DE TIEMPO (clase en directo de 2026-10-11) ===')
+  const sets = [
+    ['diario de OKX · 2022-26', './.candles-board-1D', 'node scripts/fetch-board.mjs 1D'],
+    ['diario de OKX · 2018-21 (un periodo que nadie ha tocado)', './.candles-board-1Dold', 'BOARD_OLD=1 node scripts/fetch-board.mjs 1D'],
+    ['4 h · 2022-26', './.candles-board-4H', 'node scripts/fetch-board.mjs 4H'],
+  ]
+  const line = (label, trades) => {
+    if (!trades.length) return console.log(`     ${label.padEnd(58)} sin operaciones`)
+    const hit = trades.filter((t) => t.gross > 0).length / trades.length
+    const sorted = [...trades].sort((a, b) => b.r - a.r)
+    const first = trades.filter((t) => t.first)
+    const second = trades.filter((t) => !t.first)
+    const longs = trades.filter((t) => t.side === 'long')
+    const shorts = trades.filter((t) => t.side === 'short')
+    console.log(
+      `     ${label.padEnd(58)} n=${String(trades.length).padStart(5)}  acierto ${(100 * hit).toFixed(1)} %  bruto ${f(mean(trades.map((t) => t.gross)))}  NETO ${f(mean(trades.map((t) => t.r)))} R ${ci(trades)}  mitades ${f(mean(first.map((t) => t.r)))} / ${f(mean(second.map((t) => t.r)))}  largos ${f(mean(longs.map((t) => t.r)))} (${longs.length}) cortos ${f(mean(shorts.map((t) => t.r)))} (${shorts.length})  sin las 10 mejores ${f(mean(sorted.slice(10).map((t) => t.r)))}`,
+    )
+  }
+  const cell = (settings, coins) => coins.flatMap(([, cs]) => closed((c) => analyseFibPhases(c, settings), cs))
+  const base = FIB_PHASE_SETTINGS
+  console.log('  Con un objetivo al doble del riesgo, el equilibrio es un acierto del 33 % antes de comisiones.\n')
+  for (const [label, dir, hint] of sets) {
+    const coins = load(dir, 400)
+    if (!coins) {
+      missing(dir, hint)
+      continue
+    }
+    console.log(`  ── ${label} · ${coins.length} monedas`)
+    line('tal como se describe (ambos eventos, tiempo ≤ 1/2)', cell(base, coins))
+    if (!dir.includes('4H')) {
+      line('cambio 1: la corrección dura como mucho 1/3', cell({ ...base, timeRatio: 1 / 3 }, coins))
+      line('· sin la regla de tiempo (qué aporta)', cell({ ...base, timeRatio: 0 }, coins))
+      line('· solo evento 1 (el giro tras un retroceso ≥ 50 %)', cell({ ...base, events: 'turn' }, coins))
+      line('· solo evento 2 (dos cierres sobre el máximo)', cell({ ...base, events: 'break' }, coins))
+      line('cambio 2: el stop a 1 : 1 en vez de 2 : 1', cell({ ...base, rewardToRisk: 1 }, coins))
+      // The two videos that follow (2026-10-11): the same events, but a target at 25, 50 and 100 %
+      // of phase 1 taken in three parts that share one stop, and the "first pivot" measured on a
+      // phase 1 of any size. Each is a counted variant of the one above.
+      const tranches = [0.25, 0.5, 1].map((extension) => ({ extension, trades: cell({ ...base, extension, stopExtension: 0.5 }, coins) }))
+      for (const { extension, trades } of tranches) {
+        line(`tramo: objetivo ${100 * extension} % de la fase 1, stop del 50 % (1 : 2)`, trades)
+      }
+      const parts = tranches.map((t) => mean(t.trades.map((x) => x.r)))
+      const grossParts = tranches.map((t) => mean(t.trades.map((x) => x.gross)))
+      console.log(
+        `     ${'los tres tramos a partes iguales (media de las tres)'.padEnd(58)} NETO ${f(mean(parts))} R  bruto ${f(mean(grossParts))}  (sin mover el stop a break-even)`,
+      )
+      line('«primer pivote»: fase 1 menor (pivote 2, ≥ 1,5 ATR)', cell({ ...base, pivot: 2, minImpulseAtr: 1.5 }, coins))
+      // The simulation workshop (2026-10-11): half out at the first target, the other half to the
+      // doubled projection with the stop at the entry and then under each higher low once the last
+      // high is broken. The control is the same exit without the trail: what it adds is the difference.
+      const runner = { ...base, exit: 'tranches', extension: 1, stopExtension: 0.5, firstExtension: 0.5 }
+      line('taller: mitad al 50 %, el resto al 100 % con stop en la entrada', cell({ ...runner, swingTrail: false }, coins))
+      line('taller: lo mismo y el stop sigue los mínimos crecientes', cell(runner, coins))
+      line('· solo evento 2 (dos cierres), con el trailing', cell({ ...runner, events: 'break' }, coins))
+    }
+    console.log()
+  }
+}
+
+// ── 10. a confirmed swing at a support or resistance ────────────────────────
+if (section === 'support') {
+  console.log('\n=== SWING CONFIRMADO EN UN SOPORTE O UNA RESISTENCIA (directo de 2026-10-11) ===')
+  const sets = [
+    ['diario de OKX · 2022-26', './.candles-board-1D', 'node scripts/fetch-board.mjs 1D'],
+    ['diario de OKX · 2018-21 (un periodo que nadie ha tocado)', './.candles-board-1Dold', 'BOARD_OLD=1 node scripts/fetch-board.mjs 1D'],
+    ['4 h · 2022-26', './.candles-board-4H', 'node scripts/fetch-board.mjs 4H'],
+  ]
+  const line = (label, trades) => {
+    if (!trades.length) return console.log(`     ${label.padEnd(58)} sin operaciones`)
+    const hit = trades.filter((t) => t.gross > 0).length / trades.length
+    const sorted = [...trades].sort((a, b) => b.r - a.r)
+    const first = trades.filter((t) => t.first)
+    const second = trades.filter((t) => !t.first)
+    const longs = trades.filter((t) => t.side === 'long')
+    const shorts = trades.filter((t) => t.side === 'short')
+    console.log(
+      `     ${label.padEnd(58)} n=${String(trades.length).padStart(5)}  acierto ${(100 * hit).toFixed(1)} %  bruto ${f(mean(trades.map((t) => t.gross)))}  NETO ${f(mean(trades.map((t) => t.r)))} R ${ci(trades)}  mitades ${f(mean(first.map((t) => t.r)))} / ${f(mean(second.map((t) => t.r)))}  largos ${f(mean(longs.map((t) => t.r)))} (${longs.length}) cortos ${f(mean(shorts.map((t) => t.r)))} (${shorts.length})  sin las 10 mejores ${f(mean(sorted.slice(10).map((t) => t.r)))}`,
+    )
+  }
+  const cell = (settings, coins) => coins.flatMap(([, cs]) => closed((c) => analyseSupportPivot(c, settings), cs))
+  const base = SUPPORT_PIVOT_SETTINGS
+  console.log('  Con un objetivo al doble del riesgo, el equilibrio es un acierto del 33 % antes de comisiones.')
+  console.log('  Él mismo dice que «al menos un 33 %» de estas operaciones salen bien.\n')
+  for (const [label, dir, hint] of sets) {
+    const coins = load(dir, 700)
+    if (!coins) {
+      missing(dir, hint)
+      continue
+    }
+    console.log(`  ── ${label} · ${coins.length} monedas`)
+    line('tal como se describe (swing de 5 velas en un nivel, 2 R)', cell(base, coins))
+    line('control: todo swing confirmado, sin nivel', cell({ ...base, needLevel: false }, coins))
+    line('cambio 1: swing de 3 velas en vez de 5', cell({ ...base, pivot: 3 }, coins))
+    line('cambio 2: objetivo de 1 R', cell({ ...base, targetR: 1 }, coins))
+    console.log()
   }
 }

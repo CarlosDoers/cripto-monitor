@@ -281,6 +281,38 @@ const FINDINGS: { verdict: Verdict; what: string; detail: ReactNode }[] = [
   },
   {
     verdict: 'no',
+    what: 'Comprar la caída a un soporte, aunque esperes a un pivote confirmado',
+    detail: (
+      <>
+        El autor de la clase lo dice él mismo: «no compro soportes así como así», y una de cada tres sale bien.
+        Con su propia condición (un mínimo de cinco velas en un nivel, objetivo al doble del riesgo), en el
+        diario de OKX sobre 22 monedas: <strong>−0,07 R</strong> por operación, y comprar cualquier mínimo
+        confirmado, sin nivel, da +0,03 R: el soporte no suma nada. En 2018–21 sale +0,35 R, pero solo
+        los largos, en un mercado alcista.
+      </>
+    ),
+  },
+  {
+    verdict: 'no',
+    what: 'Fases, retrocesos de Fibonacci y regla de tiempo (acción del precio «con niveles calculados»)',
+    detail: (
+      <>
+        Un impulso, una corrección que no dure más de la mitad o un tercio, y entrar en el giro o en la
+        ruptura del máximo para ir a por la mitad del impulso con un stop a 2 : 1. Medido tal como se cuenta,
+        en el diario de OKX sobre 24 monedas (440 operaciones): <strong>−0,02 R</strong> por operación. En
+        2018–21, que nadie había tocado, +0,10 R con un intervalo que incluye el cero y con los largos
+        ganando y los cortos perdiendo: comprar caídas en un mercado alcista. La regla de tiempo ayuda en
+        un periodo y estorba en el otro. El ejemplo del vídeo es Microsoft en 1994, elegido a posteriori.
+        Los dos vídeos siguientes de la misma serie añaden el «primer pivote» (lo mismo en un impulso de
+        cualquier tamaño) y salir en tres partes, al 25, al 50 y al 100 % del impulso con un solo stop:
+        medidos aparte, dan −0,10 R, −0,06 R y −0,02 R en 2022–26; solo los largos de 2018–21 ganan. La
+        última pieza de la serie, el stop que sigue los mínimos crecientes tras cobrar la mitad, añade +0,01 R:
+        con él −0,02 R, sin él −0,03 R.
+      </>
+    ),
+  },
+  {
+    verdict: 'no',
     what: 'Flechas de compra y venta con Klinger y «más del 90 % de acierto»',
     detail: (
       <>

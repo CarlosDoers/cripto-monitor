@@ -605,7 +605,7 @@ Three details the component depends on. The tip is **portalled to `<body>` with 
 
 ## Deployment
 
-Manual by choice: `git push` publishes code, `vercel --prod` deploys. They are independent. Auto-deploy would need the repo connected in Vercel's *Settings → Git*, which requires installing the Vercel GitHub app on the account that owns the repo.
+Manual by choice: `git push` publishes code, `vercel --prod` deploys. They are independent. **The Vercel CLI uploads the working directory and does not read `.gitignore`**, so `.vercelignore` keeps the research caches (`.candles*`, `.funding`) out of it: with the 1 m board in place (117 MB a coin) `vercel --prod` stopped at `File size limit exceeded (100 MB)`, and before that it had been uploading ~600 MB of candles on every deploy. A new cache directory under another name needs a line there. Auto-deploy would need the repo connected in Vercel's *Settings → Git*, which requires installing the Vercel GitHub app on the account that owns the repo.
 
 Environment variables live only in Vercel and `.env.local` (gitignored):
 

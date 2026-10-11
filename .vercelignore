@@ -1,0 +1,6 @@
+# Research data for the scripts (npm run candles, fetch-board, funding:fetch).
+# The Vercel CLI does not read .gitignore, and a single 1 m file is over its
+# 100 MB per-file limit. Nothing here is needed to build or serve the app.
+.candles
+.candles-*
+.funding

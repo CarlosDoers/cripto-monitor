@@ -10,6 +10,7 @@
 //   npm run ideas listing      do newly listed coins underperform BTC
 //   npm run ideas rsi          RSI + support/resistance + reversal candle (a 2026-10-11 video), and what each
 //                              of the three adds. On request only: it is the slowest section.
+//   npm run ideas kvo          the measurable half of a 5 m "win rate above 90 %" video: Klinger + swing stop + 1.5 R
 //   npm run ideas ifvg         liquidity sweep + inverted fair value gap at New York's open on 1 m BTC and ETH
 //                              (a 2026-10-11 video). Needs `fetch-board.mjs 1m` (see scalp-research.mjs).
 //
@@ -44,6 +45,8 @@ import {
 } from '../src/lib/indicators/fvg.ts'
 import { analyseRsiZoneReversal, RSI_ZONE_SETTINGS } from '../src/lib/indicators/rsiZoneReversal.ts'
 import { analyseSweepIfvg, SWEEP_IFVG_SETTINGS } from '../src/lib/indicators/sweepIfvg.ts'
+import { analyseKlingerScalp, KLINGER_SETTINGS } from '../src/lib/indicators/klingerScalp.ts'
+import { aggregate } from '../src/lib/indicators/scalpPullback.ts'
 import { resolveTrade } from '../src/lib/indicators/tradeKit.ts'
 import { atr } from '../src/lib/indicators/ta.ts'
 import { feeInR } from '../src/lib/indicators/types.ts'
@@ -457,5 +460,44 @@ if (section === 'ifvg') {
       }
       console.log()
     }
+  }
+}
+
+// ── 8. Klinger + swing stop + 1.5 R on 5 m and 15 m ─────────────────────────
+if (section === 'kvo') {
+  console.log('\n=== KLINGER + STOP ESTRUCTURAL + 1,5 R EN 5 M (vídeo de 2026-10-11, «más de un 90 %») ===')
+  const coins = load('./.candles-board-1m', 100_000)
+  if (!coins) {
+    missing('./.candles-board-1m', 'BOARD_SINCE=2024-10-11 BOARD_COINS=BTC,ETH node scripts/fetch-board.mjs 1m')
+  } else {
+    // The sum of 1 m volumes is the bar's volume, which is what the oscillator needs.
+    const frames = [['5 m (la del vídeo)', 5], ['15 m', 15]]
+    const VARIANTS = [
+      ['tal como se describe: Klinger 35/50/16, vela del color, stop en el último extremo, 1,5 R', {}],
+      ['cambio 1: objetivo de 1 R', { targetR: 1 }],
+      ['cambio 2: con los ajustes por defecto del Klinger (34 / 55 / 13)', { fast: 34, slow: 55, signal: 13 }],
+      ['control: solo el color de la vela (sin Klinger), mismo stop y objetivo', { kvo: false }],
+    ]
+    for (const [tfLabel, minutes] of frames) {
+      console.log(`  ── ${tfLabel} · ${coins.map(([c]) => c).join(' + ')}`)
+      const series = coins.map(([coin, cs]) => [coin, aggregate(cs, minutes * 60_000).bars])
+      for (const [label, patch] of VARIANTS) {
+        for (const [fee, feeRate] of [['taker 0,10 %', 0.001], ['maker 0,04 %', 0.0004]]) {
+          const settings = { ...KLINGER_SETTINGS, ...patch, targetR: patch.targetR ?? KLINGER_SETTINGS.targetR, feeRate }
+          const trades = series.flatMap(([coin, cs]) => closed((c) => analyseKlingerScalp(c, settings), cs).map((t) => ({ ...t, coin })))
+          if (!trades.length) continue
+          const hit = trades.filter((t) => t.gross > 0).length / trades.length
+          const first = trades.filter((t) => t.first)
+          const second = trades.filter((t) => !t.first)
+          const target = patch.targetR ?? KLINGER_SETTINGS.targetR
+          console.log(
+            `     ${(fee === 'taker 0,10 %' ? label : '').padEnd(86)} ${fee.padEnd(13)} n=${String(trades.length).padStart(5)}  acierto ${(100 * hit).toFixed(1)} % (equilibrio ${(100 / (1 + target)).toFixed(0)} %)  bruto ${f(mean(trades.map((t) => t.gross)))}  NETO ${f(mean(trades.map((t) => t.r)))} R ${ci(trades)}  mitades ${f(mean(first.map((t) => t.r)))} / ${f(mean(second.map((t) => t.r)))}`,
+          )
+        }
+      }
+      console.log()
+    }
+    console.log('  Un objetivo de 1,5 R, con un precio sin deriva, se alcanza antes que el stop el 40 % de las veces (1 / (1 + 1,5)).')
+    console.log('  Para un 90 % de acierto la expectativa bruta tendría que ser +1,25 R por operación.')
   }
 }

@@ -281,6 +281,20 @@ const FINDINGS: { verdict: Verdict; what: string; detail: ReactNode }[] = [
   },
   {
     verdict: 'no',
+    what: 'Flechas de compra y venta con Klinger y «más del 90 % de acierto»',
+    detail: (
+      <>
+        Los vídeos de «imposible perder» enseñan cuatro operaciones elegidas a posteriori con un indicador de
+        flechas. La parte medible (el oscilador de Klinger, un stop en el último extremo y un objetivo de 1,5
+        veces el riesgo, en 5 minutos sobre dos años de BTC y ETH) acierta el <strong>43 %</strong> y gana
+        +0,01 R antes de comisiones: lo mismo que mirar solo el color de la vela. Con ese objetivo, un precio
+        sin deriva lo alcanza el 40 % de las veces; un 90 % exigiría +1,25 R por operación, cinco veces más
+        que lo mejor que existe aquí. Lo que fabrica esas demostraciones es una flecha que se repinta.
+      </>
+    ),
+  },
+  {
+    verdict: 'no',
     what: 'Toma de liquidez + IFVG en la apertura de Nueva York (Smart Money)',
     detail: (
       <>

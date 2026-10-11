@@ -397,6 +397,20 @@ const FINDINGS: { verdict: Verdict; what: string; detail: ReactNode }[] = [
   },
   {
     verdict: 'no',
+    what: 'Posicionamiento: open interest, ratios largo/corto y liquidaciones',
+    detail: (
+      <>
+        Binance dejó de publicar las liquidaciones, así que el open interest en monedas hace de proxy. En BTC y
+        ETH, el cambio del open interest, los takers y los cuartiles de precio contra OI no anticipan nada con
+        |t| mayor de 1,5; y tras un hundimiento del open interest no hay rebote. En 30 perpetuos, el ratio de
+        cuentas largas frente a cortas sale contrario (<strong>−1 % por semana</strong>, t −3,9), pero tres
+        cuartas partes son qué monedas son siempre las más largas: frente a su propia media de 365 días queda
+        en −0,3 % (t −0,8). Es otra vez identidad de moneda, no el momento.
+      </>
+    ),
+  },
+  {
+    verdict: 'no',
     what: 'Flechas de compra y venta con Klinger y «más del 90 % de acierto»',
     detail: (
       <>

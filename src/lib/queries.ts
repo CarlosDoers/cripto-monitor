@@ -838,13 +838,18 @@ const DAILY = 60 * 60 * 1000
  */
 /** Four-hour candles move every four hours; ten minutes is fresh enough. */
 const BOARD = 10 * 60 * 1000
+/** A 1 h candle closes every hour: a reading on it is stale after five minutes, not ten. */
+const BOARD_HOURLY = 5 * 60 * 1000
 
 /**
  * Up to `pages` × 300 recent candles for a set of contracts, one query each,
  * paced like the daily board. Five pages of 4 h reach the whole life of an
  * X-Perp (listed 2026-03-30), which is what an EMA 200 needs to have settled.
+ * On 1 h, four pages (1 200 candles, 50 days) are four times its length and the
+ * same tail the strategy view fetches; the cards ask for that.
  */
 export function useCandleBoard(instIds: string[], bar: string, pages = 5) {
+  const every = bar === '1H' ? BOARD_HOURLY : BOARD
   return useQueries({
     queries: instIds.map((instId) => ({
       queryKey: ['candle-board', instId, bar, pages],
@@ -860,8 +865,8 @@ export function useCandleBoard(instIds: string[], bar: string, pages = 5) {
         }
         return all.sort((a, b) => Number(a[0]) - Number(b[0]))
       },
-      staleTime: BOARD,
-      refetchInterval: BOARD,
+      staleTime: every,
+      refetchInterval: every,
       retry: 2,
     })),
     combine: (results) => {

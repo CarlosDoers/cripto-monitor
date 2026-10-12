@@ -526,16 +526,26 @@ export function Signals({ section }: { section: 'analysis' | 'strategies' }) {
     retarget(key, first)
   }
 
-  // A link can also name the strategy and its preset (`?s=donchian&p=trend`): the
-  // Screener's watch lists open the chart of the contract on the very strategy
-  // that put it there.
+  // A link can also name the strategy and its preset (`?s=donchian&p=trend`) and
+  // the timeframe it was read on (`&tf=1H`): the Screener's watch lists open the
+  // chart of the contract on the very strategy and bar that put it there. A
+  // timeframe the strategy is blocked on is ignored, like a click on it would be.
   const linkedStrategy = useRouteParam('s')
   const linkedPreset = useRouteParam('p')
+  const linkedBar = useRouteParam('tf')
   useEffect(() => {
-    if (!analysis && linkedStrategy && STRATEGIES.some((x) => x.key === linkedStrategy)) pickStrategy(linkedStrategy, linkedPreset)
+    if (analysis || !linkedStrategy || !STRATEGIES.some((x) => x.key === linkedStrategy)) return
+    pickStrategy(linkedStrategy, linkedPreset)
+    const wanted = TIMEFRAMES.find((t) => t.key === linkedBar)
+    if (wanted) {
+      const target = strategyByKey(linkedStrategy)
+      const presetKey = target.presets.find((p) => p.key === linkedPreset)?.key ?? target.presets[0].key
+      // Set after pickStrategy's own retarget so the link's bar wins when it is allowed.
+      if (timeframeVerdict(profileOf(target, presetKey), wanted.key) !== 'blocked') setTimeframe(wanted.key)
+    }
     // pickStrategy only reads state it also sets; the link is what should re-run this.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [linkedStrategy, linkedPreset, analysis])
+  }, [linkedStrategy, linkedPreset, linkedBar, analysis])
 
   function pickPreset(key: string) {
     setPresetKey(key)

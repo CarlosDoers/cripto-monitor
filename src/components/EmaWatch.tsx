@@ -4,7 +4,8 @@ import { pct, plural, price, ratio } from '../lib/format'
 import { type Market } from '../lib/markets'
 import { profileOf, strategyByKey } from '../lib/indicators/registry'
 import { routeHref } from '../lib/router'
-import { hoursOf as hours, useWatchScan } from '../lib/useWatchScan'
+import { useWatchScan } from '../lib/useWatchScan'
+import { barChoice, barOf } from '../lib/watchBars'
 import { Badge, Card, Help, TableSkeleton, TableWrap } from './ui'
 import { WatchControls } from './WatchControls'
 import { SideBadge, WatchLegend } from './WatchCells'
@@ -18,22 +19,22 @@ const STATUS: Record<WatchStatus, { label: string; variant: 'live' | 'buy' | 'wa
   corto: { label: 'Historial corto', variant: 'neutral' },
 }
 
-function what(w: Watch): string {
+function what(w: Watch, span: (candles: number) => string, label: string): string {
   // What closing across the line would do: turn the open position, or open one.
   const turn = w.side && w.next ? `cierra el ${w.side} y abre un ${w.next}` : `abre un ${w.next}`
   switch (w.status) {
     case 'nueva':
-      return `abrió un ${w.side}: cerró ${w.side === 'long' ? 'sobre' : 'bajo'} la EMA hace ${hours(w.age + 1)}`
+      return `abrió un ${w.side}: cerró ${w.side === 'long' ? 'sobre' : 'bajo'} la EMA hace ${span(w.age + 1)}`
     case 'cruzando':
       return `la vela en curso va ${w.side === 'long' ? 'por debajo' : 'por encima'} de la EMA: si cierra así, ${turn}`
     case 'cerca':
       return `a ${ratio(w.distanceAtr, 1)} ATR de la EMA: si una vela la cruza, ${turn}`
     case 'tendencia':
-      return `${w.side} desde hace ${hours(w.age)}`
+      return `${w.side} desde hace ${span(w.age)}`
     case 'fuera':
       return 'saltó el stop; espera al próximo cruce'
     case 'corto':
-      return `${w.bars} velas de 4 h; hacen falta 600`
+      return `${w.bars} velas de ${label}; hacen falta 600`
   }
 }
 
@@ -44,9 +45,12 @@ function what(w: Watch): string {
  */
 export function EmaWatch({ markets }: { markets: Market[] }) {
   const scan = useWatchScan(markets)
-  const { ids, board, byId } = scan
+  const { ids, board, byId, bar, span } = scan
+  const label = barOf(bar).label
   const strategy = strategyByKey('ema200')
   const profile = profileOf(strategy, strategy.presets[0].key)
+  // The cross is only measured as tradable on 4 h: 1 h is offered disabled, with the reason.
+  const bars = { '4H': barChoice(profile, '4H'), '1H': barChoice(profile, '1H') }
 
   const rows = useMemo(
     () =>
@@ -64,7 +68,7 @@ export function EmaWatch({ markets }: { markets: Market[] }) {
 
   return (
     <Card
-      title="Qué vigilar · EMA 200 en 4 h"
+      title={`Qué vigilar · EMA 200 en ${label}`}
       subtitle={
         ids
           ? board.loaded < total
@@ -98,7 +102,7 @@ export function EmaWatch({ markets }: { markets: Market[] }) {
       }
       flush
     >
-      <WatchControls scan={scan} empty={markets.length === 0} />
+      <WatchControls scan={scan} empty={markets.length === 0} bars={bars} />
 
       {!ids ? null : rows.length === 0 ? (
         <TableSkeleton rows={Math.min(total, 6)} cols={7} />
@@ -144,7 +148,7 @@ export function EmaWatch({ markets }: { markets: Market[] }) {
                         <span className="sub">—</span>
                       )}
                     </td>
-                    <td className="sub watch-what">{what(w)}</td>
+                    <td className="sub watch-what">{what(w, span, label)}</td>
                     <td className="num">{price(w.price)}</td>
                     <td className="num">{Number.isFinite(w.ema) ? price(w.ema) : '—'}</td>
                     <td className="num">
@@ -158,7 +162,7 @@ export function EmaWatch({ markets }: { markets: Market[] }) {
                     </td>
                     <td className="num">{w.stop !== undefined ? price(w.stop) : '—'}</td>
                     <td>
-                      <a className="card-link" href={routeHref('estrategias', { inst: w.instId, s: 'ema200' })}>
+                      <a className="card-link" href={routeHref('estrategias', { inst: w.instId, s: 'ema200', tf: bar })}>
                         Ver →
                       </a>
                     </td>
@@ -169,7 +173,7 @@ export function EmaWatch({ markets }: { markets: Market[] }) {
           </table>
         </TableWrap>
       )}
-      {ids && rows.length > 0 && <WatchLegend />}
+      {ids && rows.length > 0 && <WatchLegend label={label} />}
     </Card>
   )
 }

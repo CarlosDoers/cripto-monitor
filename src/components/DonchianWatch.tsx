@@ -7,9 +7,11 @@ import {
 } from '../lib/donchianWatch'
 import { pct, plural, price, ratio } from '../lib/format'
 import { DONCHIAN_TREND_EVIDENCE as EVIDENCE } from '../lib/indicators/donchianBreakout'
+import { profileOf, strategyByKey } from '../lib/indicators/registry'
 import { type Market } from '../lib/markets'
 import { routeHref } from '../lib/router'
-import { hoursOf as hours, useWatchScan } from '../lib/useWatchScan'
+import { useWatchScan } from '../lib/useWatchScan'
+import { barChoice, barOf } from '../lib/watchBars'
 import { Badge, Card, Help, TableSkeleton, TableWrap } from './ui'
 import { WatchControls } from './WatchControls'
 import { SideBadge, WatchLegend } from './WatchCells'
@@ -27,7 +29,7 @@ const signed = (x: number) => `${x >= 0 ? '+' : '−'}${ratio(Math.abs(x))}`
 const thousands = (n: number) => new Intl.NumberFormat('es-ES').format(n)
 
 
-function what(w: Watch): string {
+function what(w: Watch, span: (candles: number) => string, label: string): string {
   const long = w.bias === 'long'
   const edge = long ? 'el máximo' : 'el mínimo'
   const ofEma = long ? 'sobre' : 'bajo'
@@ -35,28 +37,32 @@ function what(w: Watch): string {
   const turn = w.side && w.bias ? `cierra el ${w.side} y abre un ${w.bias}` : `abre un ${w.bias}`
   switch (w.status) {
     case 'nueva':
-      return `abrió un ${w.side}: cerró ${w.side === 'long' ? 'sobre el máximo y sobre' : 'bajo el mínimo y bajo'} la EMA 200 hace ${hours(w.age + 1)}`
+      return `abrió un ${w.side}: cerró ${w.side === 'long' ? 'sobre el máximo y sobre' : 'bajo el mínimo y bajo'} la EMA 200 hace ${span(w.age + 1)}`
     case 'rompiendo':
       return `la vela en curso ya ${long ? 'supera' : 'pierde'} ${edge} de 20 velas, ${ofEma} la EMA 200: si cierra así, ${turn}`
     case 'cerca':
       return `${ofEma} la EMA 200, a ${ratio(w.distanceAtr, 1)} ATR del ${long ? 'máximo' : 'mínimo'} de 20 velas: si una vela cierra más allá, ${turn}`
     case 'tendencia':
-      return `${w.side} desde hace ${hours(w.age)}${w.side !== w.bias ? ' · ya perdió la EMA 200' : ''}`
+      return `${w.side} desde hace ${span(w.age)}${w.side !== w.bias ? ' · ya perdió la EMA 200' : ''}`
     case 'fuera':
       return `${ofEma} la EMA 200, sin ruptura: espera un cierre ${long ? 'sobre' : 'bajo'} ${edge} de 20 velas para abrir un ${w.bias}`
     case 'corto':
-      return `${w.bars} velas de 4 h; hacen falta ${w.need}`
+      return `${w.bars} velas de ${label}; hacen falta ${w.need}`
   }
 }
 
 /**
- * "¿Qué vigilo?" for the Donchian + EMA 200 preset on 4 h: the most traded
- * X-Perps against the breakout the EMA 200 allows. On demand, like the EMA 200
- * card beside it, and reading the same cached candles.
+ * "¿Qué vigilo?" for the Donchian + EMA 200 preset: the most traded X-Perps
+ * against the breakout the EMA 200 allows, on 4 h (the longer reading) or 1 h (the
+ * short one — the preset's marginal timeframe, which the "?" says). On demand,
+ * like the EMA 200 card beside it, and reading the same cached candles.
  */
 export function DonchianWatch({ markets }: { markets: Market[] }) {
   const scan = useWatchScan(markets)
-  const { ids, board, byId } = scan
+  const { ids, board, byId, bar, span } = scan
+  const label = barOf(bar).label
+  const profile = profileOf(strategyByKey('donchian'), 'trend')
+  const bars = { '4H': barChoice(profile, '4H'), '1H': barChoice(profile, '1H') }
 
   const rows = useMemo(
     () =>
@@ -74,7 +80,7 @@ export function DonchianWatch({ markets }: { markets: Market[] }) {
 
   return (
     <Card
-      title="Qué vigilar · Ruptura + EMA 200 en 4 h"
+      title={`Qué vigilar · Ruptura + EMA 200 en ${label}`}
       subtitle={
         ids
           ? board.loaded < total
@@ -85,23 +91,47 @@ export function DonchianWatch({ markets }: { markets: Market[] }) {
       action={
         <Help label="Qué vigilar">
           <p>
-            La estrategia: entra cuando una vela de 4 h cierra por encima del máximo de las 20 anteriores y por encima
+            La estrategia: entra cuando una vela de {label} cierra por encima del máximo de las 20 anteriores y por encima
             de la EMA 200 (long), o por debajo del mínimo y de la EMA (short). Stop de 2 ATR, un trailing de 8 ATR que
             deja correr la tendencia y ningún objetivo fijo.
           </p>
-          <p>
-            Es la Ruptura de siempre con el filtro que mejor le sentó. En 4 h, sobre 30 criptos desde 2022, mide{' '}
-            <strong>{signed(EVIDENCE.board.net)} R</strong> por operación ({thousands(EVIDENCE.board.n)} operaciones),
-            positiva en las dos mitades ({signed(EVIDENCE.board.halves[0])} / {signed(EVIDENCE.board.halves[1])}) y
-            frente a {signed(EVIDENCE.board.plain)} R sin el filtro. En 2018–2021, un periodo que no se tocó,{' '}
-            {signed(EVIDENCE.old.net)} R frente a {signed(EVIDENCE.old.plain)}. Los longs ganan mucho más (
-            {signed(EVIDENCE.board.longs)} R) que los shorts ({signed(EVIDENCE.board.shorts)} R).
-          </p>
-          <p>
-            Acierta una de cada cuatro y sin sus diez mejores operaciones queda en {signed(EVIDENCE.board.withoutBest10)}{' '}
-            R: vive de pocas tendencias largas. El filtro sube lo que gana cada operación, pero quita muchas y se parece
-            al cruce de la EMA 200, así que tomarlas todas no mejora el resultado mensual: sirve para elegir.
-          </p>
+          {bar === '4H' ? (
+            <>
+              <p>
+                Es la Ruptura de siempre con el filtro que mejor le sentó. En 4 h, sobre 30 criptos desde 2022, mide{' '}
+                <strong>{signed(EVIDENCE.board.net)} R</strong> por operación ({thousands(EVIDENCE.board.n)}{' '}
+                operaciones), positiva en las dos mitades ({signed(EVIDENCE.board.halves[0])} /{' '}
+                {signed(EVIDENCE.board.halves[1])}) y frente a {signed(EVIDENCE.board.plain)} R sin el filtro. En
+                2018–2021, un periodo que no se tocó, {signed(EVIDENCE.old.net)} R frente a{' '}
+                {signed(EVIDENCE.old.plain)}. Los longs ganan mucho más ({signed(EVIDENCE.board.longs)} R) que los
+                shorts ({signed(EVIDENCE.board.shorts)} R).
+              </p>
+              <p>
+                Acierta una de cada cuatro y sin sus diez mejores operaciones queda en{' '}
+                {signed(EVIDENCE.board.withoutBest10)} R: vive de pocas tendencias largas. El filtro sube lo que gana
+                cada operación, pero quita muchas y se parece al cruce de la EMA 200, así que tomarlas todas no mejora
+                el resultado mensual: sirve para elegir.
+              </p>
+            </>
+          ) : (
+            <>
+              <p>
+                <strong>Es la lectura corta, y el marco justo de esta estrategia.</strong> En 1 h, sobre 30 criptos
+                desde 2022, mide <strong>{signed(EVIDENCE.hourly.net)} R</strong> por operación (
+                {thousands(EVIDENCE.hourly.n)} operaciones; {signed(EVIDENCE.hourly.halves[0])} /{' '}
+                {signed(EVIDENCE.hourly.halves[1])} en las dos mitades) frente a {signed(EVIDENCE.hourly.plain)} R sin
+                el filtro: aquí el filtro es casi toda la ventaja. Es menos de la mitad que en 4 h y aguanta peor la
+                comisión: con el doble queda en {signed(EVIDENCE.hourly.doubleFee)} R, y sin sus diez mejores
+                operaciones en {signed(EVIDENCE.hourly.withoutBest10)} R.
+              </p>
+              <p>
+                Los longs ganan {signed(EVIDENCE.hourly.longs)} R y los shorts {signed(EVIDENCE.hourly.shorts)} R: en 1
+                h un short no tiene ventaja medida. Salta más a menudo que en 4 h, el stop queda más cerca (un
+                movimiento normal lo toca) y no está medido para entrar con la tendencia ya empezada. Úsala como
+                lectura de plazo corto junto a la de 4 h, no en su lugar.
+              </p>
+            </>
+          )}
           <p>
             <strong>Señal nueva</strong> es la entrada medida, en las dos últimas velas. <strong>Rompiendo</strong> y{' '}
             <strong>cerca</strong> son para tenerlos a la vista. Entrar en una tendencia ya empezada no está medido.
@@ -115,7 +145,7 @@ export function DonchianWatch({ markets }: { markets: Market[] }) {
       }
       flush
     >
-      <WatchControls scan={scan} empty={markets.length === 0} />
+      <WatchControls scan={scan} empty={markets.length === 0} bars={bars} />
 
       {!ids ? null : rows.length === 0 ? (
         <TableSkeleton rows={Math.min(total, 6)} cols={7} />
@@ -161,7 +191,7 @@ export function DonchianWatch({ markets }: { markets: Market[] }) {
                         <span className="sub">—</span>
                       )}
                     </td>
-                    <td className="sub watch-what">{what(w)}</td>
+                    <td className="sub watch-what">{what(w, span, label)}</td>
                     <td className="num">{price(w.price)}</td>
                     <td className="num">{Number.isFinite(w.level) ? price(w.level) : '—'}</td>
                     <td className="num">
@@ -175,7 +205,7 @@ export function DonchianWatch({ markets }: { markets: Market[] }) {
                     </td>
                     <td className="num">{w.stop !== undefined ? price(w.stop) : '—'}</td>
                     <td>
-                      <a className="card-link" href={routeHref('estrategias', { inst: w.instId, s: 'donchian', p: 'trend' })}>
+                      <a className="card-link" href={routeHref('estrategias', { inst: w.instId, s: 'donchian', p: 'trend', tf: bar })}>
                         Ver →
                       </a>
                     </td>
@@ -186,7 +216,7 @@ export function DonchianWatch({ markets }: { markets: Market[] }) {
           </table>
         </TableWrap>
       )}
-      {ids && rows.length > 0 && <WatchLegend />}
+      {ids && rows.length > 0 && <WatchLegend label={label} />}
     </Card>
   )
 }

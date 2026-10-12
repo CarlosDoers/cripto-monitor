@@ -81,7 +81,16 @@ export const DONCHIAN_TREND_EVIDENCE = {
   /** The same rule on 14 coins in 2018–2021, a period nothing was tuned on. */
   old: { n: 1009, net: 1.07, plain: 0.46 },
   /** The same preset on 1 h over the 30 coins, 2022–2026: marginal, and it does not take twice the fee. */
-  hourly: { n: 14892, net: 0.13, halves: [0.15, 0.11] as [number, number], plain: 0.02, doubleFee: 0.08 },
+  hourly: {
+    n: 14892,
+    net: 0.13,
+    halves: [0.15, 0.11] as [number, number],
+    plain: 0.02,
+    doubleFee: 0.08,
+    longs: 0.26,
+    shorts: 0.01,
+    withoutBest10: 0.08,
+  },
 }
 
 export function analyseDonchian(

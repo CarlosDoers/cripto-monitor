@@ -203,6 +203,9 @@ if (want('trend')) {
       near('1 h · 1ª mitad', m.halves[0], quoted.halves[0], 0.03)
       near('1 h · 2ª mitad', m.halves[1], quoted.halves[1], 0.03)
       near('1 h · con el doble de comisión', m.doubleFee, quoted.doubleFee, 0.03)
+      near('1 h · largos', m.longs, quoted.longs, 0.03)
+      near('1 h · cortos', m.shorts, quoted.shorts, 0.03)
+      near('1 h · sin las 10 mejores', m.withoutBest10, quoted.withoutBest10, 0.03)
     }
     if (period === 'board') {
       near('board · 1ª mitad', m.halves[0], quoted.halves[0], 0.03)

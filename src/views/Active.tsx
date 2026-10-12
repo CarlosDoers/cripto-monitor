@@ -55,7 +55,7 @@ export function Active() {
             {last && (
               <p>
                 Lo último que cerraste fue <strong>{last.symbol}</strong>{' '}
-                {last.direction === 'short' ? 'en corto' : 'en largo'}, {timeAgo(last.closedAt)} (
+                {last.direction === 'short' ? 'en short' : 'en long'}, {timeAgo(last.closedAt)} (
                 {dateTime(last.closedAt)}), con un resultado de{' '}
                 <DeltaValue value={last.pnl}>{signedUsd(last.pnl)}</DeltaValue>
                 {Number.isFinite(last.pnlRatio) && last.pnlRatio !== 0 && <> ({pct(last.pnlRatio)} sobre el margen)</>}.

@@ -256,7 +256,7 @@ export function Overview() {
                   </td>
                   <td>
                     <Badge variant={isShort(p) ? 'sell' : 'buy'}>
-                      {isShort(p) ? 'Corto' : 'Largo'}
+                      {isShort(p) ? 'Short' : 'Long'}
                     </Badge>
                   </td>
                   {/* Dollars first: a count of contracts says nothing until

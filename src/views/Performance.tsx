@@ -174,7 +174,7 @@ function TradesTable({ trades }: { trades: Trade[] }) {
                 </td>
                 <td>
                   <Badge variant={t.direction === 'short' ? 'sell' : 'buy'}>
-                    {t.direction === 'short' ? 'Corto' : 'Largo'}
+                    {t.direction === 'short' ? 'Short' : 'Long'}
                     {t.lever > 0 && ` ${t.lever}×`}
                   </Badge>
                 </td>
@@ -480,14 +480,14 @@ export function Performance() {
           )}
         </Card>
 
-        <Card title="Largos contra cortos" dimmed={dimmed}>
+        <Card title="Longs contra shorts" dimmed={dimmed}>
           {p.isLoading ? (
             <Skeleton height={140} />
           ) : (
             <DivergingBars
               rows={p.byDirection.map((g) => ({
                 key: g.key,
-                label: g.key === 'short' ? 'Cortos' : 'Largos',
+                label: g.key === 'short' ? 'Shorts' : 'Longs',
                 value: g.pnl,
                 // Same rule as every other bucket: four shorts at "100 %" is
                 // noise, and it printed as if it were a record.

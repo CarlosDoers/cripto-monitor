@@ -18,17 +18,17 @@ const STATUS: Record<CarryStatus, { label: string; variant: 'buy' | 'live' | 'wa
   cubrir: {
     label: 'Cubrir',
     variant: 'buy',
-    title: 'La última semana pagó más del 10 % anual y no tienes el corto: la regla dice montarlo.',
+    title: 'La última semana pagó más del 10 % anual y no tienes el short: la regla dice montarlo.',
   },
   cobrando: {
     label: 'Cobrando',
     variant: 'live',
-    title: 'Ya tienes el corto y la financiación sigue pagando: mantener.',
+    title: 'Ya tienes el short y la financiación sigue pagando: mantener.',
   },
   salir: {
     label: 'Deshacer',
     variant: 'warn',
-    title: 'Tienes el corto pero la última semana ya no pagó: la regla dice cerrarlo.',
+    title: 'Tienes el short pero la última semana ya no pagó: la regla dice cerrarlo.',
   },
   esperar: {
     label: 'Esperar',
@@ -112,7 +112,7 @@ export function Funding() {
 
       <Card
         title="Tus monedas"
-        subtitle={`Las que tienes en spot y tienen X-Perp: cubrirlas con un corto cobra la financiación sin apostar por el precio${
+        subtitle={`Las que tienes en spot y tienen X-Perp: cubrirlas con un short cobra la financiación sin apostar por el precio${
           dust > 0 ? ` · ${plural(dust, 'saldo', 'saldos')} bajo el 0,5 % de la cartera fuera` : ''
         }`}
         flush
@@ -178,7 +178,7 @@ export function Funding() {
                       <td className="num">
                         <span>
                           {h.contracts > 0 ? `${qty(h.contracts)} contr.` : '—'}
-                          {h.hedged > 0 && <span className="sub"> · {qty(h.hedged)} ya en corto</span>}
+                          {h.hedged > 0 && <span className="sub"> · {qty(h.hedged)} ya en short</span>}
                         </span>
                       </td>
                       <td className="num">
@@ -277,7 +277,7 @@ export function Funding() {
           <p>
             <strong>La regla:</strong> cubrir una moneda cuando la financiación de su X-Perp pagó más de un{' '}
             {share(CARRY_RULE.enter, 0)} anual en los últimos {CARRY_RULE.days} días, y deshacerlo cuando
-            deje de pagar. Cubrir es abrir un corto del mismo tamaño que lo que tienes: el precio se compensa y
+            deje de pagar. Cubrir es abrir un short del mismo tamaño que lo que tienes: el precio se compensa y
             cobras la financiación cada 8 horas.
           </p>
           <p>
@@ -298,9 +298,9 @@ export function Funding() {
             {ratio(ev.correlation.opening)} con la Apertura.
           </p>
           <p>
-            <strong>Lo que no funcionó:</strong> ir contra la financiación extrema. Ponerse corto cuando está en
+            <strong>Lo que no funcionó:</strong> ir contra la financiación extrema. Ponerse short cuando está en
             su décimo más alto perdió un {pct(ev.contrarianShortWeekly, 1)} por semana, porque cuando hay muchos
-            largos el precio suele seguir subiendo. Tampoco una cartera larga en la financiación baja y corta en
+            longs el precio suele seguir subiendo. Tampoco una cartera long en la financiación baja y short en
             la alta: un año gana, otro pierde lo mismo.
           </p>
           <p>
@@ -308,8 +308,8 @@ export function Funding() {
           </p>
           <ul>
             <li>
-              <strong>El corto necesita margen.</strong> Si el precio se dispara, la moneda gana lo que el corto
-              pierde, pero están en carteras distintas y el corto puede liquidarse. Con poco apalancamiento (1–2×)
+              <strong>El short necesita margen.</strong> Si el precio se dispara, la moneda gana lo que el short
+              pierde, pero están en carteras distintas y el short puede liquidarse. Con poco apalancamiento (1–2×)
               y vigilando el margen.
             </li>
             <li>

@@ -162,7 +162,7 @@ export function Positions({ embedded = false }: { embedded?: boolean }) {
                       </td>
                       <td>
                         <Badge variant={isShort(p) ? 'sell' : 'buy'}>
-                          {isShort(p) ? 'Corto' : 'Largo'}
+                          {isShort(p) ? 'Short' : 'Long'}
                           {p.lever && ` ${p.lever}×`}
                         </Badge>
                       </td>
@@ -224,7 +224,7 @@ export function Positions({ embedded = false }: { embedded?: boolean }) {
         <Card
           key={`riesgo-${p.posId}`}
           title={p.instId}
-          subtitle={`${isShort(p) ? 'Corto' : 'Largo'}${p.lever ? ` ${p.lever}×` : ''} · margen ${p.mgnMode === 'cross' ? 'cruzado' : 'aislado'}`}
+          subtitle={`${isShort(p) ? 'Short' : 'Long'}${p.lever ? ` ${p.lever}×` : ''} · margen ${p.mgnMode === 'cross' ? 'cruzado' : 'aislado'}`}
           flush
           dimmed={isFetching && !isLoading}
         >

@@ -247,7 +247,7 @@ function BotsSummary({
                 <td>
                   <span>
                     <Badge variant={r.direction === 'short' ? 'sell' : r.direction === 'long' ? 'buy' : 'neutral'}>
-                      {r.direction === 'short' ? 'Corto' : r.direction === 'long' ? 'Largo' : 'Neutral'}
+                      {r.direction === 'short' ? 'Short' : r.direction === 'long' ? 'Long' : 'Neutral'}
                     </Badge>
                     {num(r.lever) > 0 && <span className="sub"> {r.lever}×</span>}
                   </span>
@@ -348,7 +348,7 @@ function DcaCard({
                       </td>
                       <td>
                         <Badge variant={b.direction === 'long' ? 'buy' : 'sell'}>
-                          {b.direction === 'long' ? 'Largo' : 'Corto'}
+                          {b.direction === 'long' ? 'Long' : 'Short'}
                         </Badge>
                         <span className="sub"> {b.lever}×</span>
                       </td>

@@ -7,6 +7,7 @@ import { routeHref } from '../lib/router'
 import { hoursOf as hours, useWatchScan } from '../lib/useWatchScan'
 import { Badge, Card, Help, TableSkeleton, TableWrap } from './ui'
 import { WatchControls } from './WatchControls'
+import { SideBadge, WatchLegend } from './WatchCells'
 
 const STATUS: Record<WatchStatus, { label: string; variant: 'live' | 'buy' | 'warn' | 'neutral' }> = {
   nueva: { label: 'Señal nueva', variant: 'live' },
@@ -18,16 +19,17 @@ const STATUS: Record<WatchStatus, { label: string; variant: 'live' | 'buy' | 'wa
 }
 
 function what(w: Watch): string {
-  const dir = w.side === 'long' ? 'largo' : 'corto'
+  // What closing across the line would do: turn the open position, or open one.
+  const turn = w.side && w.next ? `cierra el ${w.side} y abre un ${w.next}` : `abre un ${w.next}`
   switch (w.status) {
     case 'nueva':
-      return `${dir}: cerró ${w.side === 'long' ? 'sobre' : 'bajo'} la EMA hace ${hours(w.age + 1)}`
+      return `abrió un ${w.side}: cerró ${w.side === 'long' ? 'sobre' : 'bajo'} la EMA hace ${hours(w.age + 1)}`
     case 'cruzando':
-      return `la vela en curso va ${w.side === 'long' ? 'por debajo' : 'por encima'}: si cierra así, da la vuelta`
+      return `la vela en curso va ${w.side === 'long' ? 'por debajo' : 'por encima'} de la EMA: si cierra así, ${turn}`
     case 'cerca':
-      return `a ${ratio(w.distanceAtr, 1)} ATR de la EMA: una vela podría cruzarla`
+      return `a ${ratio(w.distanceAtr, 1)} ATR de la EMA: si una vela la cruza, ${turn}`
     case 'tendencia':
-      return `${dir} desde hace ${hours(w.age)}`
+      return `${w.side} desde hace ${hours(w.age)}`
     case 'fuera':
       return 'saltó el stop; espera al próximo cruce'
     case 'corto':
@@ -73,7 +75,7 @@ export function EmaWatch({ markets }: { markets: Market[] }) {
       action={
         <Help label="Qué vigilar">
           <p>
-            La estrategia: largo mientras las velas de 4 h cierran por encima de la EMA 200, corto mientras cierran
+            La estrategia: long mientras las velas de 4 h cierran por encima de la EMA 200, short mientras cierran
             por debajo, y la vuelta en cada cruce, con un stop de 2 ATR.
           </p>
           <p>
@@ -86,6 +88,11 @@ export function EmaWatch({ markets }: { markets: Market[] }) {
           <p>
             <strong>Señal nueva</strong> es la entrada medida, en las dos últimas velas. <strong>Cruzando</strong> y{' '}
             <strong>cerca</strong> son para tenerlos a la vista. Entrar en una tendencia ya empezada no está medido.
+          </p>
+          <p>
+            La columna <strong>Señal</strong> es la entrada que se está gestando y la <strong>Posición ahora</strong> la
+            que la estrategia ya tiene abierta, simulada: no es tu cuenta. Aquí siempre son contrarias mientras cruza:
+            un long abierto con la vela ya por debajo de la EMA es un short en camino.
           </p>
         </Help>
       }
@@ -101,12 +108,13 @@ export function EmaWatch({ markets }: { markets: Market[] }) {
             <thead>
               <tr>
                 <th>Contrato</th>
-                <th>Estado</th>
+                <th>Señal</th>
+                <th>Posición ahora</th>
                 <th>Qué pasa</th>
                 <th className="num">Precio</th>
                 <th className="num">EMA 200</th>
                 <th className="num">Distancia</th>
-                <th className="num">Stop</th>
+                <th className="num">Stop de la posición</th>
                 <th>Gráfico</th>
               </tr>
             </thead>
@@ -116,17 +124,25 @@ export function EmaWatch({ markets }: { markets: Market[] }) {
                 return (
                   <tr key={w.instId}>
                     <td>
-                      <span>
-                        <span className="ccy">{w.symbol}</span>{' '}
-                        {w.side && (
-                          <Badge variant={w.side === 'long' ? 'buy' : 'sell'}>{w.side === 'long' ? 'Largo' : 'Corto'}</Badge>
-                        )}
+                      <span className="ccy">{w.symbol}</span>
+                    </td>
+                    <td>
+                      <span className="watch-signal">
+                        {w.next && <SideBadge side={w.next} />}
+                        <Badge variant={s.variant} pulse={w.status === 'nueva' || w.status === 'cruzando'}>
+                          {s.label}
+                        </Badge>
                       </span>
                     </td>
                     <td>
-                      <Badge variant={s.variant} pulse={w.status === 'nueva' || w.status === 'cruzando'}>
-                        {s.label}
-                      </Badge>
+                      {w.side ? (
+                        <span className="watch-signal">
+                          <SideBadge side={w.side} />
+                          {w.entry !== undefined && <span className="sub">entrada {price(w.entry)}</span>}
+                        </span>
+                      ) : (
+                        <span className="sub">—</span>
+                      )}
                     </td>
                     <td className="sub watch-what">{what(w)}</td>
                     <td className="num">{price(w.price)}</td>
@@ -153,6 +169,7 @@ export function EmaWatch({ markets }: { markets: Market[] }) {
           </table>
         </TableWrap>
       )}
+      {ids && rows.length > 0 && <WatchLegend />}
     </Card>
   )
 }

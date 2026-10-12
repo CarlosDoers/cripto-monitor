@@ -427,7 +427,7 @@ export function Markets() {
 
       <p className="footnote">
         Datos públicos de OKX, actualizados cada 30 segundos. La prima es la diferencia entre el
-        precio del contrato y su índice al contado: en positivo, un largo la paga al converger; en
+        precio del contrato y su índice al contado: en positivo, un long la paga al converger; en
         negativo, la cobra. La horquilla se mide sobre el mejor
         precio de compra y de venta en el momento de la consulta y cambia constantemente; en
         contratos poco líquidos puede ser mucho peor de lo que muestre cualquier foto fija. La

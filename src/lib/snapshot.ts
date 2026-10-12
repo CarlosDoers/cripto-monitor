@@ -279,7 +279,7 @@ export function renderPositions(s: AccountSnapshot): string {
     const dist = liquidationDistance(x)
     return [
       x.instId,
-      `${isShort(x) ? 'Corto' : 'Largo'} ${ratio(num(x.lever), 0)}×`,
+      `${isShort(x) ? 'Short' : 'Long'} ${ratio(num(x.lever), 0)}×`,
       `${usd(num(x.notionalUsd))} (${qty(size.amount)} ${size.unit})`,
       price(num(x.avgPx)),
       price(num(x.markPx)),
@@ -310,7 +310,7 @@ export function renderPerformance(p: Performance, period: string, truncated: boo
       .slice(0, 8)
       .map((g) => `${label(g.key)} ${signedUsd(g.pnl)} (${plural(g.trades, 'op', 'ops')}, ${g.trades >= MIN_SAMPLE ? share(g.winRate, 0) : 'muestra corta'})`)
       .join(' · ')
-  const side = (k: string) => (k === 'short' ? 'Cortos' : 'Largos')
+  const side = (k: string) => (k === 'short' ? 'Shorts' : 'Longs')
   const recent = [...p.trades].sort((a, b) => b.closedAt - a.closedAt).slice(0, 15)
   return [
     `## Rendimiento ${period}${truncated ? ' (historial recortado a las 500 últimas)' : ''}`,
@@ -328,7 +328,7 @@ export function renderPerformance(p: Performance, period: string, truncated: boo
       recent.map((t) => [
         when(t.closedAt),
         t.symbol,
-        t.direction === 'short' ? 'Corto' : 'Largo',
+        t.direction === 'short' ? 'Short' : 'Long',
         `${t.lever}×`,
         price(t.openPx),
         price(t.closePx),
@@ -366,7 +366,7 @@ export function renderBots(s: AccountSnapshot): string {
     const feeShare = feeShareOfGrid(g)
     return [
       g.instId,
-      `${g.direction === 'short' ? 'Corto' : g.direction === 'long' ? 'Largo' : 'Neutral'}${num(g.lever) > 0 ? ` ${g.lever}×` : ''}`,
+      `${g.direction === 'short' ? 'Short' : g.direction === 'long' ? 'Long' : 'Neutral'}${num(g.lever) > 0 ? ` ${g.lever}×` : ''}`,
       usd(num(g.investment)),
       `${price(num(g.minPx))}–${price(num(g.maxPx))} (${g.gridNum} niveles)`,
       mark
@@ -437,7 +437,7 @@ export function renderMethod(): string {
     `- Solo hay ${offered.length} estrategias que la app ofrece${variants.length ? ` (${variants.join(', ')})` : ''}, cada una medida con años de datos hasta el ${measuredThroughText()}, costes incluidos, en las dos mitades del histórico (umbral +${ratio(MIN_TRADABLE_R)} R).${retired.length ? ` ${retired.join(', ')} se midió y se retiró: no se sostiene en las dos mitades.` : ''} **No propongas señales, niveles ni entradas que no salgan de ellas**: la app ha medido decenas de ideas que parecían buenas (soportes y resistencias, rebotes en EMAs, cruces de MACD, ir contra la financiación extrema) y ninguna ganaba dinero.`,
     '- R es lo que se arriesga en una operación (de la entrada al stop). Acertar mucho no es ganar: manda la esperanza en R.',
     ...strategies,
-    `- **Financiación (carry):** tener la moneda y un corto igual en su perpetuo, entrando cuando los últimos 7 días pagaron más del ${share(CARRY_RULE.enter, 0)} anual y saliendo cuando dejan de pagar: ${pct(CARRY_EVIDENCE.ownApr, 1)} anual medido desde 2022. El tipo por defecto de OKX es ${share(BASE_FUNDING_APR, 2)} anual.`,
+    `- **Financiación (carry):** tener la moneda y un short igual en su perpetuo, entrando cuando los últimos 7 días pagaron más del ${share(CARRY_RULE.enter, 0)} anual y saliendo cuando dejan de pagar: ${pct(CARRY_EVIDENCE.ownApr, 1)} anual medido desde 2022. El tipo por defecto de OKX es ${share(BASE_FUNDING_APR, 2)} anual.`,
     `- **Toques a la EMA ${touch.length} diaria:** contexto, no señal (${touch.text}).`,
   ].join('\n')
 }
@@ -529,7 +529,7 @@ export async function signalsText(get: Get, market: RawMarket, opts: { ema: numb
   const rev = live.map(({ x, scan }) => {
     const o = scan!.kind === 'signal' ? scan!.opportunity : null
     return o
-      ? [x.symbol, o.side === 'long' ? 'Largo' : 'Corto', `1:${ratio(o.remaining)}`, price(o.entry), price(o.price), price(o.stop), price(o.target), `hace ${o.age} días`]
+      ? [x.symbol, o.side === 'long' ? 'Long' : 'Short', `1:${ratio(o.remaining)}`, price(o.entry), price(o.price), price(o.stop), price(o.target), `hace ${o.age} días`]
       : []
   })
   const watchStatus: Record<EmaWatch['status'], string> = {
@@ -558,14 +558,14 @@ export async function signalsText(get: Get, market: RawMarket, opts: { ema: numb
     watching.length ? `A vigilar (fuera de su banda; si la próxima vela diaria cierra dentro, salta la señal): ${watching.map((w) => w.x.symbol).join(', ')}` : '',
     '',
     `## Ruptura + EMA 200 en 4 h (${emaSet.length} más negociados)`,
-    'Largo si cierra sobre el máximo de 20 velas y sobre la EMA 200; corto bajo el mínimo y bajo la EMA. Solo la "señal nueva" es la entrada medida; entrar en una tendencia ya empezada no está medido. El stop es el vigente: el trailing de 8 ATR cuando ha pasado al inicial.',
+    'Long si cierra sobre el máximo de 20 velas y sobre la EMA 200; short bajo el mínimo y bajo la EMA. Solo la "señal nueva" es la entrada medida; entrar en una tendencia ya empezada no está medido. "Señal" es la entrada que abriría la regla si la vela cierra como está (→ su dirección); "Posición ahora" es la que la regla ya tiene abierta, simulada, y a ella pertenece el stop: puede ser contraria (un short abierto con un long en camino). El stop es el vigente: el trailing de 8 ATR cuando ha pasado al inicial.',
     table(
-      ['Activo', 'Estado', 'Lado', 'Desde', 'Precio', 'Ruptura en', 'Distancia', 'Stop'],
+      ['Activo', 'Señal', 'Posición ahora', 'Desde', 'Precio', 'Ruptura en', 'Distancia', 'Stop de la posición'],
       trend.map((w) => [
         w.symbol,
-        // Before a breakout there is no side yet, but the EMA already says which one it would be.
-        `${trendStatus[w.status]}${w.status === 'rompiendo' || w.status === 'cerca' ? ` (${w.bias === 'long' ? 'largo' : 'corto'})` : ''}`,
-        w.side === 'long' ? 'Largo' : w.side === 'short' ? 'Corto' : '—',
+        // The entry on the table, with its direction; none when it is only waiting or already in a trade.
+        `${trendStatus[w.status]}${w.next ? ` → ${w.next === 'long' ? 'Long' : 'Short'}` : ''}`,
+        w.side === 'long' ? 'Long' : w.side === 'short' ? 'Short' : '—',
         w.side ? hoursOf(w.age) : '—',
         price(w.price),
         Number.isFinite(w.level) ? price(w.level) : '—',
@@ -575,13 +575,13 @@ export async function signalsText(get: Get, market: RawMarket, opts: { ema: numb
     ),
     '',
     `## EMA 200 en 4 h (${emaSet.length} más negociados)`,
-    'Solo la "señal nueva" es la entrada medida; entrar en una tendencia ya empezada no está medido.',
+    'Solo la "señal nueva" es la entrada medida; entrar en una tendencia ya empezada no está medido. "Señal" es la entrada que abriría la estrategia si la vela cierra como está (→ su dirección); "Posición ahora" es la que ya tiene abierta, simulada: mientras cruza, son contrarias.',
     table(
-      ['Activo', 'Estado', 'Lado', 'Desde', 'Precio', 'EMA 200', 'Distancia', 'Stop'],
+      ['Activo', 'Señal', 'Posición ahora', 'Desde', 'Precio', 'EMA 200', 'Distancia', 'Stop de la posición'],
       ema.map((w) => [
         w.symbol,
-        watchStatus[w.status],
-        w.side === 'long' ? 'Largo' : w.side === 'short' ? 'Corto' : '—',
+        `${watchStatus[w.status]}${w.next ? ` → ${w.next === 'long' ? 'Long' : 'Short'}` : ''}`,
+        w.side === 'long' ? 'Long' : w.side === 'short' ? 'Short' : '—',
         w.side ? (w.age * 4 < 48 ? `${w.age * 4} h` : `${Math.round(w.age / 6)} días`) : '—',
         price(w.price),
         Number.isFinite(w.ema) ? price(w.ema) : '—',
@@ -693,7 +693,7 @@ export async function fundingText(get: Get, account: AccountSnapshot, market: Ra
       apr !== undefined ? pct(apr, 1) : '—',
       nowText(r.rate),
       ctVal > 0 ? `${qty(Math.floor(h.total / ctVal))} contratos` : '—',
-      hedged ? `${qty(hedged)} en corto` : 'no',
+      hedged ? `${qty(hedged)} en short` : 'no',
       carryStatus(apr, hedged > 0) ?? '—',
     ]
   })
@@ -701,7 +701,7 @@ export async function fundingText(get: Get, account: AccountSnapshot, market: Ra
   const paying = liquidNow.filter((r) => nowApr(r.rate!) > CARRY_RULE.enter).length
   return [
     `# Financiación (carry) — ${when(now)}`,
-    `Regla medida: cubrir con un corto cuando los últimos 7 días pagaron más del ${share(CARRY_RULE.enter, 0)} anual; deshacer cuando dejan de pagar. Medido: ${pct(CARRY_EVIDENCE.ownApr, 1)} anual desde 2022 cubriendo monedas que ya se tienen (${pct(CARRY_EVIDENCE.spotLimitApr, 1)} comprando el spot). Riesgos: el corto necesita margen y puede liquidarse; la financiación se gira; el spot en esta cuenta cuesta 0,20–0,35 % por lado.`,
+    `Regla medida: cubrir con un short cuando los últimos 7 días pagaron más del ${share(CARRY_RULE.enter, 0)} anual; deshacer cuando dejan de pagar. Medido: ${pct(CARRY_EVIDENCE.ownApr, 1)} anual desde 2022 cubriendo monedas que ya se tienen (${pct(CARRY_EVIDENCE.spotLimitApr, 1)} comprando el spot). Riesgos: el short necesita margen y puede liquidarse; la financiación se gira; el spot en esta cuenta cuesta 0,20–0,35 % por lado.`,
     table(['Moneda', 'Valor', 'Últimos 7 días (anual)', 'Ahora (anual)', 'Para cubrir', 'Ya cubierta', 'Regla'], rows),
     boardMissing
       ? 'OKX no dejó leer ahora la financiación de todo el mercado (límite de peticiones): falta la columna «Ahora», pero la regla usa la última semana, que sí está.'

@@ -73,7 +73,7 @@ const FINDINGS: { verdict: Verdict; what: string; detail: ReactNode }[] = [
     detail: (
       <>
         En BTC, ETH y SOL desde 2022 es la que más gana por operación: <strong>+0,41 R</strong> por
-        señal, positiva en cada una por separado, en todos los años y en largos y cortos. Pero menos
+        señal, positiva en cada una por separado, en todos los años y en longs y shorts. Pero menos
         sólida de lo que parecía: el ancho de banda elegido es un pico (con 2 o 3 ATR la segunda mitad
         del histórico queda en cero), y su ventaja aguantaría solo 5 variantes probadas. Y no se sale de
         ahí: en las otras 26 monedas del tablero mide <strong>−0,03 R</strong> sobre 759 señales
@@ -95,8 +95,8 @@ const FINDINGS: { verdict: Verdict; what: string; detail: ReactNode }[] = [
         largas de pérdidas y úsala con tamaño pequeño. Con el filtro de la EMA 200 (el preset «Canal 20 +
         EMA 200», que tiene su propio «Qué vigilo» en el Screener) mide{' '}
         <strong>+{ratio(TREND.board.net)} R</strong> sobre {new Intl.NumberFormat('es-ES').format(TREND.board.n)}{' '}
-        operaciones, frente a +{ratio(TREND.board.plain)} sin él, y mejora cada uno de los cinco años: los largos
-        ganan +{ratio(TREND.board.longs)} R y los cortos +{ratio(TREND.board.shorts)}. Sube lo que gana cada
+        operaciones, frente a +{ratio(TREND.board.plain)} sin él, y mejora cada uno de los cinco años: los longs
+        ganan +{ratio(TREND.board.longs)} R y los shorts +{ratio(TREND.board.shorts)}. Sube lo que gana cada
         operación pero quita muchas y se parece al cruce de la EMA 200, así que sirve para elegir qué rupturas
         coger, no para ganar más en conjunto.
       </>
@@ -145,10 +145,10 @@ const FINDINGS: { verdict: Verdict; what: string; detail: ReactNode }[] = [
     what: 'Cobrar la financiación cubriendo lo que tienes (carry)',
     detail: (
       <>
-        Tener la moneda y un corto del mismo tamaño en su perpetuo, mientras la financiación pague:{' '}
+        Tener la moneda y un short del mismo tamaño en su perpetuo, mientras la financiación pague:{' '}
         <strong>{pct(CARRY_EVIDENCE.ownApr, 1)} anual</strong> desde 2022 en {CARRY_EVIDENCE.coins}{' '}
         monedas, positivo en las dos mitades del histórico, y casi sin relación con las estrategias.
-        No es una predicción sino un cobro, con sus riesgos: el margen del corto y que la financiación se
+        No es una predicción sino un cobro, con sus riesgos: el margen del short y que la financiación se
         gire. Está en la sección Financiación.
       </>
     ),
@@ -158,9 +158,9 @@ const FINDINGS: { verdict: Verdict; what: string; detail: ReactNode }[] = [
     what: 'Ir contra la financiación extrema',
     detail: (
       <>
-        Ponerse corto cuando la financiación está en su décimo más alto perdió un{' '}
-        {pct(CARRY_EVIDENCE.contrarianShortWeekly, 1)} por semana: cuando hay muchos largos, el precio
-        suele seguir subiendo. Ordenar el tablero por financiación (largo en la baja, corto en la alta)
+        Ponerse short cuando la financiación está en su décimo más alto perdió un{' '}
+        {pct(CARRY_EVIDENCE.contrarianShortWeekly, 1)} por semana: cuando hay muchos longs, el precio
+        suele seguir subiendo. Ordenar el tablero por financiación (long en la baja, short en la alta)
         tampoco funcionó: un año gana y el siguiente pierde lo mismo.
       </>
     ),
@@ -288,7 +288,7 @@ const FINDINGS: { verdict: Verdict; what: string; detail: ReactNode }[] = [
         Con su propia condición (un mínimo de cinco velas en un nivel, objetivo al doble del riesgo), en el
         diario de OKX sobre 22 monedas: <strong>−0,07 R</strong> por operación, y comprar cualquier mínimo
         confirmado, sin nivel, da +0,03 R: el soporte no suma nada. En 2018–21 sale +0,35 R, pero solo
-        los largos, en un mercado alcista.
+        los longs, en un mercado alcista.
       </>
     ),
   },
@@ -300,12 +300,12 @@ const FINDINGS: { verdict: Verdict; what: string; detail: ReactNode }[] = [
         Un impulso, una corrección que no dure más de la mitad o un tercio, y entrar en el giro o en la
         ruptura del máximo para ir a por la mitad del impulso con un stop a 2 : 1. Medido tal como se cuenta,
         en el diario de OKX sobre 24 monedas (440 operaciones): <strong>−0,02 R</strong> por operación. En
-        2018–21, que nadie había tocado, +0,10 R con un intervalo que incluye el cero y con los largos
-        ganando y los cortos perdiendo: comprar caídas en un mercado alcista. La regla de tiempo ayuda en
+        2018–21, que nadie había tocado, +0,10 R con un intervalo que incluye el cero y con los longs
+        ganando y los shorts perdiendo: comprar caídas en un mercado alcista. La regla de tiempo ayuda en
         un periodo y estorba en el otro. El ejemplo del vídeo es Microsoft en 1994, elegido a posteriori.
         Los dos vídeos siguientes de la misma serie añaden el «primer pivote» (lo mismo en un impulso de
         cualquier tamaño) y salir en tres partes, al 25, al 50 y al 100 % del impulso con un solo stop:
-        medidos aparte, dan −0,10 R, −0,06 R y −0,02 R en 2022–26; solo los largos de 2018–21 ganan. La
+        medidos aparte, dan −0,10 R, −0,06 R y −0,02 R en 2022–26; solo los longs de 2018–21 ganan. La
         última pieza de la serie, el stop que sigue los mínimos crecientes tras cobrar la mitad, añade +0,01 R:
         con él −0,02 R, sin él −0,03 R.
       </>
@@ -316,7 +316,7 @@ const FINDINGS: { verdict: Verdict; what: string; detail: ReactNode }[] = [
     what: 'Canales Donchian combinados con volatilidad objetivo (artículo académico de 2025)',
     detail: (
       <>
-        Nueve ventanas de 5 a 360 días, solo largos, tamaño para una volatilidad del 25 % anual. En BTC desde
+        Nueve ventanas de 5 a 360 días, solo longs, tamaño para una volatilidad del 25 % anual. En BTC desde
         2018 baja la caída máxima de −76 % a −28 % y sube el Sharpe de 0,84 a 1,01, pero mantener{' '}
         <strong>la misma exposición media</strong> ya da 0,84 y −35 %: el timing aporta +0,17 de Sharpe con
         un intervalo que incluye el cero, y en la cesta de 14 monedas aporta 0,00. Lo que reduce el riesgo es
@@ -326,16 +326,16 @@ const FINDINGS: { verdict: Verdict; what: string; detail: ReactNode }[] = [
   },
   {
     verdict: 'ojo',
-    what: 'Fuerza relativa semanal entre las monedas más negociadas (largo-corto)',
+    what: 'Fuerza relativa semanal entre las monedas más negociadas (long-short)',
     detail: (
       <>
         Con las monedas muertas dentro (581 pares de Binance, 2018–2026), comprar cada domingo el tercio de
-        los 30 más negociados más cercano a su máximo de 90 días y vender en corto el más lejano gana{' '}
+        los 30 más negociados más cercano a su máximo de 90 días y vender en short el más lejano gana{' '}
         <strong>+1,7 % por semana</strong> (t 5,0, positivo en los nueve años). El momentum de 1 a 4 semanas
         que se veía en la cesta actual (t 5) era supervivencia: sin ella queda en t 2 a 3 y falla en 2022 y
         2026. Tres límites: entre monedas que llevan años cotizando <strong>no existe</strong> (mediana −0,08 %
         en cestas al azar); dentro de una misma edad tampoco, porque en buena parte es{' '}
-        <strong>la edad</strong> (las listadas hace poco, en caída, frente a las veteranas); y solo largo
+        <strong>la edad</strong> (las listadas hace poco, en caída, frente a las veteranas); y solo long
         rinde lo mismo que BTC con una caída del −84 %. No hay historial de X-Perps para medirlo en OKX. En el Screener
         hay una tarjeta de solo lectura que ordena los contratos así, con estos límites a la vista.
       </>
@@ -397,14 +397,14 @@ const FINDINGS: { verdict: Verdict; what: string; detail: ReactNode }[] = [
   },
   {
     verdict: 'no',
-    what: 'Posicionamiento: open interest, ratios largo/corto y liquidaciones',
+    what: 'Posicionamiento: open interest, ratios long/short y liquidaciones',
     detail: (
       <>
         Binance dejó de publicar las liquidaciones, así que el open interest en monedas hace de proxy. En BTC y
         ETH, el cambio del open interest, los takers y los cuartiles de precio contra OI no anticipan nada con
         |t| mayor de 1,5; y tras un hundimiento del open interest no hay rebote. En 30 perpetuos, el ratio de
-        cuentas largas frente a cortas sale contrario (<strong>−1 % por semana</strong>, t −3,9), pero tres
-        cuartas partes son qué monedas son siempre las más largas: frente a su propia media de 365 días queda
+        cuentas long frente a short sale contrario (<strong>−1 % por semana</strong>, t −3,9), pero tres
+        cuartas partes son qué monedas tienen siempre más cuentas en long: frente a su propia media de 365 días queda
         en −0,3 % (t −0,8). Es otra vez identidad de moneda, no el momento.
       </>
     ),
@@ -472,7 +472,7 @@ const FINDINGS: { verdict: Verdict; what: string; detail: ReactNode }[] = [
     detail: (
       <>
         Tras un cambio de carácter bajista, el contrato va de media un <strong>1 % peor</strong> que el
-        resto la semana siguiente. Poco, pero consistente: úsalo para no entrar en largo.
+        resto la semana siguiente. Poco, pero consistente: úsalo para no entrar en long.
       </>
     ),
   },
@@ -627,7 +627,7 @@ export function Guide() {
         <ul>
           <li>
             <strong>Estructura principal</strong> (línea continua, giros de 50 velas): marca el sentido.
-            Alcista, piensa en largos; bajista, en cortos. Mírala en 4 h o en diario.
+            Alcista, piensa en longs; bajista, en shorts. Mírala en 4 h o en diario.
           </li>
           <li>
             <strong>Estructura interna</strong> (discontinua, giros de 5 velas): marca la fase. Si va en

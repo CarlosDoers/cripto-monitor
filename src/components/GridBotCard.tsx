@@ -17,8 +17,8 @@ import type { GridBot, GridPosition } from '../lib/types'
 import { Badge, Card, DeltaValue, Help, TableWrap } from './ui'
 
 const DIRECTION: Record<string, { label: string; variant: 'buy' | 'sell' | 'neutral' }> = {
-  long: { label: 'Largo', variant: 'buy' },
-  short: { label: 'Corto', variant: 'sell' },
+  long: { label: 'Long', variant: 'buy' },
+  short: { label: 'Short', variant: 'sell' },
   neutral: { label: 'Neutral', variant: 'neutral' },
 }
 
@@ -195,7 +195,7 @@ export function GridBotCard({
           : 'Ha comprado todos los niveles, mantiene la posición entera y ya no puede promediar.')
         : place === 'encima'
           ? `Por encima del rango (${price(num(bot.minPx))} – ${price(num(bot.maxPx))}). ` + (bot.direction === 'short'
-            ? 'Ha vendido todos los niveles, mantiene el corto entero y ya no puede promediar.'
+            ? 'Ha vendido todos los niveles, mantiene el short entero y ya no puede promediar.'
             : 'Lo ha vendido todo y está parado hasta que vuelva.')
           : null
 
@@ -280,7 +280,7 @@ export function GridBotCard({
             <dd>
               {position ? (
                 <>
-                  {usd(num(position.notionalUsd))} <span className="sub">{posSize < 0 ? 'en corto' : 'en largo'}</span>
+                  {usd(num(position.notionalUsd))} <span className="sub">{posSize < 0 ? 'en short' : 'en long'}</span>
                 </>
               ) : (
                 '—'

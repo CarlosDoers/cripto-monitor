@@ -31,6 +31,12 @@ export interface DonchianWatch {
   bias: 'long' | 'short' | null
   /** The open position's side, which can differ from the bias if price crossed the EMA since. */
   side: 'long' | 'short' | null
+  /**
+   * The entry that is on the table: the side just opened (`nueva`), or the one the
+   * candle in progress would open if it closes as it is (`rompiendo`, `cerca`).
+   * It is not the open position's side: a short can be open while a long is forming.
+   */
+  next: 'long' | 'short' | null
   /** Closed 4 h candles since the open position's entry. */
   age: number
   price: number
@@ -66,6 +72,7 @@ export function watchDonchianTrend(rows: OkxCandle[], live: number, instId: stri
       status: 'corto',
       bias: null,
       side: null,
+      next: null,
       age: 0,
       ema: NaN,
       level: NaN,
@@ -103,12 +110,16 @@ export function watchDonchianTrend(rows: OkxCandle[], live: number, instId: stri
   else if (waiting && toLevel / unit <= NEAR_ATR) status = 'cerca'
   else status = open ? 'tendencia' : 'fuera'
 
+  // The entry on the table: the position just opened, or the side the edge belongs to.
+  const next = status === 'nueva' ? side : status === 'rompiendo' || status === 'cerca' ? bias : null
+
   return {
     ...base,
     price,
     status,
     bias,
     side,
+    next,
     age,
     ema: line,
     level: waiting ? level : NaN,

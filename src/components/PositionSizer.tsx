@@ -134,7 +134,7 @@ export function PositionSizer({ instId, signal }: { instId: string; signal?: Str
                 <strong>
                   {qty(sizing.size)} {unit}
                 </strong>
-                <span className="sub">{sizing.side === 'long' ? 'en largo' : 'en corto'}</span>
+                <span className="sub">{sizing.side === 'long' ? 'en long' : 'en short'}</span>
               </li>
               <li>
                 <span>Si salta el stop pierdes</span>

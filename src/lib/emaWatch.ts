@@ -24,7 +24,15 @@ export interface EmaWatch {
   instId: string
   symbol: string
   status: WatchStatus
+  /** The open position's side. */
   side: 'long' | 'short' | null
+  /**
+   * The entry that is on the table: the side just opened (`nueva`), or the one the
+   * strategy would turn to if the candle in progress closes across the EMA
+   * (`cruzando`) or a candle crossed it from where price is (`cerca`). Never the
+   * open position's side, except for a position that has just opened.
+   */
+  next: 'long' | 'short' | null
   /** Closed 4 h candles since the open position's entry. */
   age: number
   price: number
@@ -44,7 +52,7 @@ export function watchEmaCross(rows: OkxCandle[], live: number, instId: string, s
   const candles = toCandles(rows)
   const base = { instId, symbol, bars: candles.length, price: live }
   if (candles.length < EMA_CROSS_SETTINGS.length * 3) {
-    return { ...base, status: 'corto', side: null, age: 0, ema: NaN, distance: NaN, distanceAtr: NaN }
+    return { ...base, status: 'corto', side: null, next: null, age: 0, ema: NaN, distance: NaN, distanceAtr: NaN }
   }
   const r = analyseEmaCross(candles)
   const line = r.overlays[0].values
@@ -70,7 +78,10 @@ export function watchEmaCross(rows: OkxCandle[], live: number, instId: string, s
   else if (distanceAtr <= NEAR_ATR) status = 'cerca'
   else status = open ? 'tendencia' : 'fuera'
 
-  return { ...base, price, status, side, age, ema, distance, distanceAtr, entry: open?.entry, stop: open?.stop }
+  // A cross from the side price is on: above the line it can only turn short, below it long.
+  const next = status === 'nueva' ? side : status === 'cruzando' ? (liveAbove ? 'long' : 'short') : status === 'cerca' ? (liveAbove ? 'short' : 'long') : null
+
+  return { ...base, price, status, side, next, age, ema, distance, distanceAtr, entry: open?.entry, stop: open?.stop }
 }
 
 const RANK: Record<WatchStatus, number> = { nueva: 0, cruzando: 1, cerca: 2, tendencia: 3, fuera: 4, corto: 5 }

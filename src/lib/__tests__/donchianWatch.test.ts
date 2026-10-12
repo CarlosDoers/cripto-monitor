@@ -65,6 +65,7 @@ describe('watchDonchianTrend', () => {
     const w = watch([...flat(0, 699), row(699, 100, 102.5, 99.8, 102)])
     expect(w.status).toBe('nueva')
     expect(w.side).toBe('long')
+    expect(w.next).toBe('long')
     expect(w.bias).toBe('long')
     expect(w.age).toBe(0)
     expect(w.entry).toBe(102)
@@ -78,6 +79,7 @@ describe('watchDonchianTrend', () => {
     const w = watch(flat(0, 700), 101)
     expect(w.status).toBe('rompiendo')
     expect(w.side).toBeNull()
+    expect(w.next).toBe('long')
     expect(w.bias).toBe('long')
     expect(w.level).toBe(100.5)
     expect(w.distance).toBeCloseTo(101 / 100.5 - 1)
@@ -87,12 +89,14 @@ describe('watchDonchianTrend', () => {
     const w = watch(flat(0, 700), 99)
     expect(w.status).toBe('rompiendo')
     expect(w.bias).toBe('short')
+    expect(w.next).toBe('short')
     expect(w.level).toBe(99.5)
   })
 
   it('"cerca": within half an ATR of the edge its bias waits on', () => {
     const w = watch(flat(0, 700), 100.3)
     expect(w.status).toBe('cerca')
+    expect(w.next).toBe('long')
     expect(w.distanceAtr).toBeCloseTo(0.2, 5)
   })
 
@@ -102,6 +106,8 @@ describe('watchDonchianTrend', () => {
     const w = watch(rows, 100.2)
     expect(w.status).toBe('fuera')
     expect(w.side).toBeNull()
+    // Nothing is on the table: it is only waiting, so no direction is offered.
+    expect(w.next).toBeNull()
     expect(w.distanceAtr).toBeGreaterThan(5)
   })
 
@@ -114,6 +120,7 @@ describe('watchDonchianTrend', () => {
     const w = watch(rows)
     expect(w.status).toBe('tendencia')
     expect(w.side).toBe('long')
+    expect(w.next).toBeNull()
     expect(w.age).toBe(9)
     expect(w.level).toBeNaN()
   })
@@ -130,6 +137,20 @@ describe('watchDonchianTrend', () => {
     expect(w.bias).toBe('short')
     expect(w.level).toBe(Math.min(...toCandles(rows).slice(-20).map((c) => c.low)))
     expect(['rompiendo', 'cerca', 'tendencia']).toContain(w.status)
+  })
+
+  it('a short open while a long is forming: the entry on the table is the long', () => {
+    // Short since the slide below the EMA, then a jump back above it and past the 20-candle high.
+    const down = Array.from({ length: 30 }, (_, k) => row(670 + k, 100 - k, 100.5 - k, 99 - k, 99.5 - k))
+    const rows = [...flat(0, 670), ...down]
+    const short = watch(rows)
+    expect(short.side).toBe('short')
+    const w = watch(rows, 400)
+    // Far above the EMA and over the channel's high: the bias is long whatever the open position is.
+    expect(w.bias).toBe('long')
+    expect(w.next).toBe('long')
+    expect(w.side).toBe('short')
+    expect(w.status).toBe('rompiendo')
   })
 
   it('shows the current stop of an old trade, not its initial one', () => {
@@ -152,6 +173,7 @@ describe('compareDonchianWatch', () => {
     status,
     bias: 'long',
     side: null,
+    next: null,
     age,
     price: 1,
     ema: 1,

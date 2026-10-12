@@ -4454,6 +4454,14 @@ table.data td.num {
   margin-left: auto;
 }
 
+/* A watch card's signal and position cells: the side chip and what goes with it, kept together. */
+.watch-signal {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+}
+
 /* The watch lists' "qué pasa" is a sentence, not a figure: it may wrap — in the
    table and in the phone's cards, where a nowrap cell ran off its card's edge. */
 table.data td.watch-what {
@@ -4966,7 +4974,7 @@ table.data td.watch-what {
   font-variant-numeric: tabular-nums;
 }
 
-/* A unit beside a figure ("en largo") reads in the text face and stays with it. */
+/* A unit beside a figure ("en long") reads in the text face and stays with it. */
 .bot-figures dd .sub {
   font-family: var(--font);
   font-size: 11.5px;

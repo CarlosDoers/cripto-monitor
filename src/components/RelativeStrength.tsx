@@ -183,7 +183,7 @@ export function RelativeStrength({ markets }: { markets: Market[] }) {
         <Help label="Fuerza relativa">
           <p>
             Ordena los contratos cripto más negociados por lo cerca que está su precio del máximo de los últimos{' '}
-            {HIGH_WINDOW} días. La medición, cada domingo, compraba el tercio más cercano y vendía en corto el más
+            {HIGH_WINDOW} días. La medición, cada domingo, compraba el tercio más cercano y vendía en short el más
             lejano, una semana, a partes iguales.
           </p>
           <p>
@@ -196,7 +196,7 @@ export function RelativeStrength({ markets }: { markets: Market[] }) {
             {signed(E.halves[1])} %.
           </p>
           <p>
-            <strong>Por qué esto no es una lista de compras.</strong> Es largo-corto: solo la pata larga rinde lo mismo
+            <strong>Por qué esto no es una lista de compras.</strong> Es long-short: solo la pata long rinde lo mismo
             que BTC ({signed(E.longOnly.yearPct, 0)} % al año frente a {signed(E.longOnly.btcYearPct, 0)} %) con una
             caída de {signed(E.longOnly.drawdownPct, 0)} %. Entre monedas que llevan años cotizando <em>no existe</em>{' '}
             (cestas al azar: mediana {signed(E.survivors[1])} %) y dentro de una misma edad tampoco (de{' '}
@@ -224,7 +224,7 @@ export function RelativeStrength({ markets }: { markets: Market[] }) {
               <LegList title="Más cerca de su máximo" note="el tercio que la medición compraba" rows={ranking.top} listed={listed} />
               <LegList
                 title="Más lejos de su máximo"
-                note="el tercio que la medición vendía en corto"
+                note="el tercio que la medición vendía en short"
                 rows={[...ranking.bottom].reverse()}
                 listed={listed}
               />
@@ -246,7 +246,7 @@ export function RelativeStrength({ markets }: { markets: Market[] }) {
                 <Leg title="Más cerca de su máximo" note="el tercio que la medición compraba" rows={ranking.top} listed={listed} />
                 <Leg
                   title="Más lejos de su máximo"
-                  note="el tercio que la medición vendía en corto"
+                  note="el tercio que la medición vendía en short"
                   rows={[...ranking.bottom].reverse()}
                   listed={listed}
                 />
@@ -254,7 +254,7 @@ export function RelativeStrength({ markets }: { markets: Market[] }) {
             </TableWrap>
           )}
           <p className="ema-rest">
-            Contexto medido en Binance spot, no una señal: sin stop ni objetivo, y solo largo rinde lo mismo que BTC. En
+            Contexto medido en Binance spot, no una señal: sin stop ni objetivo, y solo long rinde lo mismo que BTC. En
             buena parte ordena por edad: la mediana de los de arriba cotiza en OKX spot{' '}
             {listedText(medianOf(ranking.top.map(listed)))} y la de los de abajo{' '}
             {listedText(medianOf(ranking.bottom.map(listed)))}.

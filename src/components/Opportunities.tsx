@@ -40,7 +40,7 @@ function Tile({ o, rank, foldable }: { o: Opportunity; rank: number; foldable: b
     <>
       <span className="opp-rank">{rank}</span>
       <span className="opp-symbol">{o.symbol}</span>
-      <Badge variant={long ? 'buy' : 'sell'}>{long ? 'Largo' : 'Corto'}</Badge>
+      <Badge variant={long ? 'buy' : 'sell'}>{long ? 'Long' : 'Short'}</Badge>
       {o.held && <Badge variant="neutral">ya abierta</Badge>}
     </>
   )
@@ -111,7 +111,7 @@ function WatchTile({ watching, span }: { watching: Watch[]; span: number }) {
             <a className="card-link" href={routeHref('estrategias', { inst: x.instId })}>
               {x.symbol}
             </a>
-            <Badge variant={x.side === 'long' ? 'buy' : 'sell'}>{x.side === 'long' ? 'Largo' : 'Corto'}</Badge>
+            <Badge variant={x.side === 'long' ? 'buy' : 'sell'}>{x.side === 'long' ? 'Long' : 'Short'}</Badge>
           </li>
         ))}
       </ul>
@@ -173,7 +173,7 @@ export function Opportunities() {
                     {x.symbol}
                   </a>{' '}
                   <span className="sub">
-                    ({x.side === 'long' ? 'largo' : 'corto'}, 1:{ratio(x.remaining)})
+                    ({x.side === 'long' ? 'long' : 'short'}, 1:{ratio(x.remaining)})
                   </span>
                 </span>
               ))}
@@ -188,7 +188,7 @@ export function Opportunities() {
                   <a className="card-link" href={routeHref('estrategias', { inst: x.instId })}>
                     {x.symbol}
                   </a>{' '}
-                  <span className="sub">({x.side === 'long' ? 'largo' : 'corto'})</span>
+                  <span className="sub">({x.side === 'long' ? 'long' : 'short'})</span>
                 </span>
               ))}
               <span className="sub">

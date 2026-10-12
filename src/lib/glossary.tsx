@@ -42,7 +42,7 @@ export const HELP = {
         <strong>dentro</strong> del rango.
       </p>
       <p>
-        Fuera deja de operar. En un bot largo, por debajo del mínimo ya ha comprado todos los niveles: mantiene la
+        Fuera deja de operar. En un bot long, por debajo del mínimo ya ha comprado todos los niveles: mantiene la
         posición entera, no le queda con qué comprar y su límite es la liquidación. Por encima del máximo lo ha vendido
         todo y espera parado a que el precio vuelva.
       </p>
@@ -57,7 +57,7 @@ export const HELP = {
   gridFloat: (
     <p>
       La ganancia o pérdida de la posición que el bot mantiene abierta ahora mismo, a precio de mercado. No es lo
-      que llevas ganado: es la parte del resultado que todavía no está cobrada. Un bot largo compra mientras el
+      que llevas ganado: es la parte del resultado que todavía no está cobrada. Un bot long compra mientras el
       precio baja, así que tras una caída tiene monedas compradas más caras que el precio actual y el flotante sale
       negativo; si el precio vuelve, las vende nivel a nivel y esa pérdida se convierte en beneficio de la rejilla.
     </p>
@@ -245,7 +245,7 @@ export const HELP = {
   funding: (
     <>
       <p>
-        Pago cada 8 horas entre largos y cortos de un perpetuo, para que su precio no se separe
+        Pago cada 8 horas entre longs y shorts de un perpetuo, para que su precio no se separe
         del precio spot.
       </p>
       <p>Según hacia dónde se incline el mercado, lo pagas o lo cobras.</p>
@@ -457,7 +457,7 @@ export const HELP = {
   basis: (
     <p>
       Diferencia entre el precio del contrato y el precio spot. Positiva: el contrato está más caro
-      que el spot, y al acercarse los dos un largo pierde esa diferencia y un corto la gana.
+      que el spot, y al acercarse los dos un long pierde esa diferencia y un short la gana.
     </p>
   ),
   openInterest: (
@@ -521,12 +521,12 @@ export const HELP = {
   carry: (
     <>
       <p>
-        Tener una moneda y abrir a la vez un <strong>corto del mismo tamaño</strong> en su perpetuo. Si
-        el precio sube, lo que ganas en la moneda lo pierdes en el corto, y al revés: el precio deja de
+        Tener una moneda y abrir a la vez un <strong>short del mismo tamaño</strong> en su perpetuo. Si
+        el precio sube, lo que ganas en la moneda lo pierdes en el short, y al revés: el precio deja de
         importar.
       </p>
       <p>
-        Lo que queda es la financiación: cuando es positiva, los largos pagan a los cortos cada 8 horas, y
+        Lo que queda es la financiación: cuando es positiva, los longs pagan a los shorts cada 8 horas, y
         tú cobras.
       </p>
     </>
@@ -551,7 +551,7 @@ export const HELP = {
   ),
   carryContracts: (
     <p>
-      Contratos en corto que igualan lo que tienes de la moneda, redondeados hacia abajo. Con menos quedas
+      Contratos en short que igualan lo que tienes de la moneda, redondeados hacia abajo. Con menos quedas
       cubierto solo en parte; con más, apuestas a que baja.
     </p>
   ),

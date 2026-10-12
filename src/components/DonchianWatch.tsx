@@ -12,6 +12,7 @@ import { routeHref } from '../lib/router'
 import { hoursOf as hours, useWatchScan } from '../lib/useWatchScan'
 import { Badge, Card, Help, TableSkeleton, TableWrap } from './ui'
 import { WatchControls } from './WatchControls'
+import { SideBadge, WatchLegend } from './WatchCells'
 
 const STATUS: Record<DonchianStatus, { label: string; variant: 'live' | 'buy' | 'warn' | 'neutral' }> = {
   nueva: { label: 'Señal nueva', variant: 'live' },
@@ -25,23 +26,24 @@ const STATUS: Record<DonchianStatus, { label: string; variant: 'live' | 'buy' | 
 const signed = (x: number) => `${x >= 0 ? '+' : '−'}${ratio(Math.abs(x))}`
 const thousands = (n: number) => new Intl.NumberFormat('es-ES').format(n)
 
-const entry = (w: Watch) => (w.entry === undefined ? '—' : price(w.entry))
 
 function what(w: Watch): string {
   const long = w.bias === 'long'
   const edge = long ? 'el máximo' : 'el mínimo'
   const ofEma = long ? 'sobre' : 'bajo'
+  // What closing there would do: turn an open position the other way, or open one.
+  const turn = w.side && w.bias ? `cierra el ${w.side} y abre un ${w.bias}` : `abre un ${w.bias}`
   switch (w.status) {
     case 'nueva':
-      return `${w.side === 'long' ? 'largo' : 'corto'}: cerró ${w.side === 'long' ? 'sobre el máximo y sobre' : 'bajo el mínimo y bajo'} la EMA 200 hace ${hours(w.age + 1)} · entrada ${entry(w)}`
+      return `abrió un ${w.side}: cerró ${w.side === 'long' ? 'sobre el máximo y sobre' : 'bajo el mínimo y bajo'} la EMA 200 hace ${hours(w.age + 1)}`
     case 'rompiendo':
-      return `la vela en curso ya ${long ? 'supera' : 'pierde'} ${edge} de 20 velas, ${ofEma} la EMA 200: si cierra así, ${w.side ? 'da la vuelta' : `entra en ${long ? 'largo' : 'corto'}`}`
+      return `la vela en curso ya ${long ? 'supera' : 'pierde'} ${edge} de 20 velas, ${ofEma} la EMA 200: si cierra así, ${turn}`
     case 'cerca':
-      return `${ofEma} la EMA 200, a ${ratio(w.distanceAtr, 1)} ATR de ${edge} de 20 velas: una vela podría romperlo${w.side ? ' y darle la vuelta' : ''}`
+      return `${ofEma} la EMA 200, a ${ratio(w.distanceAtr, 1)} ATR del ${long ? 'máximo' : 'mínimo'} de 20 velas: si una vela cierra más allá, ${turn}`
     case 'tendencia':
-      return `${w.side === 'long' ? 'largo' : 'corto'} desde hace ${hours(w.age)} · entrada ${entry(w)}${w.side !== w.bias ? ' · ya perdió la EMA 200' : ''}`
+      return `${w.side} desde hace ${hours(w.age)}${w.side !== w.bias ? ' · ya perdió la EMA 200' : ''}`
     case 'fuera':
-      return `${ofEma} la EMA 200, sin ruptura: espera un cierre ${long ? 'sobre' : 'bajo'} ${edge} de 20 velas`
+      return `${ofEma} la EMA 200, sin ruptura: espera un cierre ${long ? 'sobre' : 'bajo'} ${edge} de 20 velas para abrir un ${w.bias}`
     case 'corto':
       return `${w.bars} velas de 4 h; hacen falta ${w.need}`
   }
@@ -84,7 +86,7 @@ export function DonchianWatch({ markets }: { markets: Market[] }) {
         <Help label="Qué vigilar">
           <p>
             La estrategia: entra cuando una vela de 4 h cierra por encima del máximo de las 20 anteriores y por encima
-            de la EMA 200 (largo), o por debajo del mínimo y de la EMA (corto). Stop de 2 ATR, un trailing de 8 ATR que
+            de la EMA 200 (long), o por debajo del mínimo y de la EMA (short). Stop de 2 ATR, un trailing de 8 ATR que
             deja correr la tendencia y ningún objetivo fijo.
           </p>
           <p>
@@ -92,8 +94,8 @@ export function DonchianWatch({ markets }: { markets: Market[] }) {
             <strong>{signed(EVIDENCE.board.net)} R</strong> por operación ({thousands(EVIDENCE.board.n)} operaciones),
             positiva en las dos mitades ({signed(EVIDENCE.board.halves[0])} / {signed(EVIDENCE.board.halves[1])}) y
             frente a {signed(EVIDENCE.board.plain)} R sin el filtro. En 2018–2021, un periodo que no se tocó,{' '}
-            {signed(EVIDENCE.old.net)} R frente a {signed(EVIDENCE.old.plain)}. Los largos ganan mucho más (
-            {signed(EVIDENCE.board.longs)} R) que los cortos ({signed(EVIDENCE.board.shorts)} R).
+            {signed(EVIDENCE.old.net)} R frente a {signed(EVIDENCE.old.plain)}. Los longs ganan mucho más (
+            {signed(EVIDENCE.board.longs)} R) que los shorts ({signed(EVIDENCE.board.shorts)} R).
           </p>
           <p>
             Acierta una de cada cuatro y sin sus diez mejores operaciones queda en {signed(EVIDENCE.board.withoutBest10)}{' '}
@@ -103,6 +105,11 @@ export function DonchianWatch({ markets }: { markets: Market[] }) {
           <p>
             <strong>Señal nueva</strong> es la entrada medida, en las dos últimas velas. <strong>Rompiendo</strong> y{' '}
             <strong>cerca</strong> son para tenerlos a la vista. Entrar en una tendencia ya empezada no está medido.
+          </p>
+          <p>
+            La columna <strong>Señal</strong> es la entrada que se está gestando y la <strong>Posición ahora</strong> la
+            que la regla ya tiene abierta, simulada: no es tu cuenta. Pueden ser contrarias — por ejemplo, un short
+            abierto cuya vela en curso ya rompe hacia arriba: si cierra así, cierra el short y abre un long.
           </p>
         </Help>
       }
@@ -118,12 +125,13 @@ export function DonchianWatch({ markets }: { markets: Market[] }) {
             <thead>
               <tr>
                 <th>Contrato</th>
-                <th>Estado</th>
+                <th>Señal</th>
+                <th>Posición ahora</th>
                 <th>Qué pasa</th>
                 <th className="num">Precio</th>
                 <th className="num">Ruptura en</th>
                 <th className="num">Distancia</th>
-                <th className="num">Stop</th>
+                <th className="num">Stop de la posición</th>
                 <th>Gráfico</th>
               </tr>
             </thead>
@@ -133,17 +141,25 @@ export function DonchianWatch({ markets }: { markets: Market[] }) {
                 return (
                   <tr key={w.instId}>
                     <td>
-                      <span>
-                        <span className="ccy">{w.symbol}</span>{' '}
-                        {w.side && (
-                          <Badge variant={w.side === 'long' ? 'buy' : 'sell'}>{w.side === 'long' ? 'Largo' : 'Corto'}</Badge>
-                        )}
+                      <span className="ccy">{w.symbol}</span>
+                    </td>
+                    <td>
+                      <span className="watch-signal">
+                        {w.next && <SideBadge side={w.next} />}
+                        <Badge variant={s.variant} pulse={w.status === 'nueva' || w.status === 'rompiendo'}>
+                          {s.label}
+                        </Badge>
                       </span>
                     </td>
                     <td>
-                      <Badge variant={s.variant} pulse={w.status === 'nueva' || w.status === 'rompiendo'}>
-                        {s.label}
-                      </Badge>
+                      {w.side ? (
+                        <span className="watch-signal">
+                          <SideBadge side={w.side} />
+                          {w.entry !== undefined && <span className="sub">entrada {price(w.entry)}</span>}
+                        </span>
+                      ) : (
+                        <span className="sub">—</span>
+                      )}
                     </td>
                     <td className="sub watch-what">{what(w)}</td>
                     <td className="num">{price(w.price)}</td>
@@ -170,6 +186,7 @@ export function DonchianWatch({ markets }: { markets: Market[] }) {
           </table>
         </TableWrap>
       )}
+      {ids && rows.length > 0 && <WatchLegend />}
     </Card>
   )
 }

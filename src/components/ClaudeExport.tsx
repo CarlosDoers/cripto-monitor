@@ -137,7 +137,7 @@ export function ClaudeExport() {
               <input type="checkbox" checked={funding} onChange={(e) => setFunding(e.target.checked)} />
               <span>
                 Financiación
-                <span className="sub">qué paga hoy cubrir con un corto las monedas que tienes</span>
+                <span className="sub">qué paga hoy cubrir con un short las monedas que tienes</span>
               </span>
             </label>
           </fieldset>

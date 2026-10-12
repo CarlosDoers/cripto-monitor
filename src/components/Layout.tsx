@@ -96,7 +96,7 @@ const NAV: Record<Route, { label: string; description: string; group: NavGroup; 
   },
   financiacion: {
     label: 'Financiación',
-    description: '¿Dónde se cobra por esperar? Cubrir lo que tienes con un corto y cobrar la financiación, sin apostar por el precio.',
+    description: '¿Dónde se cobra por esperar? Cubrir lo que tienes con un short y cobrar la financiación, sin apostar por el precio.',
     group: 'mercado',
     Icon: IconFunding,
   },

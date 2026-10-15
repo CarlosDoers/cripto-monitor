@@ -1,17 +1,9 @@
-import { timingSafeEqual } from 'node:crypto'
+import { isCron } from './_cron.js'
 import { historyEnabled, measure, readHistory, record } from './_history.js'
 import { checkAccess } from './_okx.js'
 
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json', 'cache-control': 'no-store' } })
-
-/** Vercel's cron sends `Authorization: Bearer $CRON_SECRET`, and only when CRON_SECRET is set. */
-function isCron(request: Request): boolean {
-  const secret = process.env.CRON_SECRET ?? ''
-  const given = request.headers.get('authorization') ?? ''
-  const expected = `Bearer ${secret}`
-  return secret.length >= 16 && given.length === expected.length && timingSafeEqual(Buffer.from(given), Buffer.from(expected))
-}
 
 /**
  * The net-worth history (`_history.ts`).

@@ -75,6 +75,22 @@ describe('watchDonchianTrend', () => {
     expect(w.distanceAtr).toBeNaN()
   })
 
+  it('carries the close time and the volume of the candle the position entered on', () => {
+    // Every row of the fixture has volume 1, so the entry candle is 1× the mean of the twenty before it.
+    const w = watch([...flat(0, 699), row(699, 100, 102.5, 99.8, 102)])
+    expect(w.entryAt).toBe(700 * H4)
+    expect(w.volume).toBeCloseTo(1)
+    // Without a position there is no entry candle to describe.
+    const idle = watch(flat(0, 700), 100)
+    expect(idle.entryAt).toBeUndefined()
+    expect(idle.volume).toBeUndefined()
+  })
+
+  it('takes the candle length of the reading: a 1 h entry closes an hour after it opened', () => {
+    const w = watchDonchianTrend([...flat(0, 699), row(699, 100, 102.5, 99.8, 102)], 0, 'TEST-USD_UM_XPERP-1', 'TEST', 3_600_000)
+    expect(w.entryAt).toBe(699 * H4 + 3_600_000)
+  })
+
   it('"rompiendo": the candle in progress is already beyond the edge, and no position is open', () => {
     const w = watch(flat(0, 700), 101)
     expect(w.status).toBe('rompiendo')

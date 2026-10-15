@@ -25,6 +25,7 @@ import {
   IconBook,
   IconFunding,
   IconBots,
+  IconLedger,
 } from './icons'
 
 type NavGroup = 'cuenta' | 'mercado' | 'ayuda'
@@ -93,6 +94,12 @@ const NAV: Record<Route, { label: string; description: string; group: NavGroup; 
     description: '¿Hay alguna señal? Las estrategias medidas, con sus resultados reales.',
     group: 'mercado',
     Icon: IconTarget,
+  },
+  seguimiento: {
+    label: 'Seguimiento',
+    description: '¿Sigue funcionando en vivo lo que se midió? Cada señal nueva, apuntada antes de conocer su resultado.',
+    group: 'mercado',
+    Icon: IconLedger,
   },
   financiacion: {
     label: 'Financiación',

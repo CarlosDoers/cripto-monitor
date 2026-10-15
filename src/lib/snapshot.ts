@@ -6,9 +6,13 @@ import { analyseEmaTouch, compareTouches, dayLabel, EMA_TOUCH_EVIDENCE, emaTouch
 import { activeCurrency, convert } from './currency'
 import { compareDonchianWatch, watchDonchianTrend, type DonchianWatch } from './donchianWatch'
 import { compareWatch, watchEmaCross, type EmaWatch } from './emaWatch'
+import { btcRegime, contextLine, type BtcRegime } from './entryContext'
+import { DONCHIAN_TREND_EVIDENCE } from './indicators/donchianBreakout'
+import { rowContext } from './watchContext'
+import { barChoice } from './watchBars'
 import { duration, num, pct, plural, price, qty, ratio, share, signedUsd, usd } from './format'
 import { guardsFor, isShort, liquidationDistance, PARTIAL_STOP, positionSize, stopCoverage, stopOf, targetOf } from './guards'
-import { measuredThroughText, MIN_TRADABLE_R, profileOf, STRATEGIES, tradableTimeframes } from './indicators/registry'
+import { measuredThroughText, MIN_TRADABLE_R, profileOf, STRATEGIES, strategyByKey, tradableTimeframes } from './indicators/registry'
 import { measuredContracts, scanReversal } from './opportunities'
 import { computePerformance, MIN_SAMPLE, type Performance } from './performance'
 import { buildPortfolio, type PortfolioCore } from './portfolioCore'
@@ -497,7 +501,25 @@ export function liquidCrypto(m: RawMarket, top: number) {
     .slice(0, top)
 }
 
-export async function signalsText(get: Get, market: RawMarket, opts: { ema: number; touch?: number }) {
+/** Up to `pages` × 300 candles of one contract, oldest first: what the cards' board query fetches, paced by the caller. */
+async function candlePages(get: Get, instId: string, bar: string, pages: number): Promise<Candle[]> {
+  const all: Candle[] = []
+  let after: string | undefined
+  for (let page = 0; page < pages; page++) {
+    const batch = await get<Candle>('/api/v5/market/candles', { instId, bar, limit: 300, after })
+    if (!batch.length) break
+    all.push(...batch)
+    after = batch[batch.length - 1][0]
+    if (batch.length < 300) break
+  }
+  return all.sort((a, b) => Number(a[0]) - Number(b[0]))
+}
+
+/**
+ * `short` adds the Ruptura + EMA 200 reading on 1 h — four more pages of candles
+ * per contract, so about 40 requests for ten — when the registry offers it.
+ */
+export async function signalsText(get: Get, market: RawMarket, opts: { ema: number; touch?: number; short?: boolean }) {
   // Only where the reversal's edge was measured, like the Resumen's panel.
   const reversalSet = measuredContracts(liquidCrypto(market, 400))
   const emaSet = liquidCrypto(market, opts.ema)
@@ -510,21 +532,31 @@ export async function signalsText(get: Get, market: RawMarket, opts: { ema: numb
     .map((x, i) => ({ x, scan: i < daily.length ? scanReversal(toCandles(daily[i]), x.last) : null }))
     .filter((r) => r.scan?.kind === 'watch')
 
-  const fourHour = await paced(emaSet, async (x) => {
-    const all: Candle[] = []
-    let after: string | undefined
-    for (let page = 0; page < 5; page++) {
-      const batch = await get<Candle>('/api/v5/market/candles', { instId: x.instId, bar: '4H', limit: 300, after })
-      if (!batch.length) break
-      all.push(...batch)
-      after = batch[batch.length - 1][0]
-      if (batch.length < 300) break
-    }
-    return all.sort((a, b) => Number(a[0]) - Number(b[0]))
-  })
+  const fourHour = await paced(emaSet, (x) => candlePages(get, x.instId, '4H', 5))
   const ema: EmaWatch[] = emaSet.map((x, i) => watchEmaCross(fourHour[i], x.last, x.instId, x.symbol)).sort(compareWatch)
   // The same candles: the second watch costs no request.
   const trend: DonchianWatch[] = emaSet.map((x, i) => watchDonchianTrend(fourHour[i], x.last, x.instId, x.symbol)).sort(compareDonchianWatch)
+
+  // BTC's regime, for the context column: its own 4 h candles, five requests. Without them the column is empty.
+  let regime: BtcRegime | null = null
+  try {
+    regime = btcRegime(toCandles(await candlePages(get, 'BTC-USDT', '4H', 5)))
+  } catch {
+    regime = null
+  }
+  const context = (w: DonchianWatch | EmaWatch, strategy: string, preset: string, bar: string) =>
+    contextLine(rowContext(w, regime, strategy, preset, bar)) || '—'
+
+  // The 1 h reading of the breakout, when asked for and when the registry offers it there.
+  const donchian = strategyByKey('donchian')
+  const hourlyOffered = Boolean(opts.short) && barChoice(profileOf(donchian, 'trend'), '1H').allowed
+  let hourly: DonchianWatch[] = []
+  if (hourlyOffered) {
+    const oneHour = await paced(emaSet, (x) => candlePages(get, x.instId, '1H', 4))
+    hourly = emaSet
+      .map((x, i) => watchDonchianTrend(oneHour[i], x.last, x.instId, x.symbol, 3_600_000))
+      .sort(compareDonchianWatch)
+  }
 
   const rev = live.map(({ x, scan }) => {
     const o = scan!.kind === 'signal' ? scan!.opportunity : null
@@ -548,7 +580,7 @@ export async function signalsText(get: Get, market: RawMarket, opts: { ema: numb
     fuera: 'sin posición',
     corto: 'historial corto',
   }
-  const hoursOf = (age: number) => (age * 4 < 48 ? `${age * 4} h` : `${Math.round(age / 6)} días`)
+  const hoursOf = (age: number, per = 4) => (age * per < 48 ? `${age * per} h` : `${Math.round((age * per) / 24)} días`)
   const touchSection = opts.touch ? await emaTouchText(get, liquidCrypto(market, opts.touch)) : ''
   return [
     `# Señales en vivo — ${when(Date.now())}`,
@@ -560,29 +592,53 @@ export async function signalsText(get: Get, market: RawMarket, opts: { ema: numb
     `## Ruptura + EMA 200 en 4 h (${emaSet.length} más negociados)`,
     'Long si cierra sobre el máximo de 20 velas y sobre la EMA 200; short bajo el mínimo y bajo la EMA. Solo la "señal nueva" es la entrada medida; entrar en una tendencia ya empezada no está medido. "Señal" es la entrada que abriría la regla si la vela cierra como está (→ su dirección); "Posición ahora" es la que la regla ya tiene abierta, simulada, y a ella pertenece el stop: puede ser contraria (un short abierto con un long en camino). El stop es el vigente: el trailing de 8 ATR cuando ha pasado al inicial.',
     table(
-      ['Activo', 'Señal', 'Posición ahora', 'Desde', 'Precio', 'Ruptura en', 'Distancia', 'Stop de la posición'],
+      ['Activo', 'Señal', 'Posición ahora', 'Desde', 'Contexto', 'Precio', 'Ruptura en', 'Distancia', 'Stop de la posición'],
       trend.map((w) => [
         w.symbol,
         // The entry on the table, with its direction; none when it is only waiting or already in a trade.
         `${trendStatus[w.status]}${w.next ? ` → ${w.next === 'long' ? 'Long' : 'Short'}` : ''}`,
         w.side === 'long' ? 'Long' : w.side === 'short' ? 'Short' : '—',
         w.side ? hoursOf(w.age) : '—',
+        context(w, 'donchian', 'trend', '4H'),
         price(w.price),
         Number.isFinite(w.level) ? price(w.level) : '—',
         Number.isFinite(w.distance) ? `${pct(w.distance)} (${ratio(w.distanceAtr, 1)} ATR)` : '—',
         w.stop !== undefined ? price(w.stop) : '—',
       ]),
     ),
+    contextNote(regime),
     '',
+    hourlyOffered
+      ? [
+          `## Ruptura + EMA 200 en 1 h (${emaSet.length} más negociados) — lectura corta`,
+          `La misma regla sobre velas de 1 h, el marco justo de esta estrategia: sobre 30 criptos desde 2022 mide ${signedR(DONCHIAN_TREND_EVIDENCE.hourly.net)} R por operación (${signedR(DONCHIAN_TREND_EVIDENCE.hourly.doubleFee)} R con el doble de comisión; ${signedR(DONCHIAN_TREND_EVIDENCE.hourly.withoutBest10)} R sin sus diez mejores operaciones), con los longs en ${signedR(DONCHIAN_TREND_EVIDENCE.hourly.longs)} R y los shorts en ${signedR(DONCHIAN_TREND_EVIDENCE.hourly.shorts)} R: en 1 h un short no tiene ventaja medida. Salta varias veces al día, el stop queda más cerca y entrar con la tendencia empezada no está medido. Úsala junto a la de 4 h, no en su lugar.`,
+          table(
+            ['Activo', 'Señal', 'Posición ahora', 'Desde', 'Contexto', 'Precio', 'Ruptura en', 'Distancia', 'Stop de la posición'],
+            hourly.map((w) => [
+              w.symbol,
+              `${trendStatus[w.status]}${w.next ? ` → ${w.next === 'long' ? 'Long' : 'Short'}` : ''}`,
+              w.side === 'long' ? 'Long' : w.side === 'short' ? 'Short' : '—',
+              w.side ? hoursOf(w.age, 1) : '—',
+              context(w, 'donchian', 'trend', '1H'),
+              price(w.price),
+              Number.isFinite(w.level) ? price(w.level) : '—',
+              Number.isFinite(w.distance) ? `${pct(w.distance)} (${ratio(w.distanceAtr, 1)} ATR)` : '—',
+              w.stop !== undefined ? price(w.stop) : '—',
+            ]),
+          ),
+          '',
+        ].join('\n\n')
+      : '',
     `## EMA 200 en 4 h (${emaSet.length} más negociados)`,
     'Solo la "señal nueva" es la entrada medida; entrar en una tendencia ya empezada no está medido. "Señal" es la entrada que abriría la estrategia si la vela cierra como está (→ su dirección); "Posición ahora" es la que ya tiene abierta, simulada: mientras cruza, son contrarias.',
     table(
-      ['Activo', 'Señal', 'Posición ahora', 'Desde', 'Precio', 'EMA 200', 'Distancia', 'Stop de la posición'],
+      ['Activo', 'Señal', 'Posición ahora', 'Desde', 'Contexto', 'Precio', 'EMA 200', 'Distancia', 'Stop de la posición'],
       ema.map((w) => [
         w.symbol,
         `${watchStatus[w.status]}${w.next ? ` → ${w.next === 'long' ? 'Long' : 'Short'}` : ''}`,
         w.side === 'long' ? 'Long' : w.side === 'short' ? 'Short' : '—',
         w.side ? (w.age * 4 < 48 ? `${w.age * 4} h` : `${Math.round(w.age / 6)} días`) : '—',
+        context(w, 'ema200', 'base', '4H'),
         price(w.price),
         Number.isFinite(w.ema) ? price(w.ema) : '—',
         Number.isFinite(w.distance) ? `${pct(w.distance)} (${ratio(w.distanceAtr, 1)} ATR)` : '—',
@@ -594,6 +650,19 @@ export async function signalsText(get: Get, market: RawMarket, opts: { ema: numb
   ]
     .filter((x) => x !== '')
     .join('\n\n')
+}
+
+/**
+ * What the "Contexto" column is, and what BTC's regime is now. Said once under
+ * the first table: a model reading "BTC bajo su EMA 200" in a column otherwise
+ * takes it for a recommendation to stay out.
+ */
+function contextNote(regime: BtcRegime | null): string {
+  const now =
+    regime && regime.latest.above !== null
+      ? ` Ahora BTC está ${regime.latest.above ? 'sobre' : 'bajo'} su EMA 200 de 4 h (cierre de ${price(regime.latest.close)} frente a ${price(regime.latest.ema)}).`
+      : ''
+  return `«Contexto» dice qué era cierto cuando entró la posición (o qué lo es ahora, si la entrada se está gestando): el lado de la EMA 200 de 4 h en que estaba BTC, el volumen de la vela frente a la media de las 20 anteriores y si cerró en fin de semana. En el histórico, con BTC debajo, con poco volumen o en fin de semana ganaron menos; describe y no puntúa ni filtra: se encontró mirando datos y se está poniendo a prueba en el seguimiento.${now}`
 }
 
 /** The last 3 candles: today (still forming), yesterday and the day before — the card's default. */

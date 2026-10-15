@@ -21,10 +21,45 @@ describe('the claude.ai connector', () => {
     expect(body.result.protocolVersion).toBe('2025-11-25')
   })
 
-  it('lists six read-only tools', async () => {
+  it('lists seven read-only tools', async () => {
     const body = await (await post({ jsonrpc: '2.0', id: 2, method: 'tools/list' })).json()
-    expect(body.result.tools).toHaveLength(6)
+    expect(body.result.tools).toHaveLength(7)
+    expect(body.result.tools.map((t: { name: string }) => t.name)).toContain('seguimiento')
     for (const t of body.result.tools) expect(t.annotations.readOnlyHint).toBe(true)
+  })
+
+  it('offers the short reading of the breakout as an option of senales, off by default', async () => {
+    const body = await (await post({ jsonrpc: '2.0', id: 2, method: 'tools/list' })).json()
+    const senales = body.result.tools.find((t: { name: string }) => t.name === 'senales')
+    expect(senales.inputSchema.properties.corto_plazo).toMatchObject({ type: 'boolean', default: false })
+  })
+
+  it('reads the tracking ledger through what the server hands it, and says so when there is none', async () => {
+    const call = (extras?: Parameters<typeof handleMcp>[2]) =>
+      handleMcp(
+        new Request('http://x/api/mcp', {
+          method: 'POST',
+          body: JSON.stringify({ jsonrpc: '2.0', id: 7, method: 'tools/call', params: { name: 'seguimiento' } }),
+        }),
+        noOkx,
+        extras,
+      ).then((r) => r.json())
+    const none = await call()
+    expect(none.result.content[0].text).toContain('todavía no tiene datos')
+    const ledger = {
+      version: 1,
+      startedAt: Date.UTC(2026, 9, 1),
+      lastRun: Date.UTC(2026, 9, 15),
+      runs: 3,
+      since: {},
+      universe: {},
+      processed: {},
+      entries: [],
+    }
+    const some = await call({ ledger: async () => ledger })
+    expect(some.result.isError).toBeUndefined()
+    expect(some.result.content[0].text).toContain('# Seguimiento en vivo')
+    expect(some.result.content[0].text).toContain('las operaciones cerradas de un registro joven son casi todas pérdidas')
   })
 
   it('acknowledges a notification with 202 and no body', async () => {

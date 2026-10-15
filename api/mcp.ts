@@ -1,3 +1,4 @@
+import { ledgerStore } from './_ledger.js'
 import { checkMcpAuth } from './_oauth.js'
 import { okxData } from './_okx.js'
 import { handleMcp } from './_mcp.js'
@@ -9,9 +10,17 @@ import { handleMcp } from './_mcp.js'
  * and the app's extensionless imports would not resolve at runtime. Vercel
  * runs the build command before it compiles functions, so the bundle is there
  * when this file is traced.
+ *
+ * Besides OKX it hands the tools one thing: the tracking ledger, read from the
+ * same store the app's Seguimiento view reads.
  */
 export default {
   async fetch(request: Request): Promise<Response> {
-    return checkMcpAuth(request) ?? handleMcp(request, okxData)
+    return (
+      checkMcpAuth(request) ??
+      handleMcp(request, okxData, {
+        ledger: async () => (await ledgerStore()?.read())?.ledger ?? null,
+      })
+    )
   },
 }

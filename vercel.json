@@ -6,6 +6,9 @@
   "functions": {
     "api/mcp.ts": {
       "maxDuration": 60
+    },
+    "api/watch.ts": {
+      "maxDuration": 60
     }
   },
   "rewrites": [
@@ -79,6 +82,10 @@
     {
       "path": "/api/history?record=cron",
       "schedule": "55 23 * * *"
+    },
+    {
+      "path": "/api/watch?run=cron",
+      "schedule": "10 0 * * *"
     }
   ]
 }

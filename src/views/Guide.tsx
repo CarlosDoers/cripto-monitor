@@ -56,6 +56,10 @@ const GLOSSARY: [string, keyof typeof HELP][] = [
   ['ROI', 'roi'],
   ['RSI', 'rsi'],
   ['Screener: qué anticipan los atajos', 'screener'],
+  ['Seguimiento: cuántas operaciones hacen falta', 'trackingNeeded'],
+  ['Seguimiento: la banda de ruido', 'trackingNoise'],
+  ['Seguimiento: qué es el registro', 'trackingLedger'],
+  ['Seguimiento: señales contra el histórico a su edad', 'trackingVersus'],
   ['Sin coste conocido (spot)', 'uncovered'],
   ['Smart Money Concepts (SMC)', 'smc'],
   ['Tamaño total (nocional)', 'notional'],
@@ -424,6 +428,46 @@ const FINDINGS: { verdict: Verdict; what: string; detail: ReactNode }[] = [
     ),
   },
   {
+    verdict: 'ojo',
+    what: 'Filtrar las entradas de las estrategias de tendencia: volumen y régimen de BTC',
+    detail: (
+      <>
+        Sobre el Donchian + EMA 200 y el cruce de la EMA 200 en 4 h (30 monedas, 2022–26 y 2018–21), con cinco
+        filtros escritos antes de ver el número: 13 de 18 celdas van como se predijo. Dos tienen algo.{' '}
+        <strong>Volumen de la vela de entrada ≥ 1,5× la media</strong>: +0,51 R frente a +0,09 en el Donchian y
+        +0,37 frente a +0,09 en el cruce, también sin fines de semana y contra la misma franja horaria; en 1 h y
+        en el diario sin supervivencia el signo es el mismo y casi no se distingue de cero.{' '}
+        <strong>Longs con BTC por encima de su EMA 200 de 4 h</strong>: +0,74 R frente a +0,13 (Donchian), +0,46
+        frente a −0,02 en 1 h, +0,53 frente a −0,13 en el diario con monedas muertas: siete de siete, y los shorts
+        no ganan en ningún régimen. En 1 h, además, las entradas que cierran en fin de semana pierden (−0,13 R
+        frente a +0,21). Funcionan como <em>prioridad</em>, no como ventaja nueva: lo que descartan todavía gana
+        algo en 4 h, así que baja el total y sube la media. Fines de semana en 4 h, entrada «extendida» y
+        financiación abarrotada no aportan. Todo son la misma familia de tendencia y el régimen se encontró
+        mirando los controles: se muestra como etiquetas de contexto en las tarjetas de «Qué vigilar», con las
+        cifras en su tooltip, y la sección Seguimiento lo pone a prueba con operaciones que entonces no existían.
+      </>
+    ),
+  },
+  {
+    verdict: 'ojo',
+    what: 'Leer el seguimiento en vivo por la media de lo ya cerrado',
+    detail: (
+      <>
+        Un seguidor de tendencia corta rápido las perdedoras y deja correr las ganadoras, así que en un registro
+        joven <strong>lo cerrado son casi todo pérdidas</strong> (en una prueba sobre cuatro días del histórico,
+        −1,0 R de media con +0,2 a +0,4 R medidos): la media de las cerradas daría una falsa alarma cada vez. Por
+        eso cada señal se compara con lo que valían las del histórico <strong>a su misma edad</strong>, abiertas
+        incluidas. Y la banda de esa comparación no es la de operaciones independientes: las señales que saltan el
+        mismo día en veinte contratos comparten mercado, y repitiendo la cuenta sobre el propio histórico el azar
+        movía la diferencia <strong>entre 2,1 y 2,4 veces</strong> más de lo que diría la independencia (1,1 en la
+        reversión, que salta una vez por semana). Con esa amplitud, distinguir de cero una media de +0,36 R
+        necesita unas <strong>3 100 operaciones cerradas</strong> en la ruptura de 4 h —cuatro años y medio al
+        ritmo de 20 contratos—, 6 200 en el cruce y unas 109 en la reversión. El seguimiento sirve para ver si
+        algo se desvía con claridad y para ir acumulando, no para decidir pronto.
+      </>
+    ),
+  },
+  {
     verdict: 'no',
     what: 'Flechas de compra y venta con Klinger y «más del 90 % de acierto»',
     detail: (
@@ -595,6 +639,13 @@ export function Guide() {
             gráfico, aquí y en Análisis, <em>Tamaño de la operación</em> calcula cuántos contratos abrir para
             arriesgar lo que elijas si salta el stop, y si tu margen libre lo aguanta.
           </li>
+          <li>
+            <strong>Seguimiento</strong>: cada señal nueva de las estrategias medidas, apuntada por el servidor
+            antes de conocer su resultado y resuelta con las velas siguientes, comparada con lo que valían las del
+            histórico a su misma edad. Es la única evidencia que no pudo escogerse mirando cómo acabó; es lenta, y la
+            página hace la cuenta de cuánto. Con un canal configurado (ntfy o Telegram) avisa de cada señal nueva
+            de 4 h o diaria al móvil.
+          </li>
         </ul>
         <p className="sub">
           Los «?» junto a cada cifra explican qué es y qué hacer con ella. Todos están también en el
@@ -607,7 +658,8 @@ export function Guide() {
           claude.ai. Lleva las reglas de esta app: Claude explica las cifras, no las recalcula, y no propone
           entradas que no salgan de las estrategias medidas. El mismo botón explica cómo crear un proyecto
           para no repetir las instrucciones, y cómo activar el conector, con el que Claude lee la cuenta
-          por sí mismo sin copiar nada.
+          por sí mismo sin copiar nada. El conector tiene también una herramienta de seguimiento, que le da el
+          registro en vivo con las mismas cautelas que la página.
         </p>
       </Section>
 

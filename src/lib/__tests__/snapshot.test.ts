@@ -69,3 +69,32 @@ describe('the live signals text: EMA 25 touches', () => {
     expect(text).toContain('## EMA 200 en 4 h')
   })
 })
+
+describe('the live signals text: context and the short reading', () => {
+  it('adds a context column to the two 4 h tables, with what it means said once', async () => {
+    const text = await signalsText(candles(), market(line), { ...opts, touch: 0 })
+    const trend = text.slice(text.indexOf('## Ruptura + EMA 200 en 4 h'), text.indexOf('## EMA 200 en 4 h'))
+    expect(trend).toContain('| Activo | Señal | Posición ahora | Desde | Contexto |')
+    expect(text).toContain('«Contexto» dice qué era cierto')
+    expect(text).toContain('describe y no puntúa ni filtra')
+    const cross = text.slice(text.indexOf('## EMA 200 en 4 h'))
+    expect(cross).toContain('| Activo | Señal | Posición ahora | Desde | Contexto |')
+  })
+
+  it('leaves the 1 h reading out unless asked, and puts it in when asked and offered', async () => {
+    expect(await signalsText(candles(), market(line), { ...opts, touch: 0 })).not.toContain('en 1 h')
+    const text = await signalsText(candles(), market(line), { ...opts, touch: 0, short: true })
+    expect(text).toContain('## Ruptura + EMA 200 en 1 h')
+    expect(text).toContain('lectura corta')
+    expect(text).toContain('en 1 h un short no tiene ventaja medida')
+  })
+
+  it('survives BTC not answering: the column is just empty', async () => {
+    const get: Get = async <T,>(path: string, params?: Record<string, string | number | undefined>) => {
+      if (params?.instId === 'BTC-USDT') throw new Error('sin BTC')
+      return (await candles()(path, params)) as T[]
+    }
+    const text = await signalsText(get, market(line), { ...opts, touch: 0 })
+    expect(text).toContain('## Ruptura + EMA 200 en 4 h')
+  })
+})

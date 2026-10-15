@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { barChoice, spanText } from '../watchBars'
+import { barChoice, barMsOf, barsOf, spanText } from '../watchBars'
 import type { StrategyBacktest } from '../indicators/registry'
 
 /** Only the fields the choice reads; the rest of a profile is not its business. */
@@ -40,5 +40,18 @@ describe('barChoice', () => {
 
   it('blocks a bar the strategy was never measured on', () => {
     expect(barChoice(profile({}), '1H').allowed).toBe(false)
+  })
+})
+
+describe('the views a card can show', () => {
+  it('reads one bar, or both with the longer one first', () => {
+    expect(barsOf('4H')).toEqual(['4H'])
+    expect(barsOf('1H')).toEqual(['1H'])
+    expect(barsOf('both')).toEqual(['4H', '1H'])
+  })
+
+  it('knows a candle\'s length in milliseconds', () => {
+    expect(barMsOf('4H')).toBe(14_400_000)
+    expect(barMsOf('1H')).toBe(3_600_000)
   })
 })

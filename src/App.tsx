@@ -4,6 +4,7 @@ import { ApiError, probe } from './lib/api'
 import { useRoute } from './lib/router'
 import { useCurrency } from './lib/currency'
 import { useEurRate } from './lib/portfolio'
+import { useWatchKeepalive } from './lib/queries'
 import { Layout } from './components/Layout'
 import { Gate } from './components/Gate'
 import { Card, ErrorNotice, Skeleton } from './components/ui'
@@ -24,6 +25,7 @@ const Active = lazy(() => import('./views/Active').then((m) => ({ default: m.Act
 const Bots = lazy(() => import('./views/Bots').then((m) => ({ default: m.Bots })))
 const History = lazy(() => import('./views/History').then((m) => ({ default: m.History })))
 const Funding = lazy(() => import('./views/Funding').then((m) => ({ default: m.Funding })))
+const Tracking = lazy(() => import('./views/Tracking').then((m) => ({ default: m.Tracking })))
 const Guide = lazy(() => import('./views/Guide').then((m) => ({ default: m.Guide })))
 
 function ViewLoading() {
@@ -108,6 +110,8 @@ function Views() {
   // taking it as a prop, so without this only the sidebar would update.
   useCurrency()
   useEurRate()
+  // The tracking ledger's hourly trigger: any view keeps it going while the app is open.
+  useWatchKeepalive()
   return (
     <Layout route={route} navigate={navigate}>
       <Suspense fallback={<ViewLoading />}>
@@ -121,6 +125,7 @@ function Views() {
       {route === 'screener' && <Screener />}
       {route === 'analisis' && <Signals section="analysis" />}
       {route === 'estrategias' && <Signals section="strategies" />}
+      {route === 'seguimiento' && <Tracking />}
       {route === 'financiacion' && <Funding />}
       {route === 'guia' && <Guide />}
       </Suspense>

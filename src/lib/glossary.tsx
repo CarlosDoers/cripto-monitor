@@ -13,6 +13,13 @@ import { ratio, share } from './format'
  * alone would not land.
  */
 
+/**
+ * Trades under which the app shows no statistic (`MIN_SAMPLE` in `performance.ts`,
+ * which a test holds this equal to): importing it would drag the data layer into
+ * the chunk every view shares.
+ */
+const MIN_SAMPLE_HELP = 5
+
 export const HELP = {
   // ---- Tamaño de la operación ----
   positionSize: (
@@ -554,6 +561,91 @@ export const HELP = {
       Contratos en short que igualan lo que tienes de la moneda, redondeados hacia abajo. Con menos quedas
       cubierto solo en parte; con más, apuestas a que baja.
     </p>
+  ),
+
+  // ---- Seguimiento ----
+  trackingLedger: (
+    <>
+      <p>
+        Cada señal nueva de las estrategias medidas, apuntada por el servidor <strong>antes</strong> de que se conozca
+        cómo acaba, y resuelta con las velas que llegan después. Es lo único que la app tiene que no pudo escogerse
+        mirando el resultado: todo lo demás, por honesto que sea, se midió sobre un histórico donde el final ya
+        estaba escrito.
+      </p>
+      <p>
+        Solo cuenta lo que ocurre desde que el contrato entró en vigilancia. Si un contrato sale de los más negociados
+        y vuelve, empieza de nuevo: lo que hizo mientras no estaba no se apunta, porque suele volver precisamente
+        por haberse movido.
+      </p>
+      <p>
+        No es tu cuenta. Las operaciones son simuladas con la regla de cada estrategia: entrada al cierre de la vela,
+        stop y salida como dice la regla, y una comisión de ida y vuelta del 0,1 %.
+      </p>
+    </>
+  ),
+  trackingVersus: (
+    <>
+      <p>
+        Un seguidor de tendencia corta rápido las perdedoras y deja correr las ganadoras. Por eso, en un registro
+        joven, <strong>las operaciones cerradas son casi todas pérdidas</strong> y su media sale en torno a −1 R sin
+        que eso diga nada: las ganadoras siguen abiertas. Comparar esa media con la medida (+0,2 a +0,4 R) daría una
+        falsa alarma cada vez.
+      </p>
+      <p>
+        Lo que se hace es mirar cada señal, abierta o cerrada, y compararla con lo que valían las del histórico{' '}
+        <strong>a su misma edad</strong>, también abiertas y marcadas al cierre de esa vela. La diferencia media es lo
+        que se lee; la banda es lo que esa diferencia se mueve por azar.
+      </p>
+      <p>
+        <strong>La banda es ancha a propósito.</strong> Las señales que saltan el mismo día en veinte contratos
+        comparten mercado y no valen veinte pruebas. Se midió repitiendo esta misma cuenta sobre el propio histórico,
+        en cada ventana de 7 a 60 días: el azar movía la diferencia entre 2,1 y 2,4 veces más de lo que diría la
+        independencia, y la banda lo recoge. Con ella, el 95 % de las ventanas del histórico caen dentro.
+      </p>
+      <p>
+        Es una prueba de si lo que pasa en vivo se parece a lo que pasaba, no de si la estrategia gana: para eso hace
+        falta que las operaciones terminen, y es lo que cuenta la última columna.
+      </p>
+    </>
+  ),
+  trackingNoise: (
+    <>
+      <p>
+        Lo que se mueve la diferencia solo por azar: ±1,96 errores típicos —con la desviación que tenían las señales
+        del histórico a esa edad— multiplicados por lo que se midió que las señales simultáneas se parecen entre sí
+        (de 1,1 en la reversión, que salta una vez por semana, a 2,4 en las rupturas).
+      </p>
+      <p>
+        Mientras la diferencia esté dentro de la banda no dice nada a favor ni en contra de lo medido. Solo cuando se
+        sale de ella —por encima o por debajo— empieza a decir algo.
+      </p>
+    </>
+  ),
+  trackingNeeded: (
+    <>
+      <p>
+        Operaciones cerradas que hacen falta para que una media igual a la medida se distinga de cero con un 95 % de
+        confianza: (1,96 × amplitud × desviación ÷ media)². Con operaciones independientes serían unas 540 en la
+        ruptura; las señales que saltan juntas no lo son, y esa amplitud (2,4) lo multiplica por casi seis.
+      </p>
+      <p>
+        Es el tamaño que necesita la muestra, no una promesa de que vaya a salir, y el ritmo es el de lo que llevas
+        apuntado: con pocas operaciones es una estimación burda, no la leas como una fecha.
+      </p>
+    </>
+  ),
+  trackingForward: (
+    <>
+      <p>
+        Lo que el histórico encontró al partir las entradas de una estrategia por lo que se sabía al entrar: el
+        volumen de la vela, el lado de su EMA 200 en que estaba BTC, si cerraba en fin de semana. Aquí se mira si en
+        vivo pasa lo mismo, con operaciones que no existían cuando se midió.
+      </p>
+      <p>
+        Cada mitad necesita al menos {MIN_SAMPLE_HELP} operaciones cerradas para enseñar su media; antes sale con un
+        guion. Con tan pocas el azar manda: úsalo para ver si algo se desmiente con claridad, no para confirmar.
+      </p>
+    </>
   ),
 } satisfies Record<string, ReactNode>
 

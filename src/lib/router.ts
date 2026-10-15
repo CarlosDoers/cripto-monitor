@@ -18,6 +18,7 @@ export const ROUTES = [
   'screener',
   'analisis',
   'estrategias',
+  'seguimiento',
   'financiacion',
   // Ayuda
   'guia',

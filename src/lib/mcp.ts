@@ -1,5 +1,6 @@
 import type { handleMcp as Declared } from '../../api/_mcp'
 import { CONNECTOR_INSTRUCTIONS } from './claudePrompt'
+import { ledgerText, parseLedger } from './ledger'
 import { computePerformance } from './performance'
 import {
   buildAccount,
@@ -44,12 +45,17 @@ const PROTOCOL_VERSIONS = ['2025-11-25', '2025-06-18', '2025-03-26', '2024-11-05
 
 type Args = Record<string, unknown>
 
+/** What the server can give a tool beyond OKX: today, the tracking ledger it keeps. */
+interface Extras {
+  ledger?: () => Promise<unknown>
+}
+
 interface Tool {
   name: string
   title: string
   description: string
   inputSchema: { type: 'object'; properties: Record<string, unknown>; required?: string[] }
-  run: (args: Args, get: Get) => Promise<string>
+  run: (args: Args, get: Get, extras: Extras) => Promise<string>
 }
 
 const READ_ONLY = { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false }
@@ -119,13 +125,29 @@ const TOOLS: Tool[] = [
       properties: {
         ema_top: { type: 'integer', minimum: 5, maximum: 20, default: 10, description: 'Cuántos contratos revisar para las dos estrategias de 4 h (ruptura a favor de la EMA 200 y cruce de la EMA 200).' },
         toques_top: { type: 'integer', minimum: 0, maximum: 30, default: 20, description: 'Cuántos contratos revisar para los toques a la EMA 25 diaria (0 los omite).' },
+        corto_plazo: { type: 'boolean', default: false, description: 'Añade la lectura de 1 h de la ruptura a favor de la EMA 200 (unas 40 peticiones más por diez contratos).' },
       },
     },
     async run(args, get) {
       return signalsText(get, await collectMarket(get), {
         ema: intArg(args, 'ema_top', 10, 5, 20),
         touch: intArg(args, 'toques_top', 20, 0, 30),
+        short: args.corto_plazo === true,
       })
+    },
+  },
+  {
+    name: 'seguimiento',
+    title: 'Seguimiento en vivo',
+    description:
+      'Cómo van en vivo las estrategias medidas: cada señal nueva que el servidor apuntó antes de conocer su resultado, comparada con lo que valían las del histórico a su misma edad, con la banda de ruido y cuántas operaciones hacen falta para concluir algo. Léelo antes de opinar sobre si una estrategia "sigue funcionando": con pocas operaciones la respuesta casi siempre es que no se puede saber.',
+    inputSchema: { type: 'object', properties: {} },
+    async run(_args, _get, extras) {
+      const ledger = parseLedger(await extras.ledger?.())
+      if (!ledger) {
+        return 'El seguimiento todavía no tiene datos: el servidor no ha apuntado ninguna señal, o este despliegue no tiene almacén donde guardarlas.'
+      }
+      return [stamp(), ledgerText(ledger)].join('\n\n')
     },
   },
   {
@@ -161,6 +183,7 @@ const PROMPTS = [
       '1. Llama a estado_cuenta y empieza por lo que requiere atención.',
       '2. Llama a rendimiento con 30d y con todo, y dime si el último mes va mejor o peor que el resto.',
       '3. Llama a senales y dime si alguna estrategia medida da entrada hoy; si ninguna, dilo así.',
+      '4. Llama a seguimiento y dime solo si alguna estrategia está fuera de su banda de ruido; si no, di que es pronto para concluir nada.',
       'Breve y en este orden.',
     ].join('\n'),
   },
@@ -180,7 +203,7 @@ type RpcReply = { jsonrpc: '2.0'; id: string | number | null } & ({ result: unkn
 const ok = (id: RpcRequest['id'], result: unknown): RpcReply => ({ jsonrpc: '2.0', id: id ?? null, result })
 const fail = (id: RpcRequest['id'], code: number, message: string): RpcReply => ({ jsonrpc: '2.0', id: id ?? null, error: { code, message } })
 
-async function dispatch(msg: RpcRequest, get: Get): Promise<RpcReply | null> {
+async function dispatch(msg: RpcRequest, get: Get, extras: Extras): Promise<RpcReply | null> {
   if (!msg || typeof msg !== 'object' || msg.jsonrpc !== '2.0' || typeof msg.method !== 'string') {
     // A response or a malformed message: nothing to answer unless it carried an id.
     return msg && typeof msg === 'object' && 'id' in msg && !('result' in msg || 'error' in msg)
@@ -209,7 +232,7 @@ async function dispatch(msg: RpcRequest, get: Get): Promise<RpcReply | null> {
       const tool = TOOLS.find((t) => t.name === params.name)
       if (!tool) return fail(id, -32602, `Herramienta desconocida: ${String(params.name)}`)
       try {
-        const text = await tool.run((params.arguments as Args) ?? {}, get)
+        const text = await tool.run((params.arguments as Args) ?? {}, get, extras)
         return ok(id, { content: [{ type: 'text', text }] })
       } catch (err) {
         // A tool failure is a result the model can read and act on, not a protocol error.
@@ -236,7 +259,7 @@ const json = (body: unknown, status = 200) =>
  * The whole endpoint. Authentication happens before this, in `api/mcp.ts`.
  * Typed by `api/_mcp.d.ts`, which is what the function sees of this bundle.
  */
-export const handleMcp: typeof Declared = async (request, get) => {
+export const handleMcp: typeof Declared = async (request, get, extras = {}) => {
   // No server-initiated stream is offered, which the spec answers with 405.
   if (request.method !== 'POST') {
     return new Response(null, { status: 405, headers: { allow: 'POST' } })
@@ -250,7 +273,7 @@ export const handleMcp: typeof Declared = async (request, get) => {
   const batch = Array.isArray(body)
   const messages: unknown[] = Array.isArray(body) ? body : [body]
   const okx = patient(get)
-  const replies = (await Promise.all(messages.map((m) => dispatch(m as RpcRequest, okx)))).filter(
+  const replies = (await Promise.all(messages.map((m) => dispatch(m as RpcRequest, okx, extras)))).filter(
     (r): r is RpcReply => r !== null,
   )
   if (replies.length === 0) return new Response(null, { status: 202 })

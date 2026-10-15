@@ -188,6 +188,15 @@ export const IconTarget = (p: Props) => (
   </svg>
 )
 
+/** A list with a tick: what was written down, and what became of it. */
+export const IconLedger = (p: Props) => (
+  <svg {...base} className={p.className}>
+    <rect x="4" y="3" width="16" height="18" rx="2" />
+    <path d="M8 8h8M8 12h5" />
+    <path d="M8.5 16.5l2 2 4-4" />
+  </svg>
+)
+
 export const IconChevronDown = (p: Props) => (
   <svg {...base} className={p.className}>
     <polyline points="6 9 12 15 18 9" />

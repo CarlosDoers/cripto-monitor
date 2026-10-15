@@ -6,4 +6,9 @@
 
 export type Get = <T>(path: string, params?: Record<string, string | number | undefined>) => Promise<T[]>
 
-export function handleMcp(request: Request, get: Get): Promise<Response>
+/** What the server can give a tool besides OKX: the tracking ledger it keeps, read on demand. */
+export interface McpExtras {
+  ledger?: () => Promise<unknown>
+}
+
+export function handleMcp(request: Request, get: Get, extras?: McpExtras): Promise<Response>

@@ -22,7 +22,7 @@ function apiDevServer(env: Record<string, string>): Plugin {
 
       server.middlewares.use((req: IncomingMessage, res: ServerResponse, next: () => void) => {
         const url = req.url ?? ''
-        const ours = ['/api/okx', '/api/mcp', '/api/oauth', '/api/history', '/.well-known/oauth-', '/.well-known/openid-configuration']
+        const ours = ['/api/okx', '/api/mcp', '/api/oauth', '/api/history', '/api/watch', '/.well-known/oauth-', '/.well-known/openid-configuration']
         if (!ours.some((p) => url.startsWith(p))) return next()
         void serve(server, req, res)
       })
@@ -41,16 +41,36 @@ type Handler = (request: Request) => Promise<Response>
 function handlerFor(server: ViteDevServer, url: string): Handler {
   if (url.startsWith('/api/mcp')) {
     return async (request) => {
-      const [okx, oauth, mcp] = (await Promise.all([
+      const [okx, oauth, mcp, ledger] = (await Promise.all([
         server.ssrLoadModule('/api/_okx.ts'),
         server.ssrLoadModule('/api/_oauth.ts'),
         server.ssrLoadModule('/src/lib/mcp.ts'),
+        server.ssrLoadModule('/api/_ledger.ts'),
       ])) as [
         typeof import('./api/_okx.js'),
         typeof import('./api/_oauth.js'),
         { handleMcp: typeof import('./api/_mcp.js').handleMcp },
+        typeof import('./api/_ledger.js'),
       ]
-      return oauth.checkMcpAuth(request) ?? mcp.handleMcp(request, okx.okxData)
+      return (
+        oauth.checkMcpAuth(request) ??
+        mcp.handleMcp(request, okx.okxData, { ledger: async () => (await ledger.ledgerStore()?.read())?.ledger ?? null })
+      )
+    }
+  }
+  if (url.startsWith('/api/watch')) {
+    // The tracking ledger's job, from its source like the connector: the bundle is stale or missing in dev.
+    return async (request) => {
+      const [okx, watch, job] = (await Promise.all([
+        server.ssrLoadModule('/api/_okx.ts'),
+        server.ssrLoadModule('/api/_watchHandler.ts'),
+        server.ssrLoadModule('/src/lib/watchJob.ts'),
+      ])) as [
+        typeof import('./api/_okx.js'),
+        typeof import('./api/_watchHandler.js'),
+        { runWatch: typeof import('./api/_watch.js').runWatch; describeWatch: typeof import('./api/_watch.js').describeWatch },
+      ]
+      return watch.createWatchHandler({ runWatch: job.runWatch, describeWatch: job.describeWatch, get: okx.okxData })(request)
     }
   }
   if (url.startsWith('/api/history')) {

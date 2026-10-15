@@ -132,3 +132,58 @@ export async function netWorthHistory(): Promise<NetWorthHistory> {
 export async function recordNetWorth(): Promise<NetWorthHistory> {
   return (await request('', '/api/history', 'POST')) as NetWorthHistory
 }
+
+/** What the server reports about the tracking ledger's configuration: names and numbers, never a secret. */
+export interface WatchSettings {
+  channels: string[]
+  top: number
+  bars: string[]
+  alertBars: string[]
+  alertSides: string[]
+}
+
+/** One pass of the job, as the endpoint summarises it. */
+export interface WatchRun {
+  status: 'ran' | 'skipped' | 'failed'
+  reason?: string
+  tracks: string[]
+  scanned: number
+  added: number
+  closed: number
+  alerts: { sent: number; failed: number; channels: string[] }
+  errors: string[]
+  ms: number
+}
+
+export interface WatchState {
+  /** False where nothing can store the ledger (a deployment without a Blob store). */
+  enabled: boolean
+  storage?: 'blob' | 'file'
+  /** The ledger as stored; `parseLedger` makes it a typed one. */
+  ledger: unknown
+  config: WatchSettings
+  run?: WatchRun
+}
+
+/** The tracking ledger (`api/watch.ts`), for the Seguimiento view. */
+export async function watchLedger(): Promise<WatchState> {
+  return (await request('', '/api/watch')) as WatchState
+}
+
+/** What the server reports about the ledger without sending it: when it last ran, how big it is. */
+export interface WatchMeta {
+  enabled: boolean
+  storage?: 'blob' | 'file'
+  config: WatchSettings
+  meta?: { exists: boolean; startedAt: number; lastRun: number; runs: number; entries: number; lockUntil: number | null }
+}
+
+/** The ledger's pulse, for the hourly check the app makes from every view. */
+export async function watchMeta(): Promise<WatchMeta> {
+  return (await request('meta=1', '/api/watch')) as WatchMeta
+}
+
+/** A pass now. The server skips it when one has just run. */
+export async function runWatchNow(): Promise<WatchState> {
+  return (await request('', '/api/watch', 'POST')) as WatchState
+}

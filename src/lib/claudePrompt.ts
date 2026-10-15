@@ -42,5 +42,5 @@ export const PROJECT_INSTRUCTIONS = [
 export const CONNECTOR_INSTRUCTIONS = [
   ROLE,
   `Reglas:\n${rules()}`,
-  'Herramientas: empieza por estado_cuenta. Las cifras de estrategias están en estrategias. senales tarda unos segundos y consulta decenas de contratos: úsala cuando pregunte por entradas u oportunidades, no por defecto.',
+  'Herramientas: empieza por estado_cuenta. Las cifras de estrategias están en estrategias. senales tarda unos segundos y consulta decenas de contratos: úsala cuando pregunte por entradas u oportunidades, no por defecto. seguimiento dice cómo van en vivo las señales que el servidor apuntó antes de conocer su resultado: con pocas operaciones casi nunca se puede concluir nada, y lo que dice la banda de ruido manda sobre la media.',
 ].join('\n\n')

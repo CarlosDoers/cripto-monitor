@@ -11,10 +11,11 @@ import { profileOf, strategyByKey } from '../lib/indicators/registry'
 import { type Market } from '../lib/markets'
 import { routeHref } from '../lib/router'
 import { useWatchScan } from '../lib/useWatchScan'
-import { barChoice, barOf } from '../lib/watchBars'
+import { rowContext, sideNote } from '../lib/watchContext'
+import { barChoice, barMsOf, barOf, spanText, type WatchBar } from '../lib/watchBars'
 import { Badge, Card, Help, TableSkeleton, TableWrap } from './ui'
 import { WatchControls } from './WatchControls'
-import { SideBadge, WatchLegend } from './WatchCells'
+import { ContextTags, SideBadge, WatchLegend } from './WatchCells'
 
 const STATUS: Record<DonchianStatus, { label: string; variant: 'live' | 'buy' | 'warn' | 'neutral' }> = {
   nueva: { label: 'Señal nueva', variant: 'live' },
@@ -28,8 +29,12 @@ const STATUS: Record<DonchianStatus, { label: string; variant: 'live' | 'buy' | 
 const signed = (x: number) => `${x >= 0 ? '+' : '−'}${ratio(Math.abs(x))}`
 const thousands = (n: number) => new Intl.NumberFormat('es-ES').format(n)
 
+/** A reading of one contract on one bar: the watch itself and the bar it was made on. */
+type Row = Watch & { bar: WatchBar }
 
-function what(w: Watch, span: (candles: number) => string, label: string): string {
+function what(w: Row): string {
+  const span = (candles: number) => spanText(candles, w.bar)
+  const label = barOf(w.bar).label
   const long = w.bias === 'long'
   const edge = long ? 'el máximo' : 'el mínimo'
   const ofEma = long ? 'sobre' : 'bajo'
@@ -53,51 +58,61 @@ function what(w: Watch, span: (candles: number) => string, label: string): strin
 
 /**
  * "¿Qué vigilo?" for the Donchian + EMA 200 preset: the most traded X-Perps
- * against the breakout the EMA 200 allows, on 4 h (the longer reading) or 1 h (the
- * short one — the preset's marginal timeframe, which the "?" says). On demand,
- * like the EMA 200 card beside it, and reading the same cached candles.
+ * against the breakout the EMA 200 allows, on 4 h (the longer reading), 1 h (the
+ * short one — the preset's marginal timeframe, which the "?" says) or both, a row
+ * each. On demand, like the EMA 200 card beside it, and reading the same cached
+ * candles.
  */
 export function DonchianWatch({ markets }: { markets: Market[] }) {
   const scan = useWatchScan(markets)
-  const { ids, board, byId, bar, span } = scan
-  const label = barOf(bar).label
+  const { ids, boards, byId, bars: shown, view, regime, loaded } = scan
   const profile = profileOf(strategyByKey('donchian'), 'trend')
-  const bars = { '4H': barChoice(profile, '4H'), '1H': barChoice(profile, '1H') }
+  const choices = { '4H': barChoice(profile, '4H'), '1H': barChoice(profile, '1H') }
 
-  const rows = useMemo(
-    () =>
-      (ids ?? [])
-        .filter((id) => board.byInst[id])
-        .map((id) => {
-          const m = byId.get(id)
-          return watchDonchianTrend(board.byInst[id], m?.last ?? 0, id, m?.symbol ?? id.split('-')[0])
-        })
-        .sort(compareDonchianWatch),
-    [ids, board.byInst, byId],
-  )
-  const watch = rows.filter((w) => w.status === 'nueva' || w.status === 'rompiendo' || w.status === 'cerca')
+  const rows = useMemo(() => {
+    const byContract = new Map<string, Row[]>()
+    for (const id of ids ?? []) {
+      for (const bar of shown) {
+        const candles = boards[bar].byInst[id]
+        if (!candles) continue
+        const m = byId.get(id)
+        const w = watchDonchianTrend(candles, m?.last ?? 0, id, m?.symbol ?? id.split('-')[0], barMsOf(bar))
+        byContract.set(id, [...(byContract.get(id) ?? []), { ...w, bar }])
+      }
+    }
+    // Contracts by their most urgent reading; a contract's own rows stay longer-bar first.
+    return [...byContract.values()]
+      .sort((a, b) => compareDonchianWatch([...a].sort(compareDonchianWatch)[0], [...b].sort(compareDonchianWatch)[0]))
+      .flat()
+  }, [ids, boards, byId, shown])
+
+  const watch = new Set(rows.filter((w) => w.status === 'nueva' || w.status === 'rompiendo' || w.status === 'cerca').map((w) => w.instId))
   const total = ids?.length ?? 0
+  const label = view === 'both' ? '4 h y 1 h' : barOf(shown[0]).label
+  const hourly = shown.includes('1H')
+  const longer = shown.includes('4H')
 
   return (
     <Card
       title={`Qué vigilar · Ruptura + EMA 200 en ${label}`}
       subtitle={
         ids
-          ? board.loaded < total
-            ? `Analizando ${board.loaded} de ${total}…`
-            : `${plural(watch.length, 'contrato para vigilar', 'contratos para vigilar')} de los ${total} más negociados`
+          ? loaded < total
+            ? `Analizando ${loaded} de ${total}…`
+            : `${plural(watch.size, 'contrato para vigilar', 'contratos para vigilar')} de los ${total} más negociados`
           : 'La ruptura de 20 velas que va a favor de la EMA 200. Pulsa para ver qué X-Perp están en ella'
       }
       action={
         <Help label="Qué vigilar">
           <p>
-            La estrategia: entra cuando una vela de {label} cierra por encima del máximo de las 20 anteriores y por encima
-            de la EMA 200 (long), o por debajo del mínimo y de la EMA (short). Stop de 2 ATR, un trailing de 8 ATR que
-            deja correr la tendencia y ningún objetivo fijo.
+            La estrategia: entra cuando una vela cierra por encima del máximo de las 20 anteriores y por encima de la
+            EMA 200 (long), o por debajo del mínimo y de la EMA (short). Stop de 2 ATR, un trailing de 8 ATR que deja
+            correr la tendencia y ningún objetivo fijo.
           </p>
-          {bar === '4H' ? (
+          {longer && (
             <>
               <p>
+                {hourly && <strong>En 4 h, la lectura larga. </strong>}
                 Es la Ruptura de siempre con el filtro que mejor le sentó. En 4 h, sobre 30 criptos desde 2022, mide{' '}
                 <strong>{signed(EVIDENCE.board.net)} R</strong> por operación ({thousands(EVIDENCE.board.n)}{' '}
                 operaciones), positiva en las dos mitades ({signed(EVIDENCE.board.halves[0])} /{' '}
@@ -113,11 +128,13 @@ export function DonchianWatch({ markets }: { markets: Market[] }) {
                 el resultado mensual: sirve para elegir.
               </p>
             </>
-          ) : (
+          )}
+          {hourly && (
             <>
               <p>
-                <strong>Es la lectura corta, y el marco justo de esta estrategia.</strong> En 1 h, sobre 30 criptos
-                desde 2022, mide <strong>{signed(EVIDENCE.hourly.net)} R</strong> por operación (
+                {longer && <strong>En 1 h, la lectura corta, y el marco justo de esta estrategia. </strong>}
+                {!longer && <strong>Es la lectura corta, y el marco justo de esta estrategia. </strong>}En 1 h, sobre 30
+                criptos desde 2022, mide <strong>{signed(EVIDENCE.hourly.net)} R</strong> por operación (
                 {thousands(EVIDENCE.hourly.n)} operaciones; {signed(EVIDENCE.hourly.halves[0])} /{' '}
                 {signed(EVIDENCE.hourly.halves[1])} en las dos mitades) frente a {signed(EVIDENCE.hourly.plain)} R sin
                 el filtro: aquí el filtro es casi toda la ventaja. Es menos de la mitad que en 4 h y aguanta peor la
@@ -141,11 +158,18 @@ export function DonchianWatch({ markets }: { markets: Market[] }) {
             que la regla ya tiene abierta, simulada: no es tu cuenta. Pueden ser contrarias — por ejemplo, un short
             abierto cuya vela en curso ya rompe hacia arriba: si cierra así, cierra el short y abre un long.
           </p>
+          <p>
+            <strong>Contexto</strong> dice qué era cierto al entrar: si BTC estaba sobre su EMA 200 de 4 h, cuánto
+            volumen traía la vela y si cerró en fin de semana. En el histórico los longs con BTC debajo y las entradas
+            con poco volumen o en fin de semana ganaron menos; la etiqueta en ámbar es ese lado, y su tooltip trae
+            las cifras. Describe, no puntúa ni filtra: se encontró mirando el histórico y la sección Seguimiento lo
+            pone a prueba con operaciones que entonces no existían.
+          </p>
         </Help>
       }
       flush
     >
-      <WatchControls scan={scan} empty={markets.length === 0} bars={bars} />
+      <WatchControls scan={scan} empty={markets.length === 0} bars={choices} />
 
       {!ids ? null : rows.length === 0 ? (
         <TableSkeleton rows={Math.min(total, 6)} cols={7} />
@@ -158,9 +182,9 @@ export function DonchianWatch({ markets }: { markets: Market[] }) {
                 <th>Señal</th>
                 <th>Posición ahora</th>
                 <th>Qué pasa</th>
+                <th>Contexto</th>
                 <th className="num">Precio</th>
                 <th className="num">Ruptura en</th>
-                <th className="num">Distancia</th>
                 <th className="num">Stop de la posición</th>
                 <th>Gráfico</th>
               </tr>
@@ -168,14 +192,18 @@ export function DonchianWatch({ markets }: { markets: Market[] }) {
             <tbody>
               {rows.map((w) => {
                 const s = STATUS[w.status]
+                const note = (side: 'long' | 'short') => sideNote('donchian', 'trend', w.bar, side)
                 return (
-                  <tr key={w.instId}>
+                  <tr key={`${w.instId}-${w.bar}`}>
                     <td>
-                      <span className="ccy">{w.symbol}</span>
+                      <span className="watch-signal">
+                        <span className="ccy">{w.symbol}</span>
+                        {view === 'both' && <span className="sub">{barOf(w.bar).label}</span>}
+                      </span>
                     </td>
                     <td>
                       <span className="watch-signal">
-                        {w.next && <SideBadge side={w.next} />}
+                        {w.next && <SideBadge side={w.next} note={note(w.next)} />}
                         <Badge variant={s.variant} pulse={w.status === 'nueva' || w.status === 'rompiendo'}>
                           {s.label}
                         </Badge>
@@ -184,20 +212,27 @@ export function DonchianWatch({ markets }: { markets: Market[] }) {
                     <td>
                       {w.side ? (
                         <span className="watch-signal">
-                          <SideBadge side={w.side} />
+                          <SideBadge side={w.side} note={note(w.side)} />
                           {w.entry !== undefined && <span className="sub">entrada {price(w.entry)}</span>}
                         </span>
                       ) : (
                         <span className="sub">—</span>
                       )}
                     </td>
-                    <td className="sub watch-what">{what(w, span, label)}</td>
+                    <td className="sub watch-what">{what(w)}</td>
+                    <td>
+                      <ContextTags tags={rowContext(w, regime, 'donchian', 'trend', w.bar)} />
+                    </td>
                     <td className="num">{price(w.price)}</td>
-                    <td className="num">{Number.isFinite(w.level) ? price(w.level) : '—'}</td>
                     <td className="num">
-                      {Number.isFinite(w.distance) ? (
+                      {Number.isFinite(w.level) ? (
                         <span>
-                          {pct(w.distance)} <span className="sub">· {ratio(w.distanceAtr, 1)} ATR</span>
+                          {price(w.level)}{' '}
+                          {Number.isFinite(w.distance) && (
+                            <span className="sub">
+                              · {pct(w.distance)} · {ratio(w.distanceAtr, 1)} ATR
+                            </span>
+                          )}
                         </span>
                       ) : (
                         '—'
@@ -205,7 +240,10 @@ export function DonchianWatch({ markets }: { markets: Market[] }) {
                     </td>
                     <td className="num">{w.stop !== undefined ? price(w.stop) : '—'}</td>
                     <td>
-                      <a className="card-link" href={routeHref('estrategias', { inst: w.instId, s: 'donchian', p: 'trend', tf: bar })}>
+                      <a
+                        className="card-link"
+                        href={routeHref('estrategias', { inst: w.instId, s: 'donchian', p: 'trend', tf: w.bar })}
+                      >
                         Ver →
                       </a>
                     </td>
@@ -216,7 +254,7 @@ export function DonchianWatch({ markets }: { markets: Market[] }) {
           </table>
         </TableWrap>
       )}
-      {ids && rows.length > 0 && <WatchLegend label={label} />}
+      {ids && rows.length > 0 && <WatchLegend label={view === 'both' ? 'su marco' : label} />}
     </Card>
   )
 }

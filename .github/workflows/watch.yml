@@ -1,0 +1,46 @@
+# Un repaso horario del seguimiento (src/lib/watchJob.ts), para que las señales de 4 h y de 1 h
+# se apunten —y se avisen— sin esperar al cron diario de Vercel.
+#
+# Hace falta que existan dos secretos del repositorio (Settings → Secrets and variables → Actions):
+#   WATCH_URL    la dirección de la app, sin barra final: https://tu-app.vercel.app
+#   CRON_SECRET  el mismo valor que la variable CRON_SECRET de Vercel (16 caracteres o más)
+# Sin ellos, el flujo termina sin hacer nada y sin fallar.
+#
+# Repasar dos veces no duplica nada: el servidor se salta un repaso si acaba de hacer otro.
+# GitHub desactiva los flujos programados de un repositorio público tras 60 días sin actividad.
+name: Seguimiento · repaso horario
+
+on:
+  schedule:
+    # El minuto 7, no el 0: a las en punto es cuando más flujos programados se retrasan.
+    - cron: '7 * * * *'
+  workflow_dispatch: {}
+
+permissions: {}
+
+concurrency:
+  group: seguimiento
+  cancel-in-progress: false
+
+jobs:
+  repaso:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Pedir el repaso al servidor
+        env:
+          WATCH_URL: ${{ secrets.WATCH_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          if [ -z "$WATCH_URL" ] || [ -z "$CRON_SECRET" ]; then
+            echo "Faltan los secretos WATCH_URL y CRON_SECRET: no hay nada que hacer."
+            exit 0
+          fi
+          out="$(mktemp)"
+          code="$(curl -sS -m 100 -o "$out" -w '%{http_code}' \
+            -H "Authorization: Bearer $CRON_SECRET" \
+            "${WATCH_URL%/}/api/watch?run=cron")"
+          echo "HTTP $code"
+          # Solo el resumen del repaso: la respuesta lleva el registro entero, y un log no es su sitio.
+          jq -c '.run // .error // .' "$out" || true
+          [ "$code" = "200" ]

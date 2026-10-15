@@ -5,3 +5,5 @@
 .candles-*
 .funding
 .research
+# The tracking ledger kept on disk by `npm run dev` (api/_ledger.ts).
+.watch

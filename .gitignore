@@ -40,8 +40,12 @@ dist-ssr
 # Board candles for sweeps (scripts/fetch-board.mjs)
 .candles-board-*
 
-# claude.ai connector bundle, written by `npm run build` (scripts/build-mcp.mjs)
+# claude.ai connector and tracking-ledger bundles, written by `npm run build` (scripts/build-mcp.mjs)
 api/_mcp.js
+api/_watch.js
+
+# The tracking ledger when it runs locally without a Blob store (api/_ledger.ts)
+.watch
 
 # Public-API data fetched by scripts/literature-research.mjs
 .research

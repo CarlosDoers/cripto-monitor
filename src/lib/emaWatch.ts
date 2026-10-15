@@ -1,3 +1,4 @@
+import { volumeRatio } from './entryContext'
 import { atr } from './indicators/ta'
 import { analyseEmaCross, EMA_CROSS_SETTINGS } from './indicators/emaCross'
 import { toCandles } from './signals'
@@ -41,6 +42,10 @@ export interface EmaWatch {
   distance: number
   distanceAtr: number
   entry?: number
+  /** Close time of the candle the open position entered on, in ms. */
+  entryAt?: number
+  /** That candle's volume over the mean of the 20 before it (`entryContext`). NaN when unknown. */
+  volume?: number
   stop?: number
   bars: number
 }
@@ -48,7 +53,13 @@ export interface EmaWatch {
 const NEAR_ATR = 0.5
 const FRESH = 1
 
-export function watchEmaCross(rows: OkxCandle[], live: number, instId: string, symbol: string): EmaWatch {
+export function watchEmaCross(
+  rows: OkxCandle[],
+  live: number,
+  instId: string,
+  symbol: string,
+  barMs = 4 * 3_600_000,
+): EmaWatch {
   const candles = toCandles(rows)
   const base = { instId, symbol, bars: candles.length, price: live }
   if (candles.length < EMA_CROSS_SETTINGS.length * 3) {
@@ -81,7 +92,21 @@ export function watchEmaCross(rows: OkxCandle[], live: number, instId: string, s
   // A cross from the side price is on: above the line it can only turn short, below it long.
   const next = status === 'nueva' ? side : status === 'cruzando' ? (liveAbove ? 'long' : 'short') : status === 'cerca' ? (liveAbove ? 'short' : 'long') : null
 
-  return { ...base, price, status, side, next, age, ema, distance, distanceAtr, entry: open?.entry, stop: open?.stop }
+  return {
+    ...base,
+    price,
+    status,
+    side,
+    next,
+    age,
+    ema,
+    distance,
+    distanceAtr,
+    entry: open?.entry,
+    entryAt: open ? candles[open.index].time + barMs : undefined,
+    volume: open ? volumeRatio(candles, open.index) : undefined,
+    stop: open?.stop,
+  }
 }
 
 const RANK: Record<WatchStatus, number> = { nueva: 0, cruzando: 1, cerca: 2, tendencia: 3, fuera: 4, corto: 5 }

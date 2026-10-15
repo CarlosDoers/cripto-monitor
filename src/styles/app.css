@@ -4468,6 +4468,22 @@ table.data td.watch-what {
   white-space: normal;
 }
 
+/* Seguimiento: how far a strategy is from the trades it needs, a bar with its words under it. */
+.tracking-progress {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 190px;
+}
+
+/* A count and, under it, the figure that must not be read alone. */
+.tracking-count {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+}
+
 /* The scanner's closing line: who did not touch, and who has too little history. */
 .ema-rest {
   margin: 0;

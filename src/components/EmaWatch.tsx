@@ -1,14 +1,16 @@
 import { useMemo } from 'react'
 import { compareWatch, watchEmaCross, type EmaWatch as Watch, type WatchStatus } from '../lib/emaWatch'
+import { CONTEXT_EVIDENCE, HIGH_VOLUME } from '../lib/entryContext'
 import { pct, plural, price, ratio } from '../lib/format'
 import { type Market } from '../lib/markets'
 import { profileOf, strategyByKey } from '../lib/indicators/registry'
 import { routeHref } from '../lib/router'
 import { useWatchScan } from '../lib/useWatchScan'
-import { barChoice, barOf } from '../lib/watchBars'
+import { rowContext, sideNote } from '../lib/watchContext'
+import { barChoice, barMsOf, barOf, spanText, type WatchBar } from '../lib/watchBars'
 import { Badge, Card, Help, TableSkeleton, TableWrap } from './ui'
 import { WatchControls } from './WatchControls'
-import { SideBadge, WatchLegend } from './WatchCells'
+import { ContextTags, SideBadge, WatchLegend } from './WatchCells'
 
 const STATUS: Record<WatchStatus, { label: string; variant: 'live' | 'buy' | 'warn' | 'neutral' }> = {
   nueva: { label: 'Señal nueva', variant: 'live' },
@@ -19,7 +21,12 @@ const STATUS: Record<WatchStatus, { label: string; variant: 'live' | 'buy' | 'wa
   corto: { label: 'Historial corto', variant: 'neutral' },
 }
 
-function what(w: Watch, span: (candles: number) => string, label: string): string {
+type Row = Watch & { bar: WatchBar }
+
+const signed = (x: number) => `${x >= 0 ? '+' : '−'}${ratio(Math.abs(x))}`
+
+function what(w: Row): string {
+  const span = (candles: number) => spanText(candles, w.bar)
   // What closing across the line would do: turn the open position, or open one.
   const turn = w.side && w.next ? `cierra el ${w.side} y abre un ${w.next}` : `abre un ${w.next}`
   switch (w.status) {
@@ -34,46 +41,53 @@ function what(w: Watch, span: (candles: number) => string, label: string): strin
     case 'fuera':
       return 'saltó el stop; espera al próximo cruce'
     case 'corto':
-      return `${w.bars} velas de ${label}; hacen falta 600`
+      return `${w.bars} velas de ${barOf(w.bar).label}; hacen falta 600`
   }
 }
 
 /**
  * "¿Qué vigilo?": the most traded X-Perps against the EMA 200 strategy on 4 h,
  * the one EMA configuration of the 162 swept that cleared the bar. On demand,
- * like the touch scan below it.
+ * like the touch scan below it. Only 4 h is offered — the registry blocks the
+ * strategy on 1 h, and so does this card.
  */
 export function EmaWatch({ markets }: { markets: Market[] }) {
   const scan = useWatchScan(markets)
-  const { ids, board, byId, bar, span } = scan
-  const label = barOf(bar).label
+  const { ids, boards, byId, bars: shown, view, regime, loaded } = scan
   const strategy = strategyByKey('ema200')
   const profile = profileOf(strategy, strategy.presets[0].key)
+  const ev = CONTEXT_EVIDENCE['ema200/base@4H']
   // The cross is only measured as tradable on 4 h: 1 h is offered disabled, with the reason.
-  const bars = { '4H': barChoice(profile, '4H'), '1H': barChoice(profile, '1H') }
+  const choices = { '4H': barChoice(profile, '4H'), '1H': barChoice(profile, '1H') }
 
-  const rows = useMemo(
-    () =>
-      (ids ?? [])
-        .filter((id) => board.byInst[id])
-        .map((id) => {
-          const m = byId.get(id)
-          return watchEmaCross(board.byInst[id], m?.last ?? 0, id, m?.symbol ?? id.split('-')[0])
-        })
-        .sort(compareWatch),
-    [ids, board.byInst, byId],
-  )
-  const watch = rows.filter((w) => w.status === 'nueva' || w.status === 'cruzando' || w.status === 'cerca')
+  const rows = useMemo(() => {
+    const byContract = new Map<string, Row[]>()
+    for (const id of ids ?? []) {
+      for (const bar of shown) {
+        const candles = boards[bar].byInst[id]
+        if (!candles) continue
+        const m = byId.get(id)
+        const w = watchEmaCross(candles, m?.last ?? 0, id, m?.symbol ?? id.split('-')[0], barMsOf(bar))
+        byContract.set(id, [...(byContract.get(id) ?? []), { ...w, bar }])
+      }
+    }
+    return [...byContract.values()]
+      .sort((a, b) => compareWatch([...a].sort(compareWatch)[0], [...b].sort(compareWatch)[0]))
+      .flat()
+  }, [ids, boards, byId, shown])
+
+  const watch = new Set(rows.filter((w) => w.status === 'nueva' || w.status === 'cruzando' || w.status === 'cerca').map((w) => w.instId))
   const total = ids?.length ?? 0
+  const label = view === 'both' ? '4 h y 1 h' : barOf(shown[0]).label
 
   return (
     <Card
       title={`Qué vigilar · EMA 200 en ${label}`}
       subtitle={
         ids
-          ? board.loaded < total
-            ? `Analizando ${board.loaded} de ${total}…`
-            : `${plural(watch.length, 'contrato para vigilar', 'contratos para vigilar')} de los ${total} más negociados`
+          ? loaded < total
+            ? `Analizando ${loaded} de ${total}…`
+            : `${plural(watch.size, 'contrato para vigilar', 'contratos para vigilar')} de los ${total} más negociados`
           : 'La única combinación de EMA que pasó el listón, de 162 probadas. Pulsa para ver qué X-Perp están en ella'
       }
       action={
@@ -98,11 +112,19 @@ export function EmaWatch({ markets }: { markets: Market[] }) {
             que la estrategia ya tiene abierta, simulada: no es tu cuenta. Aquí siempre son contrarias mientras cruza:
             un long abierto con la vela ya por debajo de la EMA es un short en camino.
           </p>
+          <p>
+            <strong>Contexto</strong> dice qué era cierto al entrar: si BTC estaba sobre su EMA 200 de 4 h, cuánto
+            volumen traía la vela y si cerró en fin de semana. En el cruce, con la vela a {ratio(HIGH_VOLUME, 1)} veces el
+            volumen medio o más midió {signed(ev.volume.with)} R por operación y con menos {signed(ev.volume.without)} R;
+            los longs con BTC sobre su EMA, {signed(ev.longs.with)} R y con BTC debajo {signed(ev.longs.without)} R.
+            Describe, no puntúa ni filtra: se encontró mirando el histórico y la sección Seguimiento lo pone a prueba
+            con operaciones que entonces no existían.
+          </p>
         </Help>
       }
       flush
     >
-      <WatchControls scan={scan} empty={markets.length === 0} bars={bars} />
+      <WatchControls scan={scan} empty={markets.length === 0} bars={choices} />
 
       {!ids ? null : rows.length === 0 ? (
         <TableSkeleton rows={Math.min(total, 6)} cols={7} />
@@ -115,9 +137,9 @@ export function EmaWatch({ markets }: { markets: Market[] }) {
                 <th>Señal</th>
                 <th>Posición ahora</th>
                 <th>Qué pasa</th>
+                <th>Contexto</th>
                 <th className="num">Precio</th>
                 <th className="num">EMA 200</th>
-                <th className="num">Distancia</th>
                 <th className="num">Stop de la posición</th>
                 <th>Gráfico</th>
               </tr>
@@ -125,14 +147,18 @@ export function EmaWatch({ markets }: { markets: Market[] }) {
             <tbody>
               {rows.map((w) => {
                 const s = STATUS[w.status]
+                const note = (side: 'long' | 'short') => sideNote('ema200', 'base', w.bar, side)
                 return (
-                  <tr key={w.instId}>
+                  <tr key={`${w.instId}-${w.bar}`}>
                     <td>
-                      <span className="ccy">{w.symbol}</span>
+                      <span className="watch-signal">
+                        <span className="ccy">{w.symbol}</span>
+                        {view === 'both' && <span className="sub">{barOf(w.bar).label}</span>}
+                      </span>
                     </td>
                     <td>
                       <span className="watch-signal">
-                        {w.next && <SideBadge side={w.next} />}
+                        {w.next && <SideBadge side={w.next} note={note(w.next)} />}
                         <Badge variant={s.variant} pulse={w.status === 'nueva' || w.status === 'cruzando'}>
                           {s.label}
                         </Badge>
@@ -141,20 +167,27 @@ export function EmaWatch({ markets }: { markets: Market[] }) {
                     <td>
                       {w.side ? (
                         <span className="watch-signal">
-                          <SideBadge side={w.side} />
+                          <SideBadge side={w.side} note={note(w.side)} />
                           {w.entry !== undefined && <span className="sub">entrada {price(w.entry)}</span>}
                         </span>
                       ) : (
                         <span className="sub">—</span>
                       )}
                     </td>
-                    <td className="sub watch-what">{what(w, span, label)}</td>
+                    <td className="sub watch-what">{what(w)}</td>
+                    <td>
+                      <ContextTags tags={rowContext(w, regime, 'ema200', 'base', w.bar)} />
+                    </td>
                     <td className="num">{price(w.price)}</td>
-                    <td className="num">{Number.isFinite(w.ema) ? price(w.ema) : '—'}</td>
                     <td className="num">
-                      {Number.isFinite(w.distance) ? (
+                      {Number.isFinite(w.ema) ? (
                         <span>
-                          {pct(w.distance)} <span className="sub">· {ratio(w.distanceAtr, 1)} ATR</span>
+                          {price(w.ema)}{' '}
+                          {Number.isFinite(w.distance) && (
+                            <span className="sub">
+                              · {pct(w.distance)} · {ratio(w.distanceAtr, 1)} ATR
+                            </span>
+                          )}
                         </span>
                       ) : (
                         '—'
@@ -162,7 +195,10 @@ export function EmaWatch({ markets }: { markets: Market[] }) {
                     </td>
                     <td className="num">{w.stop !== undefined ? price(w.stop) : '—'}</td>
                     <td>
-                      <a className="card-link" href={routeHref('estrategias', { inst: w.instId, s: 'ema200', tf: bar })}>
+                      <a
+                        className="card-link"
+                        href={routeHref('estrategias', { inst: w.instId, s: 'ema200', tf: w.bar })}
+                      >
                         Ver →
                       </a>
                     </td>
@@ -173,7 +209,7 @@ export function EmaWatch({ markets }: { markets: Market[] }) {
           </table>
         </TableWrap>
       )}
-      {ids && rows.length > 0 && <WatchLegend label={label} />}
+      {ids && rows.length > 0 && <WatchLegend label={view === 'both' ? 'su marco' : barOf(shown[0]).label} />}
     </Card>
   )
 }

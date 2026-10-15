@@ -1,3 +1,4 @@
+import { volumeRatio } from './entryContext'
 import { atr, ema, highest, lowest } from './indicators/ta'
 import { analyseDonchian, DONCHIAN_TREND_SETTINGS } from './indicators/donchianBreakout'
 import { toCandles } from './signals'
@@ -51,6 +52,10 @@ export interface DonchianWatch {
   distance: number
   distanceAtr: number
   entry?: number
+  /** Close time of the candle the open position entered on, in ms. */
+  entryAt?: number
+  /** That candle's volume over the mean of the 20 before it (`entryContext`). NaN when unknown. */
+  volume?: number
   /** Where the stop stands now — the trail, once it has moved past the initial one. */
   stop?: number
   bars: number
@@ -61,7 +66,14 @@ export interface DonchianWatch {
 const NEAR_ATR = 0.5
 const FRESH = 1
 
-export function watchDonchianTrend(rows: OkxCandle[], live: number, instId: string, symbol: string): DonchianWatch {
+/** `barMs` is the candle's length: the 4 h of the longer reading by default. */
+export function watchDonchianTrend(
+  rows: OkxCandle[],
+  live: number,
+  instId: string,
+  symbol: string,
+  barMs = 4 * 3_600_000,
+): DonchianWatch {
   const candles = toCandles(rows)
   const s = DONCHIAN_TREND_SETTINGS
   const result = analyseDonchian(candles, s)
@@ -126,6 +138,8 @@ export function watchDonchianTrend(rows: OkxCandle[], live: number, instId: stri
     distance: waiting ? price / level - 1 : NaN,
     distanceAtr: waiting ? Math.abs(toLevel) / unit : NaN,
     entry: open?.entry,
+    entryAt: open ? candles[open.index].time + barMs : undefined,
+    volume: open ? volumeRatio(candles, open.index) : undefined,
     stop: open ? (open.stopNow ?? open.stop) : undefined,
   }
 }

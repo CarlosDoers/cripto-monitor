@@ -1,5 +1,18 @@
-import { useQueries, useQuery, type UseQueryOptions } from '@tanstack/react-query'
-import { okx, ApiError, netWorthHistory, recordNetWorth, type NetWorthHistory } from './api'
+import { useEffect } from 'react'
+import { useQueries, useQuery, useQueryClient, type UseQueryOptions } from '@tanstack/react-query'
+import {
+  okx,
+  ApiError,
+  netWorthHistory,
+  recordNetWorth,
+  runWatchNow,
+  watchLedger,
+  watchMeta,
+  type NetWorthHistory,
+  type WatchMeta,
+  type WatchSettings,
+} from './api'
+import { parseLedger, type Ledger } from './ledgerModel'
 import { instTypeOf } from './instruments'
 import { num } from './format'
 import type {
@@ -942,4 +955,65 @@ export function useNetWorthHistory() {
     refetchInterval: HOURLY,
     retry: false,
   })
+}
+
+export interface TrackingState {
+  enabled: boolean
+  storage?: 'blob' | 'file'
+  ledger: Ledger | null
+  config: WatchSettings
+}
+
+/**
+ * The tracking ledger the server keeps (`api/watch.ts`). Read, never computed
+ * here: the browser has no say in what was recorded. Only the Seguimiento view
+ * reads it, every few minutes while it is open; every other view just asks its
+ * pulse once an hour (`useWatchKeepalive`), so a tab left open is also the
+ * hourly trigger.
+ */
+export function useWatchLedger() {
+  return useQuery<TrackingState, ApiError>({
+    queryKey: ['watch-ledger'],
+    queryFn: async () => {
+      const state = await watchLedger()
+      return { enabled: state.enabled, storage: state.storage, config: state.config, ledger: parseLedger(state.ledger) }
+    },
+    staleTime: SLOW,
+    refetchInterval: SLOW,
+    retry: false,
+  })
+}
+
+/** The last time this page asked the server for a pass: one an hour is the most it will ask for. */
+let lastWatchTrigger = 0
+
+/**
+ * Asks the server for a pass when the ledger has not had one for most of an
+ * hour. The daily cron is the floor and an external scheduler can do hourly;
+ * this makes opening the app — or leaving it open — one more trigger, so the
+ * ledger keeps up wherever the app is used. The server decides whether to run:
+ * a second ask inside ten minutes is skipped there.
+ */
+export function useWatchKeepalive() {
+  const client = useQueryClient()
+  // Its pulse only: the ledger itself is megabytes and every view would be reading it every hour.
+  const { data } = useQuery<WatchMeta, ApiError>({
+    queryKey: ['watch-meta'],
+    queryFn: watchMeta,
+    staleTime: HOURLY,
+    refetchInterval: HOURLY,
+    retry: false,
+  })
+  useEffect(() => {
+    if (!data?.enabled || !data.meta) return
+    const age = data.meta.exists ? Date.now() - data.meta.lastRun : Infinity
+    if (age < 55 * 60_000 || Date.now() - lastWatchTrigger < 50 * 60_000) return
+    lastWatchTrigger = Date.now()
+    void runWatchNow()
+      .catch(() => undefined)
+      .finally(() => {
+        void client.invalidateQueries({ queryKey: ['watch-ledger'] })
+        void client.invalidateQueries({ queryKey: ['watch-meta'] })
+      })
+  }, [data, client])
 }

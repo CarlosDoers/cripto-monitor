@@ -18,6 +18,15 @@ export const WATCH_BARS = [
 
 export const barOf = (key: WatchBar) => WATCH_BARS.find((b) => b.key === key)!
 
+/** What a card shows: one reading, or the two side by side, a row each. */
+export type WatchView = WatchBar | 'both'
+
+/** The bars a view reads, longer first. */
+export const barsOf = (view: WatchView): WatchBar[] => (view === 'both' ? ['4H', '1H'] : [view])
+
+/** A candle's length in ms, for the functions that turn a candle's open time into its close. */
+export const barMsOf = (key: WatchBar) => barOf(key).hours * 3_600_000
+
 /** An age in candles of `bar`, as the cards say it: "hace 12 h", then days. */
 export function spanText(candles: number, bar: WatchBar): string {
   const hours = candles * barOf(bar).hours

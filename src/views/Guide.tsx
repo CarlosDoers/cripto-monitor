@@ -411,6 +411,20 @@ const FINDINGS: { verdict: Verdict; what: string; detail: ReactNode }[] = [
   },
   {
     verdict: 'no',
+    what: 'Comprar los «pumps» de 7 días en monedas poco negociadas',
+    detail: (
+      <>
+        Un vídeo atribuye a eso el −48 % de un bot de IA. Medido en las 595 monedas de Binance desde 2018,
+        con las 187 que dejaron de cotizar, repartidas por volumen en dólares: el quinto que más sube en 7 días
+        rinde <strong>+0,5 %, −0,3 % y +0,1 %</strong> a la semana sobre su banda (líquidas, medias,
+        ilíquidas), y los que suben más de un 30 %, −0,0 %, −1,8 % y −0,7 %. Ninguna celda pasa el listón (t
+        entre −1,5 y +1,4) y el signo cambia con la definición. No se demuestra que pierda ni que gane; lo
+        que sí se ve es una cola derecha que seduce y un resultado típico por debajo de cero.
+      </>
+    ),
+  },
+  {
+    verdict: 'no',
     what: 'Flechas de compra y venta con Klinger y «más del 90 % de acierto»',
     detail: (
       <>

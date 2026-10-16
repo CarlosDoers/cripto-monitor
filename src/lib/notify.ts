@@ -1,6 +1,7 @@
 import { contextLine } from './entryContext'
-import { pct, price, ratio, share } from './format'
+import { pct, price, quote, ratio, share } from './format'
 import { entryTags, REFERENCE, trackLabel, type LedgerEntry } from './ledger'
+import { isTradTrack, liquidityVerdict, tradDisplay, tradKindNote, tradSymbolByOkx, TRAD_KIND, TRAD_TRACK_KEY } from './tradMarkets'
 
 /**
  * The notification a new signal produces, and the two channels it can go to.
@@ -30,8 +31,13 @@ type Fetch = typeof fetch
 const signedR = (x: number) => `${x >= 0 ? '+' : '−'}${ratio(Math.abs(x))}`
 const barText = (bar: LedgerEntry['bar']) => (bar === '1D' ? '1 d' : bar === '4H' ? '4 h' : '1 h')
 
-/** The link into Estrategias on this contract, bar and preset. */
+/**
+ * The link into the app for this signal: Estrategias on the contract, bar and preset for a crypto one; the Screener,
+ * where the equities card lives, for a stock, ETF or commodity (those have no strategy chart of their own: the
+ * history the rule reads is the underlying's).
+ */
 export function entryUrl(e: LedgerEntry, appUrl: string): string {
+  if (isTradTrack(e.track)) return `${appUrl.replace(/\/+$/, '')}/#/screener`
   const query = new URLSearchParams({ inst: e.instId, s: e.strategy, p: e.preset, tf: e.bar })
   return `${appUrl.replace(/\/+$/, '')}/#/estrategias?${query}`
 }
@@ -42,12 +48,20 @@ export function entryUrl(e: LedgerEntry, appUrl: string): string {
  * contract, the side, the bar and the candle; each strategy keeps its own line
  * because its stop, and what was measured for it, differ.
  */
-export function formatAlert(group: LedgerEntry[], appUrl?: string): AlertMessage {
+export function formatAlert(group: LedgerEntry[], appUrl?: string, extra: string[] = []): AlertMessage {
   const [first] = group
   const side = first.side === 'long' ? 'Long' : 'Short'
   const lines = group.flatMap((e) => {
     const ref = REFERENCE[e.track]
     const risk = Math.abs(e.entry - e.stop) / e.entry
+    if (isTradTrack(e.track) && e.kind) {
+      // An equity, ETF or commodity: the price is the underlying's close on its exchange, the contract is OKX's.
+      return [
+        `${trackLabel(e.track)}: entrada ${quote(e.entry)} (cierre del subyacente) · stop ${quote(e.stop)} (${share(risk, 1)} de riesgo, 2 ATR; luego un trailing de 8 ATR)`,
+        e.okxId ? `   contrato en OKX: ${e.okxId} · ${TRAD_KIND[e.kind].label}` : '',
+        `   ${tradKindNote(e.kind)}`,
+      ]
+    }
     return [
       `${trackLabel(e.track)}: entrada ${price(e.entry)} · stop ${price(e.stop)} (${share(risk, 1)} de riesgo)${
         e.target !== undefined ? ` · objetivo ${price(e.target)} (${pct((e.target - e.entry) / e.entry, 1)})` : ''
@@ -58,14 +72,17 @@ export function formatAlert(group: LedgerEntry[], appUrl?: string): AlertMessage
     ]
   })
   // The candle is the same for all of them, so its context is too: say it once.
-  const tags = contextLine(entryTags(first))
-  const body = [...lines.filter(Boolean), tags, 'Contexto para vigilar, no una recomendación: la app no opera.']
+  // The crypto tags (volume, BTC's regime, weekend) were measured on crypto and did not replicate on ETFs or stocks.
+  const tags = isTradTrack(first.track) ? '' : contextLine(entryTags(first))
+  const body = [...lines.filter(Boolean), ...extra, tags, 'Contexto para vigilar, no una recomendación: la app no opera.']
     .filter(Boolean)
     .join('\n')
   // The preset the app leads with: the filtered breakout, then the cross, then the plain breakout.
   const lead = [...group].sort((a, b) => PRIORITY(a.track) - PRIORITY(b.track))[0]
+  const named = isTradTrack(first.track) ? tradSymbolByOkx(first.symbol) : undefined
+  const who = named ? tradDisplay(named) : first.symbol
   return {
-    title: `Señal nueva · ${first.symbol} · ${side} · ${barText(first.bar)}`,
+    title: `Señal nueva · ${who} · ${side} · ${barText(first.bar)}`,
     body,
     url: appUrl ? entryUrl(lead, appUrl) : undefined,
   }
@@ -144,6 +161,42 @@ export interface TestResult {
 }
 
 /**
+ * What an alert of the equities track looks like, with made-up figures and said so: gold is the case that carries the
+ * most (its funding line), and nothing on the screen of a phone says "this one is only an example" better than the title.
+ */
+export function exampleTradAlert(appUrl?: string): AlertMessage {
+  const sample: LedgerEntry = {
+    id: 'ejemplo',
+    track: TRAD_TRACK_KEY,
+    strategy: 'donchian',
+    preset: 'trend',
+    bar: '1D',
+    instId: 'GLD',
+    symbol: 'XAU',
+    side: 'long',
+    at: 0,
+    entry: 400,
+    stop: 380,
+    status: 'open',
+    feeR: 0.02,
+    seen: 0,
+    volume: null,
+    btcAbove: null,
+    weekend: false,
+    kind: 'commodity',
+    okxId: 'XAU-USD_UM_XPERP-310502',
+  }
+  // The two lines a real one carries after the evidence: what the perpetual charges a long, and what its book says about getting in.
+  const liquidity = liquidityVerdict({ mid: 400, spreadBp: 0.2, buyBp: 1.4, sellBp: 1.4 }, 0.05).line
+  const m = formatAlert([sample], appUrl, ['   financiación ahora: +20,0 % anual, la paga quien está largo', liquidity])
+  return {
+    title: `Ejemplo · ${m.title}`,
+    body: ['Así se vería un aviso de bolsa, ETF u oro. Las cifras de este mensaje son inventadas: no es una señal.', m.body].join('\n'),
+    url: m.url,
+  }
+}
+
+/**
  * A message that is not a signal, through every configured channel: the way to
  * find out that the topic, the token and the phone are right without waiting
  * for the market. `ok` means the channel's server accepted it — ntfy answers
@@ -153,6 +206,7 @@ export interface TestResult {
  * status line: a Telegram address has the bot's token in it.
  */
 export async function sendTestAlerts(env: Env, appUrl?: string, fetchImpl: Fetch = fetch): Promise<TestResult> {
+  const example = exampleTradAlert(appUrl)
   const message: AlertMessage = {
     title: 'Aviso de prueba · Cripto Monitor',
     body: [
@@ -165,6 +219,8 @@ export async function sendTestAlerts(env: Env, appUrl?: string, fetchImpl: Fetch
   for (const n of notifiersFromEnv(env, fetchImpl)) {
     try {
       await n.send(message)
+      // And how a signal of the equities track will look, so the first real one is not the first time it is read.
+      await n.send(example)
       channels.push({ name: n.name, ok: true })
     } catch (err) {
       channels.push({ name: n.name, ok: false, error: (err instanceof Error ? err.message : String(err)).slice(0, 120) })

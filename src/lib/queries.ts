@@ -6,13 +6,14 @@ import {
   netWorthHistory,
   recordNetWorth,
   runWatchNow,
+  tradBoard,
   watchLedger,
   watchMeta,
   type NetWorthHistory,
   type WatchMeta,
   type WatchSettings,
 } from './api'
-import { parseLedger, type Ledger } from './ledgerModel'
+import { parseBoard, parseLedger, type Ledger, type TradBoard } from './ledgerModel'
 import { instTypeOf } from './instruments'
 import { num } from './format'
 import type {
@@ -977,6 +978,30 @@ export function useWatchLedger() {
     queryFn: async () => {
       const state = await watchLedger()
       return { enabled: state.enabled, storage: state.storage, config: state.config, ledger: parseLedger(state.ledger) }
+    },
+    staleTime: SLOW,
+    refetchInterval: SLOW,
+    retry: false,
+  })
+}
+
+export interface TradBoardData {
+  enabled: boolean
+  config: TrackingState['config']
+  board: TradBoard | undefined
+  lastRun: number
+}
+
+/**
+ * The equities board the server writes after each New York close: where every stock, ETF and commodity perpetual
+ * stands against the daily trend rule. A few kilobytes, so the Screener can read it without the ledger.
+ */
+export function useTradBoard() {
+  return useQuery<TradBoardData, ApiError>({
+    queryKey: ['trad-board'],
+    queryFn: async () => {
+      const state = await tradBoard()
+      return { enabled: state.enabled, config: state.config, board: parseBoard(state.board), lastRun: state.lastRun }
     },
     staleTime: SLOW,
     refetchInterval: SLOW,

@@ -1,24 +1,34 @@
 // Daily candles of what OKX's X-Perp board lists besides crypto — equities, ETFs, leveraged ETFs, gold,
 // silver, WTI and Brent — plus the macro series a regime filter would read, from Yahoo's public chart
-// endpoint, into ./.research/yahoo-1d/<SYMBOL>.json in the shape the strategies take
-// ({ time, open, high, low, close, vol, confirmed }).
+// endpoint, in the shape the strategies take ({ time, open, high, low, close, vol, confirmed }), in two
+// folders from the same request:
+//
+//   ./.research/yahoo-1d-raw/<SYMBOL>.json   the prices as Yahoo prints them: adjusted for splits, NOT for
+//                                            dividends. These are what a position is opened and stopped at,
+//                                            and what `npm run novel` and the app's equities track measure.
+//   ./.research/yahoo-1d/<SYMBOL>.json       rescaled to total return (open, high and low by adjclose/close).
+//                                            Only the benchmark wants it: SPY held with its dividends.
 //
 //   node scripts/fetch-yahoo.mjs            fetch what is missing
 //   REFRESH=1 node scripts/fetch-yahoo.mjs  fetch everything again
 //   SYMBOLS=SPY,QQQ node scripts/fetch-yahoo.mjs   only these
 //
-// No key. Two details that matter:
+// No key. Three details that matter:
 //   · `range=max` returns MONTHLY bars whatever the interval says; explicit period1/period2 returns daily.
-//   · Open, high and low are rescaled by adjclose/close so a dividend is not a gap: the series is a total
-//     return one, which is what a strategy that holds for weeks earns. Futures carry no dividends, so the
-//     continuous contracts (GC=F …) are untouched — and carry their roll gaps, which is why the
-//     research uses the physical ETFs for the commodities and keeps the futures as a cross-check only.
+//   · The first research ran on the total-return series, and the coupons of the bond ETFs were most of what it
+//     called an edge (+0.54 R long on bonds, currencies and commodities became +0.05 R on raw prices). A
+//     perpetual pays no dividend, so a rule is measured on the raw series and only the benchmark on the other.
+//   · Futures carry no dividends, so the continuous contracts (GC=F …) are the same in both — and carry their
+//     roll gaps, which is why the research uses the physical ETFs for the commodities and keeps the futures
+//     as a cross-check only.
 //
 // ./.research is gitignored and in .vercelignore.
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
 
-const DIR = './.research/yahoo-1d'
-mkdirSync(DIR, { recursive: true })
+const RAW_DIR = './.research/yahoo-1d-raw'
+const ADJ_DIR = './.research/yahoo-1d'
+mkdirSync(RAW_DIR, { recursive: true })
+mkdirSync(ADJ_DIR, { recursive: true })
 
 /** group → symbols. The group names are what `npm run novel` reports by. */
 export const UNIVERSE = {
@@ -48,9 +58,10 @@ export const UNIVERSE = {
   macro: ['^GSPC', '^NDX', '^IXIC', '^VIX', 'DX-Y.NYB', '^TNX', '^TYX', '^IRX', 'KRW=X', 'EURUSD=X'],
 }
 
-const file = (sym) => `${DIR}/${sym.replace(/[^A-Za-z0-9.=-]/g, '_')}.json`
+const file = (dir, sym) => `${dir}/${sym.replace(/[^A-Za-z0-9.=-]/g, '_')}.json`
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 
+/** One symbol's daily bars twice over: `raw` as printed, `adjusted` rescaled to total return. Null when Yahoo has nothing. */
 export async function fetchSymbol(sym) {
   const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(sym)}?period1=0&period2=${Math.floor(Date.now() / 1000)}&interval=1d&events=div%7Csplit`
   for (let attempt = 0; attempt < 4; attempt++) {
@@ -64,25 +75,23 @@ export async function fetchSymbol(sym) {
     if (!res?.timestamp) return null
     const q = res.indicators.quote[0]
     const adj = res.indicators.adjclose?.[0]?.adjclose
-    const rows = []
+    const raw = []
+    const adjusted = []
+    // One bar per date, the first: a stray duplicate (a partial session) would break every rolling window.
+    const seen = new Set()
     for (let i = 0; i < res.timestamp.length; i++) {
       const [o, h, l, c] = [q.open[i], q.high[i], q.low[i], q.close[i]]
       if (![o, h, l, c].every((x) => Number.isFinite(x) && x > 0)) continue
+      // The trading date at 00:00 UTC: Yahoo stamps each bar with the exchange's open.
+      const time = Math.floor((res.timestamp[i] * 1000) / 86_400_000) * 86_400_000
+      if (seen.has(time)) continue
+      seen.add(time)
       const k = adj && Number.isFinite(adj[i]) && adj[i] > 0 ? adj[i] / c : 1
-      rows.push({
-        // The trading date at 00:00 UTC: Yahoo stamps each bar with the exchange's open.
-        time: Math.floor((res.timestamp[i] * 1000) / 86_400_000) * 86_400_000,
-        open: o * k,
-        high: h * k,
-        low: l * k,
-        close: c * k,
-        vol: q.volume?.[i] ?? 0,
-        confirmed: true,
-      })
+      const vol = q.volume?.[i] ?? 0
+      raw.push({ time, open: o, high: h, low: l, close: c, vol, confirmed: true })
+      adjusted.push({ time, open: o * k, high: h * k, low: l * k, close: c * k, vol, confirmed: true })
     }
-    // One bar per date: a stray duplicate (a partial session) would break every rolling window.
-    const seen = new Set()
-    return rows.filter((x) => (seen.has(x.time) ? false : (seen.add(x.time), true)))
+    return { raw, adjusted }
   }
   return null
 }
@@ -94,17 +103,20 @@ if (process.argv[1]?.endsWith('fetch-yahoo.mjs')) {
   let ok = 0
   const failed = []
   for (const sym of symbols) {
-    if (!process.env.REFRESH && existsSync(file(sym))) {
+    // A symbol with only one of the two files (an older run wrote the adjusted series alone) is fetched again.
+    if (!process.env.REFRESH && existsSync(file(RAW_DIR, sym)) && existsSync(file(ADJ_DIR, sym))) {
       ok++
       continue
     }
-    const rows = await fetchSymbol(sym)
-    if (!rows || rows.length < 100) {
+    const got = await fetchSymbol(sym)
+    if (!got || got.raw.length < 100) {
       failed.push(sym)
       console.log(`  ✗ ${sym}`)
     } else {
-      writeFileSync(file(sym), JSON.stringify(rows))
+      writeFileSync(file(RAW_DIR, sym), JSON.stringify(got.raw))
+      writeFileSync(file(ADJ_DIR, sym), JSON.stringify(got.adjusted))
       ok++
+      const rows = got.raw
       console.log(`  ✓ ${sym.padEnd(9)} ${String(rows.length).padStart(5)} barras  ${new Date(rows[0].time).toISOString().slice(0, 10)} → ${new Date(rows[rows.length - 1].time).toISOString().slice(0, 10)}`)
     }
     await sleep(350)

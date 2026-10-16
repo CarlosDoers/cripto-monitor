@@ -5,7 +5,7 @@
 // So the search goes where the account can trade and the repo had not looked. OKX's board lists 76 equity and
 // ETF X-Perps (AAPL, TSLA, SPY, QQQ, SOXL, SOXS …) and four commodities (XAU, XAG, CL, BZ), all listed in the
 // last six months — too young to measure on their own, but what they track has 25 years of free daily history
-// (`node scripts/fetch-yahoo.mjs` → ./.research/yahoo-1d). Six ideas, each with its mechanism, its rules, its
+// (`node scripts/fetch-yahoo.mjs` → ./.research/yahoo-1d-raw, and yahoo-1d for the benchmark). Six ideas, each with its mechanism, its rules, its
 // control and its bar fixed here. A result is reported whatever it says; a rule changed after a bad number is
 // a new trial, counted, never a correction.
 //
@@ -102,6 +102,7 @@ const median = (xs) => {
 let seed = 20261016
 const rnd = () => (seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648
 const monthOf = (ms) => new Date(ms).toISOString().slice(0, 7)
+const iso = (ms) => new Date(ms).toISOString().slice(0, 10)
 const yearOf = (ms) => new Date(ms).getUTCFullYear()
 
 /** Mean and 95 % interval resampling calendar months — entries on one day are not independent. */
@@ -131,29 +132,38 @@ function monthBootstrap(rows, value = (r) => r.r, key = (r) => monthOf(r.time), 
   return [draws[Math.floor(runs * 0.025)], draws[Math.floor(runs * 0.975)]]
 }
 
+// The default is the prices a position is opened and stopped at (split-adjusted, dividends NOT removed): the first
+// run of this family used the total-return series, and the bond ETFs' coupons were most of what it called an edge
+// (+0.54 R long on bonds, currencies and commodities became +0.05 R). YAHOO_DIR=./.research/yahoo-1d measures the
+// adjusted series; `node scripts/fetch-yahoo.mjs` writes both.
+const YAHOO_DIR = process.env.YAHOO_DIR ?? './.research/yahoo-1d-raw'
 function loadYahoo(sym) {
-  const path = `./.research/yahoo-1d/${sym.replace(/[^A-Za-z0-9.=-]/g, '_')}.json`
+  const path = `${YAHOO_DIR}/${sym.replace(/[^A-Za-z0-9.=-]/g, '_')}.json`
   return existsSync(path) ? JSON.parse(readFileSync(path, 'utf8')) : null
 }
-if (!existsSync('./.research/yahoo-1d')) {
-  console.log('Falta ./.research/yahoo-1d: node scripts/fetch-yahoo.mjs')
+if (!existsSync(YAHOO_DIR)) {
+  console.log(`Falta ${YAHOO_DIR}: node scripts/fetch-yahoo.mjs`)
   process.exit(1)
 }
 
 /** The same trades with the entry thrown away (see `try-strategy.mjs`): same risk distance and holding time, random start and side. */
-function randomControl(trades, sameSide = false) {
+const makeRnd = (seed) => () => (seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648
+/** `reps` > 1 averages that many draws from a PRNG of its own: one draw wanders ±0.06 R on a thousand trades. */
+function randomControl(trades, sameSide = false, reps = 1) {
+  const rand = reps > 1 ? makeRnd(7) : rnd
   const holds = trades.map((t) => t.hold).filter((h) => h > 0)
   if (!holds.length) return []
   const hold = median(holds)
   const out = []
+  for (let rep = 0; rep < reps; rep++)
   for (const t of trades) {
     const cs = t.candles
-    const start = t.index + Math.floor(rnd() * Math.max(1, hold))
+    const start = t.index + Math.floor(rand() * Math.max(1, hold))
     const end = Math.min(cs.length, start + hold)
     if (start >= end || !(t.risk > 0)) continue
     // `sameSide` keeps each trade's direction: in a market that drifts up a random LONG earns the drift, and
     // only a control that keeps the side can say whether the signal added anything to it.
-    const dir = sameSide ? (t.side === 'long' ? 1 : -1) : rnd() < 0.5 ? 1 : -1
+    const dir = sameSide ? (t.side === 'long' ? 1 : -1) : rand() < 0.5 ? 1 : -1
     const entry = cs[start].close
     const stop = entry - dir * t.risk
     let r = null
@@ -168,6 +178,15 @@ function randomControl(trades, sameSide = false) {
   }
   return out
 }
+
+// ── which ETFs the follow-up diagnostics run on ──────────────────────────────────────────────────────────
+// TREND_SET=equity (the default): index and sector ETFs — what OKX lists besides single stocks, and where the long edge
+// survived the move to real prices. TREND_SET=all: those plus bonds, currencies, other commodities and REITs.
+const TREND_SETS = {
+  equity: [...UNIVERSE.equityIndex, ...UNIVERSE.sectors],
+  all: [...UNIVERSE.commodityOkx, ...UNIVERSE.commodityOther, ...UNIVERSE.equityIndex, ...UNIVERSE.sectors, ...UNIVERSE.bonds, ...UNIVERSE.fx, ...UNIVERSE.reit],
+}
+const TREND_SET = TREND_SETS[process.env.TREND_SET ?? 'equity'] ?? TREND_SETS.equity
 
 // ── T: the trend rules on other markets ─────────────────────────────────────────────────────────────────
 const TREND_STRATEGIES = [
@@ -305,6 +324,9 @@ if (MODE === 'trend-long') {
   const wide = [...UNIVERSE.commodityOther, ...UNIVERSE.equityIndex, ...UNIVERSE.sectors, ...UNIVERSE.bonds, ...UNIVERSE.fx, ...UNIVERSE.reit]
   console.log(`CANAL 20 + EMA 200, SOLO LARGOS (variante contada: ${TRIALS} pruebas en total)\n`)
   const only = (symbols, minBars) => tradesOf(symbols, TREND_STRATEGIES[0][1], minBars).filter((t) => t.side === 'long')
+  const equity = [...UNIVERSE.equityIndex, ...UNIVERSE.sectors]
+  describeGroup('ETF de índices y sectores (20), largos', only(equity, 1500), TRIALS)
+  describeGroup(`ETF apalancados (${UNIVERSE.leveraged.length}), largos`, only(UNIVERSE.leveraged, 1500), TRIALS)
   describeGroup('ETF diversificados (41), largos', only(wide, 1500), TRIALS)
   describeGroup('las 4 materias primas de OKX, largos', only(UNIVERSE.commodityOkx, 1500), TRIALS)
   describeGroup('acciones que lista OKX, largos', only(UNIVERSE.okxStocks, 1800), TRIALS)
@@ -890,11 +912,10 @@ if (MODE === 'dumps-short') {
 
 // Diagnostic of `trend-long`: is the long edge still there in the last years? (read after the first runs, not a trial)
 if (MODE === 'trend-years') {
-  const wide = [...UNIVERSE.commodityOkx, ...UNIVERSE.commodityOther, ...UNIVERSE.equityIndex, ...UNIVERSE.sectors, ...UNIVERSE.bonds, ...UNIVERSE.fx, ...UNIVERSE.reit]
   const donchian = TREND_STRATEGIES[0][1]
-  const longs = tradesOf(wide, donchian).filter((t) => t.side === 'long')
+  const longs = tradesOf(TREND_SET, donchian).filter((t) => t.side === 'long')
   const randLong = (ts) => mean(randomControl(ts, true))
-  console.log(`CANAL 20 + EMA 200, SOLO LARGOS, ETF diversificados + 4 materias primas: año a año (n entradas, neto, azar del mismo lado)\n`)
+  console.log(`CANAL 20 + EMA 200, SOLO LARGOS, conjunto TREND_SET: año a año (n entradas, neto, azar del mismo lado)\n`)
   const years = [...new Set(longs.map((t) => yearOf(t.time)))].sort()
   for (const y of years) {
     const t = longs.filter((x) => yearOf(x.time) === y)
@@ -1115,86 +1136,38 @@ if (MODE === 'grid') {
 // Not a trial: the same trades as `trend-long`, each sized so that 1 R is 0.25 % of equity (not compounded),
 // marked every day at the close, summed across the open ones. Reported next to SPY held.
 if (MODE === 'trend-portfolio') {
-  const RISK = 0.0025
-  const symbols = [...UNIVERSE.commodityOkx, ...UNIVERSE.commodityOther, ...UNIVERSE.equityIndex, ...UNIVERSE.sectors, ...UNIVERSE.bonds, ...UNIVERSE.fx, ...UNIVERSE.reit]
-  const daily = new Map() // day -> { pnl, exposure, open }
-  const bump = (day) => {
-    if (!daily.has(day)) daily.set(day, { pnl: 0, exposure: 0, open: 0 })
-    return daily.get(day)
-  }
-  let used = 0
-  for (const sym of symbols) {
-    const c = loadYahoo(sym)
-    if (!c || c.length < 1500) continue
-    used++
-    for (const s of analyseDonchian(c, DONCHIAN_TREND_SETTINGS).signals) {
-      if (s.side !== 'long' || s.outcome === 'open' || !Number.isFinite(s.resultR)) continue
-      const risk = Math.abs(s.entry - s.stop)
-      let prev = -s.feeR
-      bump(c[s.index].time).pnl += prev * RISK
-      for (let i = s.index + 1; i <= s.closedIndex; i++) {
-        const r = i === s.closedIndex ? s.resultR - s.feeR : (c[i].close - s.entry) / risk - s.feeR
-        const d = bump(c[i].time)
-        d.pnl += (r - prev) * RISK
-        if (i < s.closedIndex) {
-          d.exposure += RISK * (c[i].close / risk)
-          d.open += 1
-        }
-        prev = r
+  const p = tradPortfolio(TREND_SET)
+  console.log(`CARTERA: Canal 20 + EMA 200 solo largos, 1 R = 0,25 % del capital, marcada cada día de mercado desde 2008 (cero los días sin posición: ${pc(p.flatShare, 0)} de ellos), 0,1 % de comisión; SPY con dividendos\n`)
+  console.log(`  exposición bruta media ${pc(p.exposure, 0)} del capital`)
+  const ranges = [['2008–2026', 2008, 2026], ['2008–2014', 2008, 2014], ['2015–2021', 2015, 2021], ['2022–2026', 2022, 2026]]
+  for (const [label, a, b] of ranges) {
+    const from = p.days.findIndex((d) => yearOf(d) >= a)
+    const to = p.days.findIndex((d) => yearOf(d) > b)
+    const cut = (v) => v.slice(from, to < 0 ? undefined : to)
+    const st = (v) => {
+      const r = cut(v)
+      let eq = 1
+      let peak = 1
+      let dd = 0
+      for (const x of r) {
+        eq *= 1 + x
+        peak = Math.max(peak, eq)
+        dd = Math.min(dd, eq / peak - 1)
       }
+      return `${pc(Math.pow(eq, 252 / r.length) - 1, 1)} al año · volatilidad ${pc(sd(r) * Math.sqrt(252), 1)} · Sharpe ${sg((mean(r) / sd(r)) * Math.sqrt(252), 2)} · caída máxima ${pc(dd, 1)}`
     }
+    console.log(`  tendencia (cartera)        ${label}: ${st(p.series.trend)}`)
+    console.log(`  SPY comprado y mantenido   ${label}: ${st(p.series.spy)}`)
   }
-  const days = [...daily.keys()].sort((a, b) => a - b)
-  const spy = loadYahoo('SPY')
-  const spyRet = new Map(spy.map((x, i) => [x.time, i ? x.close / spy[i - 1].close - 1 : 0]))
-  const stats = (label, from, to, series) => {
-    const rows = days.filter((d) => yearOf(d) >= from && yearOf(d) <= to)
-    if (!rows.length) return
-    const r = rows.map((d) => series(d))
-    let eq = 1
-    let peak = 1
-    let dd = 0
-    for (const x of r) {
-      eq *= 1 + x
-      peak = Math.max(peak, eq)
-      dd = Math.min(dd, eq / peak - 1)
-    }
-    const yrs = rows.length / 252
-    console.log(`  ${label.padEnd(26)} ${from}–${to}: ${pc(Math.pow(eq, 1 / yrs) - 1, 1)} al año · volatilidad ${pc(sd(r) * Math.sqrt(252), 1)} · Sharpe ${sg((mean(r) / sd(r)) * Math.sqrt(252), 2)} · caída máxima ${pc(dd, 1)}`)
-  }
-  console.log(`CARTERA: ${used} series, Canal 20 + EMA 200 solo largos, 1 R = ${(RISK * 100).toFixed(2)} % del capital, marcada cada día, 0,1 % de comisión\n`)
-  const exposure = days.filter((d) => yearOf(d) >= 2008).map((d) => daily.get(d).exposure)
-  const open = days.filter((d) => yearOf(d) >= 2008).map((d) => daily.get(d).open)
-  console.log(`  desde 2008: exposición bruta media ${pc(mean(exposure), 0)} del capital (máxima ${pc(Math.max(...exposure), 0)}), posiciones abiertas de media ${mean(open).toFixed(1)} (máx ${Math.max(...open)})`)
-  for (const [a, b] of [[2008, 2026], [2008, 2014], [2015, 2021], [2022, 2026]]) {
-    stats('tendencia (cartera)', a, b, (d) => daily.get(d).pnl)
-    stats('SPY comprado y mantenido', a, b, (d) => spyRet.get(d) ?? 0)
-  }
-  // Year by year, the account and SPY.
+  const yearly = [...new Set(p.days.map(yearOf))]
   console.log('\n  año a año (cartera / SPY):')
-  const years = [...new Set(days.map(yearOf))].filter((y) => y >= 2008).sort()
-  console.log('  ' + years.map((y) => {
-    const rows = days.filter((d) => yearOf(d) === y)
-    const a = rows.reduce((e, d) => e * (1 + daily.get(d).pnl), 1) - 1
-    const b = rows.reduce((e, d) => e * (1 + (spyRet.get(d) ?? 0)), 1) - 1
+  console.log('  ' + yearly.map((y) => {
+    const idx = p.days.map((d, k) => (yearOf(d) === y ? k : -1)).filter((k) => k >= 0)
+    const a = idx.reduce((e, k) => e * (1 + p.series.trend[k]), 1) - 1
+    const b = idx.reduce((e, k) => e * (1 + p.series.spy[k]), 1) - 1
     return `${y}: ${pc(a, 1)} / ${pc(b, 0)}`
   }).join('   '))
-  // Correlation with SPY, monthly.
-  const monthly = new Map()
-  for (const d of days) {
-    if (yearOf(d) < 2008) continue
-    const k = monthOf(d)
-    if (!monthly.has(k)) monthly.set(k, [0, 0])
-    const m = monthly.get(k)
-    m[0] += daily.get(d).pnl
-    m[1] += spyRet.get(d) ?? 0
-  }
-  const A = [...monthly.values()].map((x) => x[0])
-  const B = [...monthly.values()].map((x) => x[1])
-  const ma = mean(A)
-  const mb = mean(B)
-  const corr = mean(A.map((x, i) => (x - ma) * (B[i] - mb))) / (sd(A) * sd(B))
-  console.log(`\n  correlación mensual con SPY: ${sg(corr, 2)} (${A.length} meses)`)
+  console.log(`\n  correlación mensual con SPY: ${sg(p.corr, 2)}`)
 }
 
 // ── T (context): do the two filters that worked on crypto work on ETFs? ─────────────────────────────────
@@ -1381,7 +1354,7 @@ if (MODE === 'combo') {
     for (const t of trades) m.set(monthOf(t.closed), (m.get(monthOf(t.closed)) ?? 0) + t.r)
     return m
   }
-  const etfSyms = [...UNIVERSE.commodityOkx, ...UNIVERSE.commodityOther, ...UNIVERSE.equityIndex, ...UNIVERSE.sectors, ...UNIVERSE.bonds, ...UNIVERSE.fx, ...UNIVERSE.reit]
+  const etfSyms = TREND_SET
   const etf = []
   for (const sym of etfSyms) {
     const c = loadYahoo(sym)
@@ -1777,4 +1750,552 @@ if (MODE === 'trend-listed') {
     series++
   }
   console.log(`\n  ${series} contratos con historia: ${entries} entradas largas en los últimos 5 años, ${(entries / 260).toFixed(1)} a la semana de media`)
+}
+
+// ── The part of the index-ETF evidence that OKX can trade (`npm run novel trend-okx`) ───────────────────────
+// The +0.45 R of `trend-long` belongs to a basket of 20 index and sector ETFs, and OKX lists four of them: SPY, QQQ, EWY and
+// EWZ (DRAM, its fifth index contract, has no history to speak of). Written before the number: the same preset, long only,
+// raw prices, the same review, on those four pooled, then SPY + QQQ (one market, twice) apart from EWY + EWZ, then before and
+// since 2022. One more counted trial (10 in all). Their listing is not a random draw — Korea and Brazil are there because they
+// were in the news — so a good number here is not clean evidence either; the same-side random control is the reference.
+if (MODE === 'trend-okx') {
+  const TRIALS = 10
+  const only = (symbols) => tradesOf(symbols, TREND_STRATEGIES[0][1], 1500).filter((t) => t.side === 'long')
+  console.log(`CANAL 20 + EMA 200, SOLO LARGOS, EN LOS ETF DE ÍNDICE QUE OKX LISTA (${TRIALS} pruebas contadas)\n`)
+  const all = only(['SPY', 'QQQ', 'EWY', 'EWZ'])
+  describeGroup('SPY, QQQ, EWY, EWZ', all, TRIALS)
+  describeGroup('SPY + QQQ (un mercado)', only(['SPY', 'QQQ']), TRIALS)
+  describeGroup('EWY + EWZ', only(['EWY', 'EWZ']), TRIALS)
+  const edge = Date.UTC(2022, 0, 1)
+  describeGroup('los cuatro, hasta 2021', all.filter((t) => t.time < edge), TRIALS)
+  describeGroup('los cuatro, desde 2022', all.filter((t) => t.time >= edge), TRIALS)
+  const cut = Date.UTC(2013, 0, 1)
+  console.log('\n  por década (neto R, operaciones, azar del mismo lado):')
+  for (const [name, from, to] of [['hasta 2012', 0, cut], ['2013–2021', cut, edge], ['2022–2026', edge, Infinity]]) {
+    const t = all.filter((x) => x.time >= from && x.time < to)
+    console.log(`    ${name.padEnd(10)} ${sg(mean(t.map((x) => x.r)))} R  (${t.length})  azar ${sg(mean(randomControl(t, true, 20)))}`)
+  }
+  console.log('\n  uno a uno (neto R, n, azar del mismo lado, sin su mejor operación):')
+  for (const sym of ['SPY', 'QQQ', 'EWY', 'EWZ']) {
+    const t = only([sym])
+    const sorted = t.map((x) => x.r).sort((a, b) => b - a)
+    console.log(`    ${sym.padEnd(4)} ${sg(mean(t.map((x) => x.r)))} R  (${t.length})  azar ${sg(mean(randomControl(t, true, 20)))}  sin la mejor ${sg(mean(sorted.slice(1)))}`)
+  }
+}
+
+// ── M2: which Yahoo symbol is each OKX equity / commodity perpetual? (`npm run novel map`) ─────────────────
+// The scan reads the UNDERLYING's history from Yahoo, so the table that says which symbol belongs to which contract
+// must be right: a ticker can mean another thing (OKX's `O` is not Realty Income's). Every live contract of category 3
+// (equities and ETFs) and 4 (commodities) is tried against a candidate symbol — its own ticker, or the one named in
+// `OVERRIDE` — and accepted only when the daily returns of the contract (OKX, UTC days) and of the symbol (Yahoo,
+// sessions) move together: correlation ≥ 0.8 over at least 40 common days. The perpetual trades 24 h and the session
+// 6.5, so a perfect match reads 0.9–0.99, not 1.
+if (MODE === 'map') {
+  const { fetchDaily } = await import('../src/lib/yahoo.ts')
+  const OVERRIDE = { XAU: 'GLD', XAG: 'SLV', CL: 'USO', BZ: 'BNO', US100: '^NDX' }
+  const catalogue = await (await fetch('https://eea.okx.com/api/v5/public/instruments?instType=FUTURES')).json()
+  const live = catalogue.data.filter((x) => x.ruleType === 'xperp' && x.state === 'live' && (x.instCategory === '3' || x.instCategory === '4'))
+  console.log(`${live.length} contratos de acciones, ETF y materias primas en OKX\n`)
+  const sleepMs = (ms) => new Promise((r) => setTimeout(r, ms))
+  async function okxDaily(instId) {
+    const rows = []
+    let after = Date.now() + DAY
+    for (let page = 0; page < 3; page++) {
+      const r = await fetch(`https://eea.okx.com/api/v5/market/history-candles?instId=${instId}&bar=1Dutc&limit=100&after=${after}`)
+      const j = await r.json()
+      if (j.code !== '0' || !j.data?.length) break
+      rows.push(...j.data.filter((x) => x[8] === '1').map((x) => [Math.floor(+x[0] / DAY) * DAY, +x[4]]))
+      after = +j.data[j.data.length - 1][0]
+      await sleepMs(150)
+    }
+    return new Map(rows)
+  }
+  const out = []
+  for (const inst of live.sort((a, b) => a.instId.localeCompare(b.instId))) {
+    const base = inst.instId.split('-')[0]
+    const yahoo = OVERRIDE[base] ?? base
+    try {
+      const y = await fetchDaily(yahoo, { years: 2 })
+      const o = await okxDaily(inst.instId)
+      const ym = new Map(y.candles.map((c) => [c.time, c.close]))
+      const dates = [...o.keys()].filter((d) => ym.has(d) && ym.has(d - DAY) === false).sort((a, b) => a - b)
+      // Returns between consecutive common dates (a weekend is a longer gap on both sides alike).
+      const common = [...o.keys()].filter((d) => ym.has(d)).sort((a, b) => a - b)
+      const a = []
+      const b = []
+      for (let i = 1; i < common.length; i++) {
+        a.push(Math.log(o.get(common[i]) / o.get(common[i - 1])))
+        b.push(Math.log(ym.get(common[i]) / ym.get(common[i - 1])))
+      }
+      void dates
+      // The second test, for contracts too new for 40 common days: an equity's contract and its ticker print the same
+      // price. (Commodities and indices are in other units and have the history for the first test.)
+      const ratios = common.map((d) => o.get(d) / ym.get(d)).sort((x, y) => x - y)
+      const level = ratios.length ? ratios[ratios.length >> 1] : NaN
+      const sameLevel = inst.instCategory === '3' && ratios.length >= 3 && level > 0.97 && level < 1.03
+      let corr = NaN
+      let beta = NaN
+      if (a.length >= 10) {
+        const ma = mean(a)
+        const mb = mean(b)
+        corr = mean(a.map((x, i) => (x - ma) * (b[i] - mb))) / (sd(a) * sd(b))
+        beta = mean(a.map((x, i) => (x - ma) * (b[i] - mb))) / (sd(b) ** 2)
+      }
+      const byReturns = a.length >= 40 && corr >= 0.8
+      out.push({ base, yahoo, ok: byReturns || sameLevel, corr, beta, days: a.length, level, bars: y.candles.length, kind: inst.instCategory, how: byReturns ? 'rendimientos' : sameLevel ? 'precio' : '—', why: a.length < 3 ? `solo ${common.length} días en común` : undefined })
+    } catch (err) {
+      out.push({ base, yahoo, ok: false, why: err.message.slice(0, 60) })
+    }
+    await sleepMs(250)
+  }
+  for (const x of out) {
+    const f2 = (v) => (Number.isFinite(v) ? v.toFixed(2) : ' — ')
+    console.log(`  ${x.ok ? '✓' : '✗'} ${x.base.padEnd(10)} ${x.yahoo.padEnd(8)} ${x.days !== undefined ? `por ${x.how.padEnd(12)} corr ${f2(x.corr)}  precio OKX/Yahoo ${f2(x.level)}  ${String(x.days).padStart(3)} días  ${x.bars} barras en 2 años` : x.why}`)
+  }
+  console.log(`\n${out.filter((x) => x.ok).length} de ${out.length} se aceptan`)
+  console.log('OK: ' + out.filter((x) => x.ok).map((x) => `${x.base}${x.base === x.yahoo ? '' : '→' + x.yahoo}`).join(' '))
+}
+
+// ── The trad track's figures (`npm run novel trad-evidence | trad-curves | trad-calibrate`) ───────────────
+// Everything the Screener's card, the notification and the ledger quote about the daily trend rule on equities,
+// ETFs and commodities, measured on RAW prices — the ones a position is opened and stopped at — on the long side only,
+// which is the only side the ledger follows (the shorts measured −0.10 R against −0.11 for a random short). The
+// reference set is the index and sector ETFs (20): the stocks OKX lists are today's popular names, a survivor
+// selection, and the leveraged ETFs and the four commodities do not clear the bar.
+function tradLongTrades(symbols, minBars = 1500) {
+  return tradesOf(symbols, TREND_STRATEGIES[0][1], minBars).filter((t) => t.side === 'long')
+}
+
+/**
+ * The long book as an account: 0.25 % of capital per R, marked at every close, against SPY held. EVERY trading day from
+ * 2008 counts, with a zero where the book is flat: the first version kept only the days with a position open, and SPY
+ * inherited that calendar — so the days the rule was out, which are the crashes, vanished from SPY's series and flattered it.
+ * SPY is the total-return series (dividends included): what someone who buys and holds it receives.
+ */
+function tradPortfolio(symbols) {
+  const RISK = 0.0025
+  const daily = new Map()
+  const bump = (day) => {
+    if (!daily.has(day)) daily.set(day, { pnl: 0, exposure: 0 })
+    return daily.get(day)
+  }
+  for (const sym of symbols) {
+    const c = loadYahoo(sym)
+    if (!c || c.length < 1500) continue
+    for (const s of analyseDonchian(c, DONCHIAN_TREND_SETTINGS).signals) {
+      if (s.side !== 'long' || s.outcome === 'open' || !Number.isFinite(s.resultR)) continue
+      const risk = Math.abs(s.entry - s.stop)
+      let prev = -s.feeR
+      bump(c[s.index].time).pnl += prev * RISK
+      for (let i = s.index + 1; i <= s.closedIndex; i++) {
+        const r = i === s.closedIndex ? s.resultR - s.feeR : (c[i].close - s.entry) / risk - s.feeR
+        const d = bump(c[i].time)
+        d.pnl += (r - prev) * RISK
+        if (i < s.closedIndex) d.exposure += RISK * (c[i].close / risk)
+        prev = r
+      }
+    }
+  }
+  const adjusted = JSON.parse(readFileSync('./.research/yahoo-1d/SPY.json', 'utf8'))
+  const spyRet = new Map(adjusted.map((x, i) => [x.time, i ? x.close / adjusted[i - 1].close - 1 : 0]))
+  // The whole market calendar from 2008, from SPY's own days.
+  const days = adjusted.map((x) => x.time).filter((d) => yearOf(d) >= 2008)
+  const series = {
+    trend: days.map((d) => daily.get(d)?.pnl ?? 0),
+    spy: days.map((d) => spyRet.get(d) ?? 0),
+    exposure: days.map((d) => daily.get(d)?.exposure ?? 0),
+  }
+  const stat = (values, from = 0) => {
+    const r = values.slice(from)
+    let eq = 1
+    let peak = 1
+    let dd = 0
+    for (const x of r) {
+      eq *= 1 + x
+      peak = Math.max(peak, eq)
+      dd = Math.min(dd, eq / peak - 1)
+    }
+    return { cagr: Math.pow(eq, 252 / r.length) - 1, vol: sd(r) * Math.sqrt(252), sharpe: (mean(r) / sd(r)) * Math.sqrt(252), maxDd: dd }
+  }
+  const monthly = new Map()
+  days.forEach((d, k) => {
+    const key = monthOf(d)
+    if (!monthly.has(key)) monthly.set(key, [0, 0])
+    monthly.get(key)[0] += series.trend[k]
+    monthly.get(key)[1] += series.spy[k]
+  })
+  const A = [...monthly.values()].map((x) => x[0])
+  const B = [...monthly.values()].map((x) => x[1])
+  const corr = mean(A.map((x, i) => (x - mean(A)) * (B[i] - mean(B)))) / (sd(A) * sd(B))
+  const since = days.findIndex((d) => yearOf(d) >= 2022)
+  return {
+    days,
+    series,
+    trend: stat(series.trend),
+    spy: stat(series.spy),
+    exposure: mean(series.exposure),
+    corr,
+    flatShare: series.trend.filter((x) => x === 0).length / series.trend.length,
+    sharpeSince2022: { trend: stat(series.trend, since).sharpe, spy: stat(series.spy, since).sharpe },
+    stat,
+  }
+}
+
+function measureTrad() {
+  const equity = [...UNIVERSE.equityIndex, ...UNIVERSE.sectors]
+  const grab = (symbols, minBars) => {
+    const t = tradLongTrades(symbols, minBars)
+    const rs = t.map((x) => x.r)
+    const cut = median(t.map((x) => x.time))
+    const sorted = [...rs].sort((a, b) => b - a)
+    const [lo, hi] = monthBootstrap(t)
+    const recent = t.filter((x) => yearOf(x.time) >= 2022)
+    return {
+      n: t.length,
+      net: mean(rs),
+      sd: sd(rs),
+      halves: [mean(t.filter((x) => x.time < cut).map((x) => x.r)), mean(t.filter((x) => x.time >= cut).map((x) => x.r))],
+      random: mean(randomControl(t, true, 20)),
+      withoutBest10: mean(sorted.slice(10)),
+      interval: [lo, hi],
+      dsr: deflate(rs, 9).dsr,
+      recent: { n: recent.length, net: mean(recent.map((x) => x.r)), random: mean(randomControl(recent, true, 20)), withoutBest10: mean([...recent.map((x) => x.r)].sort((a, b) => b - a).slice(10)) },
+    }
+  }
+  const both = tradesOf(equity, TREND_STRATEGIES[0][1], 1500)
+  return {
+    index: grab(equity, 1500),
+    // The four of those twenty that OKX lists (SPY, QQQ, EWY, EWZ): the part of the evidence a person can trade.
+    okxIndex: grab(['SPY', 'QQQ', 'EWY', 'EWZ'], 1500),
+    ewyEwz: grab(['EWY', 'EWZ'], 1500),
+    indexBothSides: mean(both.map((x) => x.r)),
+    indexShorts: mean(both.filter((x) => x.side === 'short').map((x) => x.r)),
+    leveraged: grab(UNIVERSE.leveraged, 1500),
+    commodity: grab(UNIVERSE.commodityOkx, 1500),
+    stocks: grab(UNIVERSE.okxStocks, 1800),
+    portfolio: tradPortfolio(equity),
+  }
+}
+
+if (MODE === 'trad-evidence') {
+  const { TRAD_TREND_EVIDENCE: Q } = await import('../src/lib/tradMarkets.ts')
+  const m = measureTrad()
+  const r2 = (x) => Math.round(x * 100) / 100
+  console.log('CIFRAS DE LA TENDENCIA DIARIA EN BOLSA, ETF Y MATERIAS PRIMAS (largos, precios sin ajustar)\n')
+  const show = (label, g) =>
+    console.log(`  ${label.padEnd(30)} n=${String(g.n).padStart(5)}  neto ${sg(g.net)} R  sd ${g.sd.toFixed(2)}  mitades ${sg(g.halves[0])} / ${sg(g.halves[1])}  azar mismo lado ${sg(g.random)}  sin 10 mejores ${sg(g.withoutBest10)}  IC [${sg(g.interval[0])}, ${sg(g.interval[1])}]  DSR ${(g.dsr * 100).toFixed(0)} %  · 2022–26 n=${g.recent.n} ${sg(g.recent.net)} (azar ${sg(g.recent.random)}, sin 10 mejores ${sg(g.recent.withoutBest10)})`)
+  show('ETF de índices y sectores', m.index)
+  show('los 4 que lista OKX', m.okxIndex)
+  show('EWY + EWZ', m.ewyEwz)
+  show('ETF apalancados', m.leveraged)
+  show('materias primas de OKX', m.commodity)
+  show('acciones que lista OKX', m.stocks)
+  const p = m.portfolio
+  console.log(`\n  ambos lados (índices y sectores) ${sg(m.indexBothSides)} R · cartera 2008–26: ${pc(p.trend.cagr, 1)} al año, Sharpe ${sg(p.trend.sharpe)}, caída ${pc(p.trend.maxDd, 0)} contra SPY ${pc(p.spy.cagr, 1)}, Sharpe ${sg(p.spy.sharpe)}, caída ${pc(p.spy.maxDd, 0)} · exposición media ${pc(p.exposure, 0)} · correlación mensual con SPY ${sg(p.corr)} · Sharpe desde 2022 ${sg(p.sharpeSince2022.trend)} contra ${sg(p.sharpeSince2022.spy)}`)
+  const rows = [
+    ['índices n', m.index.n, Q.index.n, 0],
+    ['índices neto', m.index.net, Q.index.net, 0.03],
+    ['índices 1ª mitad', m.index.halves[0], Q.index.halves[0], 0.03],
+    ['índices 2ª mitad', m.index.halves[1], Q.index.halves[1], 0.03],
+    ['índices azar mismo lado', m.index.random, Q.index.random, 0.03],
+    ['índices sin 10 mejores', m.index.withoutBest10, Q.index.withoutBest10, 0.03],
+    ['índices 2022–26 neto', m.index.recent.net, Q.index.recent.net, 0.03],
+    ['índices 2022–26 azar', m.index.recent.random, Q.index.recent.random, 0.03],
+    ['sd de una operación', m.index.sd, Q.index.sd, 0.03],
+    ['OKX (4 ETF) n', m.okxIndex.n, Q.okxIndex.n, 0],
+    ['OKX (4 ETF) neto', m.okxIndex.net, Q.okxIndex.net, 0.03],
+    ['OKX (4 ETF) 1ª mitad', m.okxIndex.halves[0], Q.okxIndex.halves[0], 0.03],
+    ['OKX (4 ETF) 2ª mitad', m.okxIndex.halves[1], Q.okxIndex.halves[1], 0.03],
+    ['OKX (4 ETF) azar mismo lado', m.okxIndex.random, Q.okxIndex.random, 0.04],
+    ['OKX (4 ETF) sin 10 mejores', m.okxIndex.withoutBest10, Q.okxIndex.withoutBest10, 0.03],
+    ['OKX (4 ETF) 2022–26 n', m.okxIndex.recent.n, Q.okxIndex.recent.n, 0],
+    ['OKX (4 ETF) 2022–26 neto', m.okxIndex.recent.net, Q.okxIndex.recent.net, 0.03],
+    ['OKX (4 ETF) 2022–26 azar', m.okxIndex.recent.random, Q.okxIndex.recent.random, 0.04],
+    ['EWY + EWZ sin 10 mejores', m.ewyEwz.withoutBest10, Q.okxIndex.ewyEwzWithoutBest10, 0.03],
+    ['índices, solo cortos', m.indexShorts, Q.indexShorts, 0.03],
+    ['apalancados neto', m.leveraged.net, Q.leveraged.net, 0.03],
+    ['materias primas neto', m.commodity.net, Q.commodity.net, 0.03],
+    ['materias primas sin 10 mejores', m.commodity.withoutBest10, Q.commodity.withoutBest10, 0.03],
+    ['acciones neto', m.stocks.net, Q.stocks.net, 0.03],
+    ['acciones azar mismo lado', m.stocks.random, Q.stocks.random, 0.03],
+    ['cartera Sharpe', p.trend.sharpe, Q.portfolio.sharpe, 0.03],
+    ['SPY Sharpe', p.spy.sharpe, Q.portfolio.spySharpe, 0.03],
+    ['cartera caída máxima', p.trend.maxDd, Q.portfolio.maxDd, 0.02],
+    ['SPY caída máxima', p.spy.maxDd, Q.portfolio.spyMaxDd, 0.02],
+    ['cartera anual', p.trend.cagr, Q.portfolio.cagr, 0.003],
+    ['SPY anual', p.spy.cagr, Q.portfolio.spyCagr, 0.003],
+    ['correlación con SPY', p.corr, Q.portfolio.corrSpy, 0.03],
+  ]
+  let drift = 0
+  console.log('\n  ── las cifras que cita la interfaz (src/lib/tradMarkets.ts) ──')
+  for (const [name, got, want, tol] of rows) {
+    const ok = Math.abs(got - want) <= tol + 1e-9
+    if (!ok) drift++
+    console.log(`     ${ok ? '✓' : '✗'} ${name.padEnd(34)} medido ${(Math.round(got * 1000) / 1000).toString().padStart(8)}   citado ${String(want).padStart(8)}`)
+  }
+  console.log(`\n  ${drift ? `DESVIACIONES: ${drift} cifras citadas ya no coinciden con los datos` : 'todas coinciden con lo medido'}`)
+  console.log('\n  Para pegar en TRAD_TREND_EVIDENCE:')
+  console.log(JSON.stringify({ okxIndex: { n: m.okxIndex.n, net: r2(m.okxIndex.net), random: r2(m.okxIndex.random), halves: m.okxIndex.halves.map(r2), withoutBest10: r2(m.okxIndex.withoutBest10), interval: m.okxIndex.interval.map(r2), ewyEwzWithoutBest10: r2(m.ewyEwz.withoutBest10), recent: { n: m.okxIndex.recent.n, net: r2(m.okxIndex.recent.net), random: r2(m.okxIndex.recent.random), withoutBest10: r2(m.okxIndex.recent.withoutBest10) } }, index: { n: m.index.n, net: r2(m.index.net), sd: r2(m.index.sd), halves: m.index.halves.map(r2), random: r2(m.index.random), withoutBest10: r2(m.index.withoutBest10), interval: m.index.interval.map(r2), recent: { net: r2(m.index.recent.net), random: r2(m.index.recent.random), withoutBest10: r2(m.index.recent.withoutBest10) } }, indexBothSides: r2(m.indexBothSides), indexShorts: r2(m.indexShorts), leveraged: { n: m.leveraged.n, net: r2(m.leveraged.net), withoutBest10: r2(m.leveraged.withoutBest10) }, commodity: { n: m.commodity.n, net: r2(m.commodity.net), withoutBest10: r2(m.commodity.withoutBest10) }, stocks: { n: m.stocks.n, net: r2(m.stocks.net), random: r2(m.stocks.random) }, portfolio: { cagr: Math.round(p.trend.cagr * 1000) / 1000, sharpe: r2(p.trend.sharpe), maxDd: Math.round(p.trend.maxDd * 100) / 100, spyCagr: Math.round(p.spy.cagr * 1000) / 1000, spySharpe: r2(p.spy.sharpe), spyMaxDd: Math.round(p.spy.maxDd * 100) / 100, corrSpy: r2(p.corr), exposure: Math.round(p.exposure * 100) / 100, sharpeSince2022: r2(p.sharpeSince2022.trend), spySharpeSince2022: r2(p.sharpeSince2022.spy) } }, null, 1))
+  if (drift) process.exitCode = 1
+}
+
+// What a trade of the track is worth at each CALENDAR age — the ledger reads ages in days for this track, because the
+// market is shut on weekends and a Friday entry read on Monday is three days old, one trading day. Same idea as
+// `npm run improve curves`: each trade closed or marked to the last close at that age, net of the round trip.
+const TRAD_AGES = [0, 1, 2, 3, 4, 5, 7, 10, 14, 21, 28, 42, 56, 84, 112, 140, 196, 280, 365, 560, 730]
+
+function tradTradeValue(c, s, ageDays) {
+  const risk = Math.abs(s.entry - s.stop)
+  const at = c[s.index].time + 21.5 * 3_600_000
+  const target = at + ageDays * DAY
+  let j = s.index
+  while (j + 1 < c.length && c[j + 1].time + 21.5 * 3_600_000 <= target) j++
+  if (j + 1 >= c.length && c[j].time + 21.5 * 3_600_000 < target) return null // the history has not got that far
+  const ended = s.closedIndex !== undefined && s.closedIndex <= j
+  return ended ? s.resultR - s.feeR : (c[j].close - s.entry) / risk - s.feeR
+}
+
+function tradCurve() {
+  const equity = [...UNIVERSE.equityIndex, ...UNIVERSE.sectors]
+  const byAge = TRAD_AGES.map(() => [])
+  let trades = 0
+  for (const sym of equity) {
+    const c = loadYahoo(sym)
+    if (!c || c.length < 1500) continue
+    for (const s of analyseDonchian(c, DONCHIAN_TREND_SETTINGS).signals) {
+      if (s.side !== 'long' || !(Math.abs(s.entry - s.stop) > 0) || (s.outcome !== 'open' && !Number.isFinite(s.resultR))) continue
+      trades++
+      TRAD_AGES.forEach((a, k) => {
+        const v = tradTradeValue(c, s, a)
+        if (v !== null) byAge[k].push(v)
+      })
+    }
+  }
+  const out = { bars: [], mean: [], sd: [], n: [], trades, equity: equity.length }
+  TRAD_AGES.forEach((a, k) => {
+    const xs = byAge[k]
+    // Past the history the trades reach, a handful of long ones would be read as the curve.
+    if (xs.length < 100) return
+    out.bars.push(a)
+    out.mean.push(Math.round(mean(xs) * 1000) / 1000)
+    out.sd.push(Math.round(sd(xs) * 100) / 100)
+    out.n.push(xs.length)
+  })
+  return out
+}
+
+if (MODE === 'trad-curves') {
+  const c = tradCurve()
+  console.log(`trad/trend@1D  (${c.trades} operaciones, largos de ${c.equity} ETF de índices y sectores, edad en días naturales)`)
+  c.bars.forEach((a, i) => console.log(`  ${String(a).padStart(5)} ${String(c.n[i]).padStart(6)}  ${sg(c.mean[i], 3)}  ${c.sd[i].toFixed(2)}`))
+  console.log(`  'trad/trend@1D': { bars: ${JSON.stringify(c.bars)}, mean: ${JSON.stringify(c.mean)}, sd: ${JSON.stringify(c.sd)} },`)
+}
+
+// Is the ledger's band honest for this track? The statistic of `versusHistory` replayed on the history: every window of W
+// days, the entries that began in it, read at its end — and how much wider than independence its z-scores spread.
+async function tradCalibration(verbose) {
+  const { AGE_CURVES } = await import('../src/lib/ledgerAge.ts')
+  const curve = AGE_CURVES['trad/trend@1D']
+  if (!curve) {
+    console.log("falta AGE_CURVES['trad/trend@1D']: `npm run novel trad-curves` y pégala en src/lib/ledgerAge.ts")
+    process.exit(1)
+  }
+  const at = (age) => {
+    if (age <= curve.bars[0]) return { mean: curve.mean[0], sd: curve.sd[0] }
+    const last = curve.bars.length - 1
+    if (age >= curve.bars[last]) return { mean: curve.mean[last], sd: curve.sd[last] }
+    let hi = 1
+    while (curve.bars[hi] < age) hi++
+    const t = (age - curve.bars[hi - 1]) / (curve.bars[hi] - curve.bars[hi - 1])
+    return { mean: curve.mean[hi - 1] + t * (curve.mean[hi] - curve.mean[hi - 1]), sd: curve.sd[hi - 1] + t * (curve.sd[hi] - curve.sd[hi - 1]) }
+  }
+  const CLOSE = 21.5 * 3_600_000
+  const all = []
+  let first = Infinity
+  let last = -Infinity
+  for (const sym of [...UNIVERSE.equityIndex, ...UNIVERSE.sectors]) {
+    const c = loadYahoo(sym)
+    if (!c || c.length < 1500) continue
+    for (const s of analyseDonchian(c, DONCHIAN_TREND_SETTINGS).signals) {
+      const risk = Math.abs(s.entry - s.stop)
+      if (s.side !== 'long' || !(risk > 0) || (s.outcome !== 'open' && !Number.isFinite(s.resultR))) continue
+      const when = c[s.index].time + CLOSE
+      all.push({ c, s, risk, when })
+      first = Math.min(first, when)
+      last = Math.max(last, c[c.length - 1].time + CLOSE)
+    }
+  }
+  const pooled = []
+  if (verbose) {
+    console.log(`trad/trend@1D  (${all.length} operaciones)`)
+    console.log('  ventana (días) · ventanas · sd de z · fuera de ±1,96 · k95')
+  }
+  for (const W of [2, 4, 7, 14, 30, 60, 120, 240, 365]) {
+    const zs = []
+    for (let t0 = first; t0 + W * DAY <= last; t0 += DAY) {
+      const t1 = t0 + W * DAY
+      let n = 0
+      let dev = 0
+      let variance = 0
+      for (const x of all) {
+        if (x.when <= t0 || x.when > t1) continue
+        // The last close that had happened by t1 on this contract.
+        let j = x.s.index
+        while (j + 1 < x.c.length && x.c[j + 1].time + CLOSE <= t1) j++
+        const ended = x.s.closedIndex !== undefined && x.s.closedIndex <= j
+        const r = ended ? x.s.resultR - x.s.feeR : (x.c[j].close - x.s.entry) / x.risk - x.s.feeR
+        const e = at(Math.floor((t1 - x.when) / DAY))
+        dev += r - e.mean
+        variance += e.sd ** 2
+        n++
+      }
+      if (n >= 5) zs.push(dev / n / (Math.sqrt(variance) / n))
+    }
+    if (zs.length < 10) continue
+    const m = mean(zs)
+    const sdz = Math.sqrt(zs.reduce((a, b) => a + (b - m) ** 2, 0) / (zs.length - 1))
+    const abs = zs.map(Math.abs).sort((a, b) => a - b)
+    if (verbose) console.log(`  ${String(W).padStart(5)} ${String(zs.length).padStart(9)} ${sdz.toFixed(2).padStart(8)} ${((zs.filter((z) => Math.abs(z) > 1.96).length / zs.length) * 100).toFixed(0).padStart(8)} %   k95 ${(abs[Math.floor(abs.length * 0.95)] / 1.96).toFixed(2)}`)
+    if (W >= 7 && W <= 60) pooled.push(...zs)
+  }
+  const abs = pooled.map(Math.abs).sort((a, b) => a - b)
+  const k95 = abs[Math.floor(abs.length * 0.95)] / 1.96
+  if (verbose) console.log(`\n  ventanas de 7 a 60 días juntas: k95 ${k95.toFixed(2)}\n  → NOISE_INFLATION['trad/trend@1D']: el k95 redondeado a 0,1`)
+  return k95
+}
+
+if (MODE === 'trad-calibrate') await tradCalibration(true)
+
+// The ledger's own reading of the track: its curve and its band, checked like `npm run improve evidence` does for the crypto ones.
+if (MODE === 'trad-ledger') {
+  const { AGE_CURVES, NOISE_INFLATION } = await import('../src/lib/ledgerAge.ts')
+  const c = tradCurve()
+  const quoted = AGE_CURVES['trad/trend@1D']
+  let drift = 0
+  console.log('LA CURVA DE EDAD Y LA BANDA DE LA PISTA trad/trend@1D\n')
+  c.bars.forEach((a, i) => {
+    const k = quoted.bars.indexOf(a)
+    const ok = k >= 0 && Math.abs(c.mean[i] - quoted.mean[k]) <= 0.03 && Math.abs(c.sd[i] - quoted.sd[k]) <= 0.1
+    if (!ok) drift++
+    console.log(`  ${ok ? '✓' : '✗'} edad ${String(a).padStart(4)} d   medido ${sg(c.mean[i], 3)} (sd ${c.sd[i].toFixed(2)})   citado ${k >= 0 ? `${sg(quoted.mean[k], 3)} (sd ${quoted.sd[k].toFixed(2)})` : '—'}`)
+  })
+  const k95 = await tradCalibration(false)
+  const okK = Math.abs(k95 - NOISE_INFLATION['trad/trend@1D']) <= 0.35
+  if (!okK) drift++
+  console.log(`  ${okK ? '✓' : '✗'} factor de la banda (k95)   medido ${k95.toFixed(2)}   citado ${NOISE_INFLATION['trad/trend@1D']}`)
+  console.log(`\n  ${drift ? `DESVIACIONES: ${drift}` : 'coinciden con lo medido'}`)
+  if (drift) process.exitCode = 1
+}
+
+// ── The gold carry (`npm run novel gold`) ───────────────────────────────────────────────────────────────────
+// Found while measuring funding on the X-Perps: the XAU perpetual pays its SHORTS (the longs pay), and PAXG and XAUT — a troy
+// ounce of gold each — are live on OKX spot, so a coin held against a short is the carry the Financiación page already
+// measures for crypto. This rebuilds the figures it quotes from OKX's public API (nothing here needs a key): the perpetual's
+// funding history (about three months is all OKX serves), the hourly candles of the perpetual and of the two tokens, the
+// basis between them, and the page's own rule — in when the last 7 days paid more than 10 % a year, out at zero — with the
+// round trip at market fees (spot 0.35 % + perpetual 0.05 % a side) and with limit orders (0.20 % + 0.02 %). The window is
+// whatever OKX still serves, so the figures move and are not checked: they are the indicative reading of one day, said so.
+if (MODE === 'gold') {
+  const { mkdirSync, writeFileSync } = await import('node:fs')
+  const dir = './.research/gold'
+  mkdirSync(dir, { recursive: true })
+  const cached = async (name, make) => {
+    const file = `${dir}/${name}.json`
+    if (!process.env.REFRESH && existsSync(file)) return JSON.parse(readFileSync(file, 'utf8'))
+    const data = await make()
+    writeFileSync(file, JSON.stringify(data))
+    return data
+  }
+  const pause = (ms) => new Promise((r) => setTimeout(r, ms))
+  const PERP = 'XAU-USD_UM_XPERP-310502'
+  const funding = await cached('funding', async () => {
+    let after = ''
+    const rows = []
+    for (let k = 0; k < 60; k++) {
+      const j = await (await fetch(`https://eea.okx.com/api/v5/public/funding-rate-history?instId=${PERP}&limit=100${after ? `&after=${after}` : ''}`)).json()
+      if (!j.data?.length) break
+      rows.push(...j.data)
+      after = j.data[j.data.length - 1].fundingTime
+      await pause(250)
+    }
+    return rows.map((x) => ({ t: +x.fundingTime, r: Number(x.realizedRate ?? x.fundingRate) })).sort((a, b) => a.t - b.t)
+  })
+  const since = funding[0].t
+  const hourly = async (host, inst) => {
+    const rows = []
+    let after = Date.now() + 3_600_000
+    for (let k = 0; k < 90; k++) {
+      const j = await (await fetch(`https://${host}/api/v5/market/history-candles?instId=${inst}&bar=1H&limit=100&after=${after}`)).json()
+      if (j.code !== '0' || !j.data?.length) break
+      rows.push(...j.data.map((x) => ({ t: +x[0], c: +x[4] })))
+      after = +j.data[j.data.length - 1][0]
+      if (after < since) break
+      await pause(130)
+    }
+    return rows.filter((x) => x.t >= since).sort((a, b) => a.t - b.t)
+  }
+  const perp = await cached('perp', () => hourly('eea.okx.com', PERP))
+  const tokens = { 'PAXG-USDT': await cached('paxg', () => hourly('www.okx.com', 'PAXG-USDT')), 'XAUT-USDT': await cached('xaut', () => hourly('www.okx.com', 'XAUT-USDT')) }
+  const days = (perp.at(-1).t - perp[0].t) / DAY
+  console.log(`PERPETUO XAU: ${funding.length} liquidaciones, ${iso(funding[0].t)} → ${iso(funding.at(-1).t)} (${days.toFixed(0)} días)\n`)
+  const byWeek = new Map()
+  for (const f of funding) {
+    const w = Math.floor(f.t / (7 * DAY))
+    byWeek.set(w, [...(byWeek.get(w) ?? []), f.r])
+  }
+  const weekly = [...byWeek.values()].filter((x) => x.length >= 15).map((x) => mean(x) * 3 * 365)
+  console.log(`financiación por semana completa: ${weekly.length} semanas, media ${pc(mean(weekly), 1)} al año, ${weekly.filter((x) => x > 0.1).length} por encima del 10 %, ${weekly.filter((x) => x < 0).length} negativas, de ${pc(Math.min(...weekly), 0)} a ${pc(Math.max(...weekly), 0)}`)
+  for (const [name, spot] of Object.entries(tokens)) {
+    const m = new Map(spot.map((x) => [x.t, x.c]))
+    const rows = perp.filter((x) => m.has(x.t)).map((x) => ({ t: x.t, p: x.c, s: m.get(x.t) }))
+    const basis = rows.map((r) => r.p / r.s - 1)
+    const held = rows.at(-1).s / rows[0].s - 1 - (rows.at(-1).p / rows[0].p - 1)
+    const paid = funding.filter((f) => f.t > rows[0].t && f.t <= rows.at(-1).t).reduce((a, f) => a + f.r, 0)
+    const rule = (costRound) => {
+      let inPos = false
+      let pnl = 0
+      let switches = 0
+      let hoursIn = 0
+      const fundAt = new Map(funding.map((f) => [f.t, f.r]))
+      for (let k = 1; k < rows.length; k++) {
+        const t = rows[k].t
+        if (fundAt.has(t)) {
+          const recent = funding.filter((f) => f.t <= t).slice(-21)
+          if (recent.length === 21) {
+            const apr = mean(recent.map((f) => f.r)) * 3 * 365
+            if (!inPos && apr > 0.1) { inPos = true; pnl -= costRound / 2; switches++ }
+            else if (inPos && apr <= 0) { inPos = false; pnl -= costRound / 2; switches++ }
+          }
+        }
+        if (inPos) {
+          hoursIn++
+          pnl += rows[k].s / rows[k - 1].s - 1 - (rows[k].p / rows[k - 1].p - 1)
+          if (fundAt.has(t)) pnl += fundAt.get(t)
+        }
+      }
+      if (inPos) pnl -= costRound / 2
+      return { pnl, switches, share: hoursIn / rows.length }
+    }
+    const taker = rule(0.008)
+    const maker = rule(0.0044)
+    console.log(`\n${name} contra el perpetuo (${rows.length} horas)`)
+    console.log(`  base (perpetuo / token − 1): media ${pc(mean(basis), 3)}, DT ${pc(sd(basis), 3)}, de ${pc(Math.min(...basis), 2)} a ${pc(Math.max(...basis), 2)}`)
+    console.log(`  mantenido toda la ventana: efecto de la base ${pc(held)}, financiación cobrada ${pc(paid)} (${pc((paid * 365) / days, 1)} al año)`)
+    console.log(`  con la regla de la página: ${pc(taker.pnl)} a comisiones de mercado, ${pc(maker.pnl)} con órdenes límite en ${days.toFixed(0)} días (${pc((taker.pnl * 365) / days, 1)} y ${pc((maker.pnl * 365) / days, 1)} al año sobre el nominal de una pata), ${taker.switches} cambios, ${(taker.share * 100).toFixed(0)} % del tiempo dentro`)
+  }
+
+  // What the other X-Perps of the board pay, over the last 100 settlements each (OKX's `limit`), as a yearly rate to the SHORT.
+  const catalogue = await (await fetch('https://eea.okx.com/api/v5/public/instruments?instType=FUTURES')).json()
+  console.log('\nFINANCIACIÓN DE OTROS PERPETUOS (últimas 100 liquidaciones; positiva = la paga el largo)')
+  for (const base of ['XAU', 'XAG', 'CL', 'BZ', 'SPY', 'QQQ', 'AAPL', 'NVDA', 'TSLA', 'SOXL', 'SOXS']) {
+    const inst = catalogue.data.find((x) => x.ruleType === 'xperp' && x.state === 'live' && x.instId.split('-')[0] === base)
+    if (!inst) continue
+    const j = await (await fetch(`https://eea.okx.com/api/v5/public/funding-rate-history?instId=${inst.instId}&limit=100`)).json()
+    const rows = (j.data ?? []).map((x) => ({ t: +x.fundingTime, r: Number(x.realizedRate ?? x.fundingRate) }))
+    if (rows.length < 20) continue
+    const span = (rows[0].t - rows.at(-1).t) / DAY
+    const perDay = rows.length / Math.max(1, span)
+    console.log(`  ${base.padEnd(5)} ${pc(mean(rows.map((x) => x.r)) * perDay * 365, 1).padStart(9)} al año · ${rows.length} liquidaciones en ${span.toFixed(0)} días`)
+    await pause(250)
+  }
 }

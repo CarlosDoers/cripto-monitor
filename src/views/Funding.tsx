@@ -1,4 +1,4 @@
-import { BASE_FUNDING_APR, CARRY_EVIDENCE, CARRY_RULE, useCarry, type CarryStatus } from '../lib/carry'
+import { BASE_FUNDING_APR, CARRY_EVIDENCE, CARRY_RULE, GOLD_CARRY_EVIDENCE, useCarry, type CarryStatus } from '../lib/carry'
 import { DUST } from '../components/HoldingsTable'
 import { pct, plural, qty, ratio, share, usd, usdCompact } from '../lib/format'
 import { HELP } from '../lib/glossary'
@@ -170,7 +170,10 @@ export function Funding() {
                       </td>
                       <td className="num">
                         <span>
-                          {qty(h.held)} <span className="sub">{usd(h.heldUsd)}</span>
+                          {qty(h.held)}
+                          {/* Gold is held as PAXG or XAUT, which the perpetual hedges ounce for ounce. */}
+                          {h.heldAs.some((c) => c !== h.ccy) && <span className="sub"> {h.heldAs.join(' + ')}</span>}{' '}
+                          <span className="sub">{usd(h.heldUsd)}</span>
                         </span>
                       </td>
                       <td className="num">{apr(h.trailing)}</td>
@@ -213,7 +216,7 @@ export function Funding() {
 
       <Card
         title="Si compraras el spot"
-        subtitle={`Contratos líquidos cuya última semana pagó más del ${share(CARRY_RULE.enter, 0)} anual, entre los 15 que más pagan ahora. Comprar el spot en tu cuenta cuesta ${share(c.costs.spotMaker, 2)} por lado con orden límite`}
+        subtitle={`Contratos líquidos cuya última semana pagó más del ${share(CARRY_RULE.enter, 0)} anual, entre los 15 que más pagan ahora y el oro, que se mira siempre. Comprar el spot en tu cuenta cuesta ${share(c.costs.spotMaker, 2)} por lado con orden límite`}
         flush
         dimmed={c.isFetching && !c.isLoading}
       >
@@ -261,7 +264,16 @@ export function Funding() {
                     </td>
                     <td className="num">{apr(o.trailing)}</td>
                     <td className="num">{apr(o.nowApr)}</td>
-                    <td>{o.spotPair ?? <span className="muted">sin spot en tu cuenta</span>}</td>
+                    <td>
+                      {o.spotPair ? (
+                        <span title={o.tokenised ? 'Oro tokenizado: lo emite una empresa y el perpetuo cotiza algo por encima o por debajo. Mira lo medido más abajo.' : undefined}>
+                          {o.spotPair}
+                          {o.tokenised && <span className="sub"> · oro tokenizado</span>}
+                        </span>
+                      ) : (
+                        <span className="muted">sin spot en tu cuenta</span>
+                      )}
+                    </td>
                     <td className="num">{days(o.breakEvenDays)}</td>
                     <td className="num">{usdCompact(o.volumeUsd)}</td>
                   </tr>
@@ -269,6 +281,22 @@ export function Funding() {
               </tbody>
             </table>
           </TableWrap>
+        )}
+        {c.gold.some((g) => !g.tabled && g.trailing !== undefined) && (
+          <div className="card-body">
+            <div className="prose">
+              {c.gold
+                .filter((g) => !g.tabled && g.trailing !== undefined)
+                .map((g) => (
+                  <p key={g.ccy}>
+                    <strong>Oro ({g.ccy}).</strong> Hoy no sale en la tabla: su última semana pagó {pct(g.trailing ?? 0, 1)} anual
+                    {Number.isFinite(g.nowApr) && <> y ahora paga {pct(g.nowApr, 1)}</>}, por debajo del{' '}
+                    {share(CARRY_RULE.enter, 0)} que pide la regla. Cuando lo supere aparecerá aquí
+                    {g.spotPair ? <> con {g.spotPair}</> : ''}.
+                  </p>
+                ))}
+            </div>
+          </div>
         )}
       </Card>
 
@@ -296,6 +324,20 @@ export function Funding() {
             estrategias: su correlación mensual es {ratio(ev.correlation.reversal)} con la
             Reversión, {ratio(ev.correlation.donchian)} con la Ruptura y{' '}
             {ratio(ev.correlation.opening)} con la Apertura.
+          </p>
+          <p>
+            <strong>El oro.</strong> El perpetuo de XAU paga a los cortos (lo pagan los longs) y en OKX hay spot de oro
+            tokenizado, <strong>PAXG</strong> y <strong>XAUT</strong>, de una onza cada uno: tener uno y un short igual en el
+            perpetuo es este mismo carry. En {GOLD_CARRY_EVIDENCE.weeks} semanas pagó {pct(GOLD_CARRY_EVIDENCE.fundingApr, 1)} anual de media
+            ({GOLD_CARRY_EVIDENCE.weeksAbove10} semanas por encima del 10 %, {GOLD_CARRY_EVIDENCE.weeksNegative} negativas, de{' '}
+            {pct(GOLD_CARRY_EVIDENCE.weeklyRange[0], 0)} a {pct(GOLD_CARRY_EVIDENCE.weeklyRange[1], 0)}). Con la regla de arriba salió{' '}
+            {pct(GOLD_CARRY_EVIDENCE.ruleMarket, 1)} neto con comisiones de mercado y {pct(GOLD_CARRY_EVIDENCE.ruleLimit, 1)} con órdenes
+            límite en {GOLD_CARRY_EVIDENCE.days} días, entre un {pct(GOLD_CARRY_EVIDENCE.ruleMarketApr, 0)} y un{' '}
+            {pct(GOLD_CARRY_EVIDENCE.ruleLimitApr, 0)} anual sobre una pata. Son tres meses, que es todo lo que sirve OKX: indicativo. Lo
+            que añade: el token lo emite una empresa (riesgo de emisor) y el perpetuo cotizó entre{' '}
+            {pct(GOLD_CARRY_EVIDENCE.basisPaxg.min, 1)} y {pct(GOLD_CARRY_EVIDENCE.basisPaxg.max, 1)} sobre PAXG. La plata paga más (
+            {pct(GOLD_CARRY_EVIDENCE.silverApr, 0)}) pero no tiene token en OKX; los dos petróleos pagan a los longs. Y al revés: quien
+            opera la tendencia larga del oro con el perpetuo paga esa financiación, más de media R al mes.
           </p>
           <p>
             <strong>Lo que no funcionó:</strong> ir contra la financiación extrema. Ponerse short cuando está en

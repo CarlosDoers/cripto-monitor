@@ -32,6 +32,8 @@ export interface RunOptions {
   /** With `dry`: pretend the ledger began at this time, to see what it would have recorded since. */
   pretendStart?: number
   now?: number
+  /** Where Yahoo is asked for the equities track's candles; a test passes a fake. */
+  fetch?: typeof fetch
 }
 
 export interface RunResult {
@@ -64,4 +66,5 @@ export function describeWatch(env: Record<string, string | undefined>): {
   bars: string[]
   alertBars: string[]
   alertSides: string[]
+  trad: { enabled: boolean; alert: boolean; kinds: string[]; maxCostR: number }
 }

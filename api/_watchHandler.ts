@@ -19,7 +19,8 @@ export interface WatchDeps {
  *
  *   GET  /api/watch            → the ledger and the configuration, for the app
  *                                (behind its password); `?meta=1` answers with
- *                                when it last ran and how big it is, no more
+ *                                when it last ran and how big it is, no more;
+ *                                `?board=1` with only the equities board
  *   POST /api/watch            → a pass now, from the app when it opens; the job
  *                                skips it when one just ran
  *   GET  /api/watch?run=cron   → a pass from a scheduler (Vercel's daily cron, a
@@ -58,6 +59,13 @@ export function createWatchHandler(deps: WatchDeps) {
     }
 
     try {
+      // `?board=1`: only the equities board (a few kilobytes), for the Screener's card. The ledger is megabytes and
+      // that view has no use for it.
+      if (!cron && request.method === 'GET' && url.searchParams.get('board') === '1') {
+        const read = await store.read()
+        const l = (read.ledger ?? {}) as { board?: unknown; lastRun?: number }
+        return json({ enabled: true, storage: ledgerStorage(), config, board: l.board ?? null, lastRun: l.lastRun ?? 0, now: Date.now() })
+      }
       if (cron || request.method === 'POST') {
         // `?dry=1&pretend=72`: compute what the ledger would have recorded had it begun 72 hours ago,
         // and write and tell nobody. A way to see the job work on live data before trusting it.

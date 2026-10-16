@@ -40,6 +40,63 @@ export const CARRY_RULE = { enter: 0.1, exit: 0, days: 7 }
  */
 export const BASE_FUNDING_APR = 0.0001 * 3 * 365
 
+/**
+ * Coins that stand for something a perpetual lists under another name. Gold is the case measured (`npm run novel gold`):
+ * the XAU perpetual pays its SHORTS — the longs pay — and PAXG and XAUT, a troy ounce of gold each, are live on OKX spot,
+ * so holding one against a short is the same carry the page measures for a crypto coin. Silver pays more and has no token
+ * on OKX; the two oil perpetuals pay the other way round.
+ */
+export const TOKENISED: Record<string, string> = { PAXG: 'XAU', XAUT: 'XAU' }
+
+/** The spot coins that hedge an underlying, in the order a pair is looked for. */
+export const HEDGE_COINS: Record<string, string[]> = { XAU: ['PAXG', 'XAUT'] }
+
+/** The perpetual's underlying for a coin the account may hold: the coin itself, or what its token stands for. */
+export const underlyingOf = (ccy: string): string => TOKENISED[ccy] ?? ccy
+
+/** Whether the page offers a contract: a crypto coin's, or the one commodity that has a spot hedge. */
+export const isCarryContract = (coin: string, category: string | undefined): boolean =>
+  (category ?? '1') === '1' || coin in HEDGE_COINS
+
+/**
+ * The coins held and what the tokenised ones stand for, so that a short on XAU counts as a hedge when PAXG is
+ * what is held. Everything that reads "is this short against something the account owns" goes through it.
+ */
+export function heldUnderlyings(ccys: Iterable<string>): Set<string> {
+  const out = new Set<string>()
+  for (const c of ccys) {
+    out.add(c)
+    out.add(underlyingOf(c))
+  }
+  return out
+}
+
+/**
+ * What the gold carry measured, on the ~3 months OKX still serves (2026-07-13 → 2026-10-16): indicative, not a history —
+ * `npm run novel gold` reprints it from the public API, and it moves with the window, so it is not checked against these.
+ */
+export const GOLD_CARRY_EVIDENCE = {
+  days: 95,
+  /** The XAU perpetual's funding to the short, by complete week. */
+  weeks: 13,
+  fundingApr: 0.123,
+  weeksAbove10: 8,
+  weeksNegative: 3,
+  weeklyRange: [-0.23, 0.34] as [number, number],
+  /** Perpetual over the token, hourly: the noise a hedge carries. */
+  basisPaxg: { mean: 0.0008, sd: 0.0012, min: -0.0032, max: 0.0047 },
+  basisXaut: { mean: 0.002, sd: 0.0014, min: -0.0008, max: 0.0074 },
+  /** The page's rule (in above 10 % over 7 days, out at zero), net of the round trips, over the 95 days. */
+  ruleMarket: 0.0166,
+  ruleLimit: 0.0238,
+  ruleMarketApr: 0.064,
+  ruleLimitApr: 0.092,
+  /** The last 100 settlements of other perpetuals, a yearly rate to the short. Silver has no hedge on OKX; oil pays the long. */
+  silverApr: 0.28,
+  wtiApr: -0.221,
+  brentApr: -0.939,
+}
+
 export const CARRY_EVIDENCE = {
   /** Binance USDT perpetuals since 2022, the rule, hedging coins already held. */
   ownApr: 0.1103,
@@ -108,6 +165,8 @@ export interface CarryContract {
 }
 
 export interface HoldingCarry extends CarryContract {
+  /** The coins actually held: `['PAXG']` for gold, the coin itself for the rest. */
+  heldAs: string[]
   held: number
   heldUsd: number
   /** Share of the portfolio, for leaving dust out. */
@@ -125,12 +184,30 @@ export interface HoldingCarry extends CarryContract {
 
 export interface SpotCarry extends CarryContract {
   spotPair: string | undefined
+  /** When the spot pair is a token of the underlying (PAXG for gold) and not the coin itself. */
+  tokenised?: string
   /** Days of funding that pay for buying and selling the spot plus the short. */
   breakEvenDays: number | undefined
 }
 
 /** How many of the highest-paying contracts get their history fetched. */
 const SCAN = 15
+
+/**
+ * The contracts whose history is fetched: the `top` paying most right now (so only when the board answered), and gold
+ * whatever its live rate. A dozen crypto contracts sit at the 11 % base rate and push it out of the top 15, though its
+ * last week is the thing the rule reads — and it was what this page could not show.
+ */
+export function scanSet(byCoin: Map<string, CarryContract>, top = SCAN): CarryContract[] {
+  const ranked = [...byCoin.values()]
+    .filter((c) => c.volumeUsd >= MIN_LIQUID_VOLUME && Number.isFinite(c.nowApr))
+    .sort((a, b) => b.nowApr - a.nowApr)
+    .slice(0, top)
+  const extra = Object.keys(HEDGE_COINS)
+    .map((u) => byCoin.get(u))
+    .filter((c): c is CarryContract => c !== undefined && c.volumeUsd >= MIN_LIQUID_VOLUME && !ranked.includes(c))
+  return [...ranked, ...extra]
+}
 
 export function useCarry() {
   const board = useFundingBoard()
@@ -161,7 +238,7 @@ export function useCarry() {
     const out: CarryContract[] = []
     for (const inst of instruments.data ?? []) {
       if (!inst.instId.includes('_UM_XPERP') || inst.state !== 'live') continue
-      if (inst.instCategory && inst.instCategory !== '1') continue
+      if (!isCarryContract(inst.instId.split('-')[0], inst.instCategory)) continue
       const r = rateById.get(inst.instId)
       const t = tickById.get(inst.instId)
       const last = num(t?.last)
@@ -198,23 +275,23 @@ export function useCarry() {
     return m
   }, [positions.data])
 
-  const holdingsWithContract = useMemo(
-    () =>
-      portfolio.holdings
-        .filter((h) => !STABLES.has(h.ccy) && h.total > 0 && byCoin.has(h.ccy))
-        .map((h) => ({ h, c: byCoin.get(h.ccy)! })),
-    [portfolio.holdings, byCoin],
-  )
+  const holdingsWithContract = useMemo(() => {
+    // Tokens of one thing are one holding: 0,6 PAXG and 0,4 XAUT are an ounce of gold to hedge.
+    const merged = new Map<string, { h: (typeof portfolio.holdings)[number]; coins: string[] }>()
+    for (const h of portfolio.holdings) {
+      if (STABLES.has(h.ccy) || !(h.total > 0)) continue
+      const under = underlyingOf(h.ccy)
+      if (!byCoin.has(under)) continue
+      const prev = merged.get(under)
+      merged.set(under, {
+        h: prev ? { ...prev.h, total: prev.h.total + h.total, usd: prev.h.usd + h.usd, weight: prev.h.weight + h.weight } : { ...h, ccy: under },
+        coins: [...(prev?.coins ?? []), h.ccy],
+      })
+    }
+    return [...merged.values()].map(({ h, coins }) => ({ h, coins, c: byCoin.get(h.ccy)! }))
+  }, [portfolio.holdings, byCoin])
 
-  const scanned = useMemo(
-    () =>
-      // Ranked by the live rate, so only when the board answered.
-      [...byCoin.values()]
-        .filter((c) => c.volumeUsd >= MIN_LIQUID_VOLUME && Number.isFinite(c.nowApr))
-        .sort((a, b) => b.nowApr - a.nowApr)
-        .slice(0, SCAN),
-    [byCoin],
-  )
+  const scanned = useMemo(() => scanSet(byCoin), [byCoin])
 
   // A holding smaller than one contract cannot be hedged, so its history is
   // not worth a request: the account had a dozen such coins worth cents.
@@ -230,7 +307,7 @@ export function useCarry() {
   const withTrail = (c: CarryContract): CarryContract => ({ ...c, trailing: trailingApr(trails.byInst[c.instId], now) })
 
   const holdings: HoldingCarry[] = holdingsWithContract
-    .map(({ h, c }) => {
+    .map(({ h, c, coins }) => {
       const row = withTrail(c)
       const ctVal = num(c.inst?.ctVal)
       const lot = num(c.inst?.lotSz) || 1
@@ -241,6 +318,7 @@ export function useCarry() {
       const apr = row.trailing ?? 0
       return {
         ...row,
+        heldAs: coins,
         held: h.total,
         heldUsd: h.usd,
         weight: h.weight,
@@ -253,21 +331,46 @@ export function useCarry() {
     })
     .sort((a, b) => b.heldUsd - a.heldUsd)
 
+  /** The spot pair that holds the coin, or — for gold — one of the tokens that stand for it. */
   const spotPairOf = (ccy: string) =>
-    [`${ccy}-USDC`, `${ccy}-EUR`, `${ccy}-USDT`].find((p) => spot.has(p))
+    [ccy, ...(HEDGE_COINS[ccy] ?? [])]
+      .flatMap((coin) => [`${coin}-USDC`, `${coin}-EUR`, `${coin}-USDT`])
+      .find((p) => spot.has(p))
 
   const opportunities: SpotCarry[] = scanned
     .map((c) => {
       const row = withTrail(c)
       const apr = row.trailing ?? 0
+      const spotPair = spotPairOf(c.ccy)
+      const token = spotPair?.split('-')[0]
       return {
         ...row,
-        spotPair: spotPairOf(c.ccy),
+        spotPair,
+        tokenised: token && token !== c.ccy ? token : undefined,
         breakEvenDays: apr > 0 ? costs.spot / (apr / 365) : undefined,
       }
     })
     .filter((c) => (c.trailing ?? 0) > CARRY_RULE.enter)
     .sort((a, b) => (b.trailing ?? 0) - (a.trailing ?? 0))
+
+  /**
+   * Where gold stands today, in the table or not. The rule leaves it out when its last week paid under the threshold
+   * (8,4 % the day this was written, after 20 % over the month), and a page that says nothing about it then reads as
+   * though the gold carry were broken.
+   */
+  const gold = Object.keys(HEDGE_COINS).flatMap((underlying) => {
+    const base = byCoin.get(underlying)
+    if (!base || base.volumeUsd < MIN_LIQUID_VOLUME) return []
+    return [
+      {
+        ccy: underlying,
+        trailing: withTrail(base).trailing,
+        nowApr: base.nowApr,
+        spotPair: spotPairOf(underlying),
+        tabled: opportunities.some((o) => o.instId === base.instId),
+      },
+    ]
+  })
 
   const liquid = contracts.filter((c) => c.volumeUsd >= MIN_LIQUID_VOLUME && Number.isFinite(c.nowApr))
   const sortedNow = liquid.map((c) => c.nowApr).sort((a, b) => a - b)
@@ -275,6 +378,7 @@ export function useCarry() {
   return {
     holdings,
     opportunities,
+    gold,
     board: {
       liquid: liquid.length,
       paying: liquid.filter((c) => c.nowApr > CARRY_RULE.enter).length,
@@ -304,7 +408,7 @@ export function useCarryExits() {
   const portfolio = usePortfolio()
   const positions = usePositions()
   const hedges = useMemo(() => {
-    const held = new Set(portfolio.holdings.filter((h) => h.total > 0).map((h) => h.ccy))
+    const held = heldUnderlyings(portfolio.holdings.filter((h) => h.total > 0).map((h) => h.ccy))
     return (positions.data ?? [])
       .filter((p) => p.instId.includes('_UM_XPERP') && num(p.pos) < 0 && held.has(p.instId.split('-')[0]))
       .map((p) => p.instId)

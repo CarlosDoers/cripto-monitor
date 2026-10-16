@@ -11,9 +11,11 @@ import {
 import { plural, price, ratio } from './format'
 import { DONCHIAN_TREND_EVIDENCE } from './indicators/donchianBreakout'
 import { expectedAt, inflationOf } from './ledgerAge'
-import { BAR_MS, MAX_ENTRIES, TRACK_BARS, type Ledger, type LedgerEntry, type TrackBar } from './ledgerModel'
-import { blockReason, profileOf, STRATEGIES, type StrategyDef } from './indicators/registry'
+import { BAR_MS, MAX_ENTRIES, TRACK_BARS, type Ledger, type LedgerEntry, type ProcessedKey, type TrackBar } from './ledgerModel'
+import { blockReason, MIN_TRADABLE_R, profileOf, STRATEGIES, type StrategyDef } from './indicators/registry'
 import type { Candle, SignalSide, StrategyResult } from './indicators/types'
+import { isTradTrack, tradFollowed, tradKindNote, TRAD_KIND, TRAD_TRACK_KEY, TRAD_TREND_EVIDENCE, type TradKind } from './tradMarkets'
+import { US_CLOSE_MS } from './yahoo'
 
 /**
  * The tracking ledger: every signal the measured strategies gave *after* the
@@ -29,8 +31,8 @@ import type { Candle, SignalSide, StrategyResult } from './indicators/types'
  * model, so the browser, the server and Claude's text all read the same thing.
  */
 
-export { BAR_MS, emptyLedger, MAX_ENTRIES, parseLedger, TRACK_BARS } from './ledgerModel'
-export type { Ledger, LedgerEntry, TrackBar } from './ledgerModel'
+export { BAR_MS, emptyLedger, MAX_ENTRIES, parseBoard, parseLedger, TRACK_BARS } from './ledgerModel'
+export type { Ledger, LedgerEntry, ProcessedKey, TrackBar, TradBoard, TradBoardRow } from './ledgerModel'
 
 // ── the tracks ───────────────────────────────────────────────────────────────
 
@@ -42,6 +44,15 @@ export interface TrackDef {
   /** "Ruptura · Canal 20 + EMA 200" */
   label: string
   barMs: number
+  /**
+   * Where the strategy's candles come from: OKX's crypto X-Perps, or the underlying of the equity, ETF and commodity
+   * ones (`yahoo.ts`). They have different clocks, so the job scans them apart.
+   */
+  market: 'crypto' | 'trad'
+  /** From the start of a candle to its close: the bar for crypto, 21.5 h for a New York session. */
+  closeMs: number
+  /** The only sides the track records, when not both. */
+  sides?: SignalSide[]
 }
 
 const labelOf = (st: StrategyDef, presetKey: string) => {
@@ -69,15 +80,45 @@ export function offeredTracks(): TrackDef[] {
           bar,
           label: `${labelOf(st, preset.key)} · ${bar === '1D' ? '1 d' : bar === '4H' ? '4 h' : '1 h'}`,
           barMs: BAR_MS[bar],
+          market: 'crypto',
+          closeMs: BAR_MS[bar],
         })
       }
     }
   }
+  if (tradOffered()) out.push(TRAD_TRACK)
   return out
 }
 
+/**
+ * The equities track: the Donchian + EMA 200 preset on the daily bar of what OKX's stock, ETF and commodity perpetuals
+ * track, long only. Offered by the same kind of rule as every other bar — the measured edge clears `MIN_TRADABLE_R` in
+ * both halves, beats a random long by the same margin `npm run try` asks, and survives losing its ten best trades — so a
+ * re-measurement that fails it stops the tracking without anyone editing a list.
+ */
+export function tradOffered(): boolean {
+  const e = TRAD_TREND_EVIDENCE.index
+  return Math.min(...e.halves) >= MIN_TRADABLE_R && e.net - e.random >= 0.05 && e.withoutBest10 > 0
+}
+
+export const TRAD_TRACK: TrackDef = {
+  key: TRAD_TRACK_KEY,
+  strategy: 'donchian',
+  preset: 'trend',
+  bar: '1D',
+  label: 'Tendencia diaria · bolsa, ETF y oro',
+  barMs: BAR_MS['1D'],
+  market: 'trad',
+  closeMs: US_CLOSE_MS,
+  sides: ['long'],
+}
+
+/** From the start of an entry's candle to its close. */
+const closeOffset = (e: Pick<LedgerEntry, 'track' | 'bar'>) => (isTradTrack(e.track) ? US_CLOSE_MS : BAR_MS[e.bar])
+
 /** The label of a track key, from the registry, even for one no longer offered. */
 export function trackLabel(key: string): string {
+  if (key === TRAD_TRACK_KEY) return TRAD_TRACK.label
   const m = /^([^/]+)\/([^@]+)@(.+)$/.exec(key)
   if (!m) return key
   const st = STRATEGIES.find((s) => s.key === m[1])
@@ -124,6 +165,14 @@ export const REFERENCE: Record<string, TrackReference> = {
   },
   'ema200/base@4H': { net: 0.19, n: 6732, sd: 3.31, longs: 0.29, shorts: 0.08, sample: '30 criptos, 4 h, 2022–2026' },
   'reversal/tuned@1D': { net: 0.37, n: 140, sd: 1.79, longs: 0.59, shorts: 0.12, sample: 'BTC, ETH y SOL, diario, 2022–2026' },
+  [TRAD_TRACK_KEY]: {
+    net: TRAD_TREND_EVIDENCE.index.net,
+    n: TRAD_TREND_EVIDENCE.index.n,
+    sd: TRAD_TREND_EVIDENCE.index.sd,
+    longs: TRAD_TREND_EVIDENCE.index.net,
+    shorts: TRAD_TREND_EVIDENCE.indexShorts,
+    sample: '20 ETF de índices y sectores, diario, 1993–2026, precios sin ajustar',
+  },
 }
 
 // ── from a strategy's result to ledger entries ───────────────────────────────
@@ -143,10 +192,14 @@ export function entriesFromResult(
   result: StrategyResult,
   regime: BtcRegime | null,
   now: number,
+  /** The equities track also records what kind of contract it was and which OKX contract trades it. */
+  meta?: { kind: TradKind; okxId: string },
 ): LedgerEntry[] {
   const last = candles.at(-1)
-  return result.signals.map((s) => {
-    const ctx = entryContext(candles, s.index, def.barMs, regime)
+  return result.signals
+    .filter((s) => !def.sides || def.sides.includes(s.side))
+    .map((s) => {
+    const ctx = entryContext(candles, s.index, def.closeMs, regime)
     const open = s.outcome === 'open'
     const risk = Math.abs(s.entry - s.stop)
     const dir = s.side === 'long' ? 1 : -1
@@ -159,23 +212,24 @@ export function entriesFromResult(
       instId,
       symbol,
       side: s.side,
-      at: s.time + def.barMs,
+      at: s.time + def.closeMs,
       entry: s.entry,
       stop: s.stop,
       target: s.target,
       stopNow: open ? (s.stopNow ?? s.stop) : undefined,
       status: open ? 'open' : 'closed',
-      closedAt: !open && s.closedTime !== undefined ? s.closedTime + def.barMs : undefined,
+      closedAt: !open && s.closedTime !== undefined ? s.closedTime + def.closeMs : undefined,
       exit: open ? undefined : (s.closedPrice ?? (s.outcome === 'win' ? s.target : s.stop)),
       resultR: open ? undefined : s.resultR,
       feeR: s.feeR,
       markR: open && last && risk > 0 ? r3((dir * (last.close - s.entry)) / risk) : undefined,
       lastClose: open && last ? last.close : undefined,
-      markedAt: open && last ? last.time + def.barMs : undefined,
+      markedAt: open && last ? last.time + def.closeMs : undefined,
       seen: now,
       volume: Number.isFinite(ctx.volume) ? r3(ctx.volume) : null,
       btcAbove: ctx.btcAbove,
       weekend: ctx.weekend,
+      ...(meta ? { kind: meta.kind, okxId: meta.okxId } : {}),
     }
   })
 }
@@ -269,7 +323,7 @@ export function mergeObserved(
     const oldest = windows[`${e.track}|${e.instId}`]
     // Scanned this run, the window reaches back past the entry, and the strategy no longer shows it: leave it open
     // (a data glitch). Scanned and the entry is older than the window: it cannot be followed.
-    if (oldest !== undefined && e.at - BAR_MS[e.bar] < oldest) e.lost = true
+    if (oldest !== undefined && e.at - closeOffset(e) < oldest) e.lost = true
   }
 
   entries.sort((a, b) => a.at - b.at || a.id.localeCompare(b.id))
@@ -313,9 +367,11 @@ export function ageOf(e: LedgerEntry, asOf: number): number {
  * bar — because a closed trade is worth the same at any later age, and the
  * history's curve it is compared with includes the ones that had closed.
  */
-function asOfOf(e: LedgerEntry, processed: Partial<Record<TrackBar, number>>): number {
-  if (e.status === 'open') return e.markedAt ?? processed[e.bar] ?? e.at
-  return Math.max(processed[e.bar] ?? 0, e.closedAt ?? e.at)
+function asOfOf(e: LedgerEntry, processed: Partial<Record<ProcessedKey, number>>): number {
+  // The equities track keeps its own clock: a New York session closes at 21:30 UTC, OKX's daily at 16:00.
+  const clock = processed[isTradTrack(e.track) ? 'us' : e.bar]
+  if (e.status === 'open') return e.markedAt ?? clock ?? e.at
+  return Math.max(clock ?? 0, e.closedAt ?? e.at)
 }
 
 export interface Versus {
@@ -341,7 +397,7 @@ export interface Versus {
 export function versusHistory(
   entries: LedgerEntry[],
   track: string,
-  processed: Partial<Record<TrackBar, number>>,
+  processed: Partial<Record<ProcessedKey, number>>,
 ): Versus | null {
   const mine = entries.filter((e) => e.track === track && !e.lost)
   if (!mine.length || !expectedAt(track, 0)) return null
@@ -389,7 +445,7 @@ export interface TrackStats {
 export function trackStats(
   entries: LedgerEntry[],
   track: string,
-  processed: Partial<Record<TrackBar, number>> = {},
+  processed: Partial<Record<ProcessedKey, number>> = {},
 ): TrackStats {
   const mine = entries.filter((e) => e.track === track && !e.lost)
   const closed = mine.filter((e) => e.status === 'closed' && e.resultR !== undefined)
@@ -468,7 +524,7 @@ export interface SplitStat {
 function split(
   es: LedgerEntry[],
   track: string,
-  processed: Partial<Record<TrackBar, number>>,
+  processed: Partial<Record<ProcessedKey, number>>,
   pick: (e: LedgerEntry) => boolean | null,
 ): { with: SplitStat; without: SplitStat } {
   const dev = (e: LedgerEntry) => currentR(e) - (expectedAt(track, ageOf(e, asOfOf(e, processed)))?.mean ?? 0)
@@ -487,7 +543,7 @@ export interface ContextSplits {
 export function contextSplits(
   entries: LedgerEntry[],
   track: string,
-  processed: Partial<Record<TrackBar, number>> = {},
+  processed: Partial<Record<ProcessedKey, number>> = {},
 ): ContextSplits {
   const mine = entries.filter((e) => e.track === track && !e.lost)
   return {
@@ -504,6 +560,8 @@ export function contextSplits(
 
 /** The tags of an entry, with the evidence of its own track. */
 export function entryTags(e: LedgerEntry): ContextTag[] {
+  // Measured on crypto; on ETFs and stocks neither volume nor the market's regime replicated, so they say nothing there.
+  if (isTradTrack(e.track)) return []
   return contextTags(
     { volume: e.volume ?? NaN, btcAbove: e.btcAbove, weekend: e.weekend },
     e.side,
@@ -591,6 +649,21 @@ export function ledgerText(ledger: Ledger, now = Date.now()): string {
           (e) =>
             `- ${e.symbol} ${e.side === 'long' ? 'Long' : 'Short'} · ${trackLabel(e.track)} · desde el ${dayText(e.at)} · entrada ${price(e.entry)} · stop ${price(e.stopNow ?? e.stop)} · ${signedR((e.markR ?? 0) - e.feeR)} R al último cierre`,
         ),
+    )
+  }
+  const board = ledger.board
+  if (board?.rows.length) {
+    // Where the equities, ETFs and commodities stand at the last New York close, with how much evidence each kind has.
+    const followed = board.rows.filter((r) => tradFollowed(r.kind))
+    const names = (status: string) =>
+      followed
+        .filter((r) => r.status === status)
+        .map((r) => (status === 'cerca' ? `${r.okx} (a ${ratio(r.distanceAtr ?? 0, 1)} ATR del máximo)` : status === 'nueva' ? `${r.okx} (${TRAD_KIND[r.kind].label.toLowerCase()})` : r.okx))
+    lines.push(
+      '',
+      `## Bolsa, ETF y oro · tendencia diaria, solo largos · cierre de Nueva York del ${dayText(board.asOf)}`,
+      `Señal nueva (las dos últimas sesiones): ${names('nueva').join(', ') || 'ninguna'}. Cerca de romper: ${names('cerca').join(', ') || 'ninguno'}. En tendencia: ${names('tendencia').length} contratos. Sin posición: ${followed.filter((r) => r.status === 'fuera').length}. Historial corto: ${followed.filter((r) => r.status === 'corto').length}.`,
+      `Qué hay detrás: ${tradKindNote('index')} ${tradKindNote('stock')} ${tradKindNote('commodity')} Como cuenta, la regla en largos de índices rinde ${TRAD_TREND_EVIDENCE.portfolio.sharpe.toFixed(2).replace('.', ',')} de Sharpe contra ${TRAD_TREND_EVIDENCE.portfolio.spySharpe.toFixed(2).replace('.', ',')} de SPY comprado y mantenido: es contexto, no una recomendación.`,
     )
   }
   lines.push(

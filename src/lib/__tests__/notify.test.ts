@@ -29,6 +29,57 @@ const entry = (patch: Partial<LedgerEntry> = {}): LedgerEntry => ({
   ...patch,
 })
 
+describe('the message for an equity, an ETF or a commodity', () => {
+  const trad = (patch: Partial<LedgerEntry> = {}): LedgerEntry =>
+    entry({
+      id: 'trad/trend@1D:SPY:1',
+      track: 'trad/trend@1D',
+      strategy: 'donchian',
+      preset: 'trend',
+      bar: '1D',
+      instId: 'SPY',
+      symbol: 'SPY',
+      entry: 771.79,
+      stop: 740.5,
+      kind: 'index',
+      okxId: 'SPY-USD_UM_XPERP-310613',
+      volume: 1.2,
+      btcAbove: null,
+      ...patch,
+    })
+
+  it('says which OKX contract to look at, prices it to the cent and quotes the evidence of its kind', () => {
+    const m = formatAlert([trad()], 'https://app.test/')
+    expect(m.title).toBe('Señal nueva · SPY · Long · 1 d')
+    expect(m.body).toContain('Tendencia diaria · bolsa, ETF y oro: entrada 771,79 (cierre del subyacente) · stop 740,50 (4,1 % de riesgo')
+    expect(m.body).toContain('contrato en OKX: SPY-USD_UM_XPERP-310613 · ETF de índice')
+    expect(m.body).toContain('Medido en')
+    expect(m.body).toContain('frente a')
+    // The crypto tags were not measured on equities and are not printed, nor is the volume.
+    expect(m.body).not.toContain('BTC sobre')
+    expect(m.body).not.toContain('Volumen')
+    expect(m.body).toContain('no una recomendación')
+    expect(m.url).toBe('https://app.test/#/screener')
+  })
+
+  it('names a stock as having no evidence of its own, and a commodity as a thin sample', () => {
+    const stock = formatAlert([trad({ instId: 'AAPL', symbol: 'AAPL', kind: 'stock', okxId: 'AAPL-USD_UM_XPERP-310613' })])
+    expect(stock.title).toBe('Señal nueva · AAPL · Long · 1 d')
+    expect(stock.body).toContain('Sin evidencia propia')
+    expect(stock.body).toContain('supervivientes')
+    const gold = formatAlert([trad({ instId: 'GLD', symbol: 'XAU', kind: 'commodity', okxId: 'XAU-USD_UM_XPERP-310502' })], undefined, ['   financiación ahora: +20,1 % anual, la paga quien está largo'])
+    expect(gold.title).toBe('Señal nueva · XAU (oro) · Long · 1 d')
+    expect(gold.body).toContain('Cuatro series')
+    expect(gold.body).toContain('financiación ahora: +20,1 % anual, la paga quien está largo')
+    expect(gold.url).toBeUndefined()
+  })
+
+  it('points a stock at the Screener, where its card is, not at a strategy chart it does not have', () => {
+    expect(entryUrl(trad(), 'https://app.test/')).toBe('https://app.test/#/screener')
+    expect(entryUrl(entry(), 'https://app.test')).toContain('#/estrategias?inst=ZEC')
+  })
+})
+
 describe('the message', () => {
   it('says what fired, where its stop is, what was measured and what is around it', () => {
     const m = formatAlert([entry()], 'https://app.test/')
@@ -113,9 +164,20 @@ describe('the test message', () => {
     const fetchImpl = ok()
     const res = await sendTestAlerts({ NTFY_TOPIC: 'mi-tema' }, 'https://app.test/', fetchImpl)
     expect(res).toEqual({ channels: [{ name: 'ntfy', ok: true }] })
-    const body = JSON.parse((fetchImpl as unknown as { mock: { calls: [string, { body: string }][] } }).mock.calls[0][1].body)
+    const calls = (fetchImpl as unknown as { mock: { calls: [string, { body: string }][] } }).mock.calls
+    const body = JSON.parse(calls[0][1].body)
     expect(body).toMatchObject({ topic: 'mi-tema', title: 'Aviso de prueba · Cripto Monitor', click: 'https://app.test/#/seguimiento' })
     expect(body.message).toContain('Esto no es una señal')
+    // A second message shows how an equities signal will read, labelled as an example with invented figures.
+    expect(calls).toHaveLength(2)
+    const example = JSON.parse(calls[1][1].body)
+    expect(example.title).toBe('Ejemplo · Señal nueva · XAU (oro) · Long · 1 d')
+    expect(example.message).toContain('Las cifras de este mensaje son inventadas')
+    expect(example.message).toContain('contrato en OKX: XAU-USD_UM_XPERP-310502')
+    expect(example.message).toContain('financiación ahora')
+    // And the line about the book, so the first real one is not the first time it is read.
+    expect(example.message).toContain('liquidez ahora: entrar con 5000 $ cuesta')
+    expect(example.click).toBe('https://app.test/#/screener')
   })
 
   it('tries every channel and reports each, without throwing when one fails', async () => {

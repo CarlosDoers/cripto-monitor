@@ -140,6 +140,8 @@ export interface WatchSettings {
   bars: string[]
   alertBars: string[]
   alertSides: string[]
+  /** The equities, ETFs and commodities track: on, announced, and for which kinds. */
+  trad?: { enabled: boolean; alert: boolean; kinds: string[]; maxCostR?: number }
 }
 
 /** One pass of the job, as the endpoint summarises it. */
@@ -168,6 +170,20 @@ export interface WatchState {
 /** The tracking ledger (`api/watch.ts`), for the Seguimiento view. */
 export async function watchLedger(): Promise<WatchState> {
   return (await request('', '/api/watch')) as WatchState
+}
+
+/** Only the equities board of the ledger, which is what the Screener's card needs. */
+export interface TradBoardState {
+  enabled: boolean
+  storage?: 'blob' | 'file'
+  config: WatchSettings
+  /** As stored; `parseBoard` makes it a typed one. Null until a run has read a New York session. */
+  board: unknown
+  lastRun: number
+}
+
+export async function tradBoard(): Promise<TradBoardState> {
+  return (await request('board=1', '/api/watch')) as TradBoardState
 }
 
 /** What the server reports about the ledger without sending it: when it last ran, how big it is. */

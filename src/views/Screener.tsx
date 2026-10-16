@@ -5,6 +5,7 @@ import { EmaScanner } from '../components/EmaScanner'
 import { DonchianWatch } from '../components/DonchianWatch'
 import { EmaWatch } from '../components/EmaWatch'
 import { RelativeStrength } from '../components/RelativeStrength'
+import { TradWatch } from '../components/TradWatch'
 import {
   compareRows,
   NO_FILTERS,
@@ -15,7 +16,7 @@ import {
   type ScreenRow,
   type SortKey,
 } from '../lib/screener'
-import { pct, plural, price, ratio, share } from '../lib/format'
+import { compactUsd, pct, plural, price, ratio, share } from '../lib/format'
 import { Sparkline } from '../components/Sparkline'
 import { useSize } from '../lib/useSize'
 import { Badge, Card, DeltaValue, EmptyState, ErrorNotice, Help, SearchInput, TableSkeleton, TableWrap } from '../components/ui'
@@ -29,13 +30,6 @@ const PAGE = 50
 type View = 'resumen' | 'rendimiento' | 'tecnico' | 'graficos'
 
 const CATEGORY_LABEL = { cripto: 'Cripto', accion: 'Acción', materia: 'Materia prima' } as const
-
-function compactUsd(v: number): string {
-  if (v >= 1e9) return `${ratio(v / 1e9, 2)} B$`
-  if (v >= 1e6) return `${ratio(v / 1e6, 1)} M$`
-  if (v >= 1e3) return `${ratio(v / 1e3, 0)} k$`
-  return `${ratio(v, 0)} $`
-}
 
 /** A signed move tinted by its size, like Finviz's performance grid. Full tint at ±20 %. */
 function Heat({ value }: { value: number }) {
@@ -291,6 +285,7 @@ export function Screener() {
       <EmaScanner markets={markets} />
       <DonchianWatch markets={markets} />
       <EmaWatch markets={markets} />
+      <TradWatch markets={markets} />
       {/* Not on demand: it reads the daily candles this page already fetches. And not a
           strategy — a measured ordering (nearness to the 90-day high), with its limits. */}
       <RelativeStrength markets={markets} />

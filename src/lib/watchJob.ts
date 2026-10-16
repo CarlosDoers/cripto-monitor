@@ -13,14 +13,32 @@ import {
   TRACK_BARS,
   type Ledger,
   type LedgerEntry,
+  type ProcessedKey,
+  type TradBoard,
+  type TradBoardRow,
   type TrackBar,
   type TrackDef,
 } from './ledger'
 import { formatAlert, notifiersFromEnv, sendTestAlerts, type Notifier } from './notify'
 import { measuredContracts } from './opportunities'
+import { bookCost } from './depthCost'
 import { toCandles } from './signals'
 import { collectMarket, liquidCrypto, patient, type Get } from './snapshot'
-import type { Candle as OkxCandle } from './types'
+import {
+  compareTradWatch,
+  isTradTrack,
+  liquidityVerdict,
+  liveTradContracts,
+  tradFollowed,
+  TRAD_ALERT_KINDS,
+  TRAD_LIQUIDITY,
+  watchTradTrend,
+  type LiquidityVerdict,
+  type TradContract,
+  type TradKind,
+} from './tradMarkets'
+import type { Candle as OkxCandle, Instrument, OrderBook } from './types'
+import { fetchDaily, latestUsClose } from './yahoo'
 
 /**
  * The server's pass over the strategies the app offers: put the contracts under
@@ -51,6 +69,33 @@ export interface WatchConfig {
   alertSides: SignalSide[]
   /** A signal older than this is recorded but not announced — after an outage the phone is not flooded. */
   maxAlertAgeMs: number
+  /** The equities, ETFs and commodities track (`WATCH_TRAD=off` switches it off). */
+  trad: boolean
+  /** Whether that track's signals are announced, and for which kinds of contract. */
+  tradAlert: boolean
+  tradKinds: TradKind[]
+  /** No alert for a contract whose book makes entering and leaving cost more than this many R; 0 announces them all. */
+  tradMaxCostR: number
+}
+
+/** A daily signal stays worth announcing much longer than an hourly one: its stop is days away. */
+const DAILY_ALERT_AGE_MS = 30 * 3_600_000
+
+const off = (raw: string | undefined) => /^(off|0|false|no)$/i.test((raw ?? '').trim())
+
+const kindsOf = (raw: string | undefined, fallback: TradKind[]): TradKind[] => {
+  const asked = (raw ?? '')
+    .split(',')
+    .map((x) => x.trim().toLowerCase())
+    .filter((x): x is TradKind => x === 'index' || x === 'commodity' || x === 'stock' || x === 'leveraged')
+  return asked.length ? asked : fallback
+}
+
+/** `WATCH_TRAD_MAX_COST_R`: a number of R, or `off` to announce every contract whatever its book. */
+const costCap = (raw: string | undefined): number => {
+  if (off(raw)) return 0
+  const x = Number(raw)
+  return Number.isFinite(x) && x > 0 ? x : TRAD_LIQUIDITY.maxCostR
 }
 
 const bars = (raw: string | undefined, fallback: TrackBar[]): TrackBar[] => {
@@ -74,12 +119,22 @@ export function configFromEnv(env: Env): WatchConfig {
     alertBars: bars(env.WATCH_ALERT_BARS, ['4H', '1D']),
     alertSides: sides.length ? sides : ['long', 'short'],
     maxAlertAgeMs: (Number.isFinite(hours) && hours > 0 ? hours : 8) * 3_600_000,
+    trad: !off(env.WATCH_TRAD),
+    tradAlert: !off(env.WATCH_TRAD_ALERT),
+    tradKinds: kindsOf(env.WATCH_TRAD_KINDS, TRAD_ALERT_KINDS),
+    tradMaxCostR: costCap(env.WATCH_TRAD_MAX_COST_R),
   }
 }
 
 /** Whether a new entry is announced. */
 export function alertEligible(e: LedgerEntry, cfg: WatchConfig, now: number): boolean {
-  return cfg.alertBars.includes(e.bar) && cfg.alertSides.includes(e.side) && now - e.at <= cfg.maxAlertAgeMs
+  const age = now - e.at
+  const maxAge = e.bar === '1D' ? Math.max(cfg.maxAlertAgeMs, DAILY_ALERT_AGE_MS) : cfg.maxAlertAgeMs
+  if (isTradTrack(e.track)) {
+    // Only the kinds asked for; the one measured and failed (leveraged ETFs) is never in the ledger at all.
+    return cfg.tradAlert && e.kind !== undefined && cfg.tradKinds.includes(e.kind) && cfg.alertSides.includes(e.side) && age <= maxAge
+  }
+  return cfg.alertBars.includes(e.bar) && cfg.alertSides.includes(e.side) && age <= maxAge
 }
 
 // ── pacing ───────────────────────────────────────────────────────────────────
@@ -149,6 +204,49 @@ const BUDGET_MS = 35_000
 const CONCURRENCY = 6
 /** Tries at a conditional write before giving the run up. */
 const WRITE_TRIES = 4
+/** The equities scan stops starting symbols after this: Vercel's limit is 60 s, counted from the start of the run. */
+const TRAD_BUDGET_MS = 48_000
+/** Yahoo requests in flight at once: it answers cloud addresses with 429 more readily than a home connection. */
+const TRAD_CONCURRENCY = 4
+/** Share of the symbols that must answer for a session to count as read. */
+const TRAD_MIN_SHARE = 0.7
+
+/** Live funding of a perpetual as a sentence, when it is large enough to change the trade. */
+async function fundingNote(get: Get, instId: string): Promise<string | undefined> {
+  try {
+    const [r] = await get<{ fundingRate: string; fundingTime: string; nextFundingTime: string }>('/api/v5/public/funding-rate', { instId })
+    if (!r) return undefined
+    const gap = Number(r.nextFundingTime) - Number(r.fundingTime)
+    const apr = Number(r.fundingRate) * (gap > 0 ? 86_400_000 / gap : 3) * 365
+    if (!Number.isFinite(apr) || Math.abs(apr) < 0.03) return undefined
+    const text = `${apr >= 0 ? '+' : '−'}${(Math.abs(apr) * 100).toFixed(1).replace('.', ',')} % anual`
+    return `   financiación ahora: ${text}, ${apr >= 0 ? 'la paga quien está largo' : 'la cobra quien está largo'}`
+  } catch {
+    return undefined
+  }
+}
+
+/**
+ * What entering the contract would cost, from its book now: the line for the message and whether to send it at all. A book
+ * that cannot be read leaves the message as it was (a missing line is better than a missing signal); a book that is empty,
+ * or too thin for the usual size, blocks it.
+ */
+async function liquidityNote(
+  get: Get,
+  e: LedgerEntry,
+  instruments: Pick<Instrument, 'instId' | 'ctVal'>[],
+  maxCostR: number,
+): Promise<LiquidityVerdict | undefined> {
+  const ctVal = Number(instruments.find((i) => i.instId === e.okxId)?.ctVal)
+  if (!e.okxId || !(ctVal > 0)) return undefined
+  try {
+    const [book] = await get<OrderBook>('/api/v5/market/books', { instId: e.okxId, sz: 50 })
+    if (!book) return undefined
+    return liquidityVerdict(bookCost(book, TRAD_LIQUIDITY.refUsd, ctVal), Math.abs(e.entry - e.stop) / e.entry, maxCostR)
+  } catch {
+    return undefined
+  }
+}
 
 /** BTC's spot pair: years of history, and its price is the perpetual's within the basis. */
 const BTC_SPOT = 'BTC-USDT'
@@ -203,7 +301,9 @@ export const runWatch: typeof Declared = async (options) => {
   }
 
   try {
-    const tracks = offeredTracks().filter((t) => cfg.bars.includes(t.bar))
+    const allTracks = offeredTracks()
+    const tracks = allTracks.filter((t) => t.market === 'crypto' && cfg.bars.includes(t.bar))
+    const tradTrack = cfg.trad ? allTracks.find((t) => t.market === 'trad') : undefined
     const market = await collectMarket(get)
     const trend = liquidCrypto(market, cfg.top)
     const measured = measuredContracts(liquidCrypto(market, 400))
@@ -213,6 +313,9 @@ export const runWatch: typeof Declared = async (options) => {
     // The universe of each track: where the reversal's edge was measured, or the most traded.
     const universe: Record<string, string[]> = {}
     for (const t of tracks) universe[t.key] = (t.strategy === 'reversal' ? measured : trend).map((x) => x.instId)
+    // The equities track: the contracts of the table that are live on OKX, except the kind that measured without an edge.
+    const tradContracts = tradTrack ? liveTradContracts(market.instruments) : []
+    if (tradTrack) universe[tradTrack.key] = tradContracts.filter((c) => tradFollowed(c.sym.kind)).map((c) => c.sym.yahoo)
 
     // A dry run can pretend the ledger began earlier, to show what it would have recorded.
     const startedAt = options.pretendStart ?? now
@@ -246,7 +349,7 @@ export const runWatch: typeof Declared = async (options) => {
 
     const observed: LedgerEntry[] = []
     const windows: Record<string, number> = {}
-    const processed: Partial<Record<TrackBar, number>> = {}
+    const processed: Partial<Record<ProcessedKey, number>> = {}
     let scanned = 0
 
     if (due.length) {
@@ -299,6 +402,76 @@ export const runWatch: typeof Declared = async (options) => {
       }
     }
 
+    // ── the equities, ETFs and commodities: the same rule on the underlying's daily bars, on New York's clock ──
+    // Its own clock (`us`): the close of the newest New York session, read from SPY. A session that has not closed is
+    // never read, so on a weekday morning, at a weekend or on a holiday this costs one request and nothing else.
+    let board: TradBoard | undefined
+    if (tradTrack && tradContracts.length) {
+      try {
+        const yahoo = { fetch: options.fetch, now }
+        const latestUs = await latestUsClose('SPY', yahoo)
+        if (dry || latestUs > (ledger.processed.us ?? 0)) {
+          const rows: TradBoardRow[] = []
+          const failures = new Map<string, string>()
+          const deadline = t0 + TRAD_BUDGET_MS
+          let timedOut = false
+          const scanOne = async (c: TradContract) => {
+            const { candles } = await fetchDaily(c.sym.yahoo, yahoo)
+            scanned++
+            rows.push(watchTradTrend(candles, c.sym, c.instId))
+            if (tradFollowed(c.sym.kind)) {
+              const result = strategyByKey(tradTrack.strategy).run(candles, tradTrack.preset)
+              observed.push(...entriesFromResult(tradTrack, c.sym.yahoo, c.sym.okx, candles, result, null, now, { kind: c.sym.kind, okxId: c.instId }))
+              if (candles.length) windows[`${tradTrack.key}|${c.sym.yahoo}`] = candles[0].time
+            }
+          }
+          const failed: TradContract[] = []
+          await pool(tradContracts, TRAD_CONCURRENCY, async (c) => {
+            // Out of time, or Yahoo is refusing everything (the first eight in a row): more tries would only spend the
+            // function's minute on requests that fail, and the crypto tracks are already read.
+            if (Date.now() > deadline || (rows.length === 0 && failed.length >= 8)) {
+              timedOut = true
+              return
+            }
+            try {
+              await scanOne(c)
+            } catch (err) {
+              failed.push(c)
+              failures.set(c.sym.yahoo, (err as Error).message)
+            }
+          })
+          // What failed gets a second try once the burst is over.
+          for (const c of failed) {
+            if (Date.now() > deadline) {
+              timedOut = true
+              break
+            }
+            await sleep(600)
+            try {
+              await scanOne(c)
+              failures.delete(c.sym.yahoo)
+            } catch (err) {
+              failures.set(c.sym.yahoo, (err as Error).message)
+            }
+          }
+          for (const [symbol, why] of [...failures].slice(0, 4)) errors.push(why.startsWith(symbol) ? why : `${symbol}: ${why}`)
+          // A session counts as read when most of the table answered. A symbol that is never there must not hold the
+          // scan back for ever; one that is missing today is found tomorrow, since signals are recomputed from candles.
+          if (!timedOut && rows.length >= tradContracts.length * TRAD_MIN_SHARE) {
+            processed.us = latestUs
+            board = {
+              at: now,
+              asOf: latestUs,
+              rows: rows.sort(compareTradWatch),
+              errors: failures.size ? [...failures].map(([symbol, why]) => (why.startsWith(symbol) ? why : `${symbol}: ${why}`)) : undefined,
+            }
+          }
+        }
+      } catch (err) {
+        errors.push(`bolsa: ${(err as Error).message}`)
+      }
+    }
+
     // ── merge and write, again from a fresh read when something else wrote first ──
     let merged = mergeObserved({ ...ledger, since }, observed, windows, now)
     const finish = (l: Ledger): Ledger => ({
@@ -309,6 +482,7 @@ export const runWatch: typeof Declared = async (options) => {
       universe,
       since,
       processed: { ...l.processed, ...processed },
+      board: board ?? l.board,
       lastError: errors.length ? errors.slice(0, 5).join(' · ') : undefined,
     })
     let next = finish(merged.ledger)
@@ -332,7 +506,7 @@ export const runWatch: typeof Declared = async (options) => {
           since: fold.since,
           runs: fresh.runs + 1,
           processed: Object.fromEntries(
-            TRACK_BARS.flatMap((b) => {
+            ([...TRACK_BARS, 'us'] as ProcessedKey[]).flatMap((b) => {
               const v = Math.max(fresh.processed[b] ?? 0, processed[b] ?? 0)
               return v ? [[b, v]] : []
             }),
@@ -351,9 +525,26 @@ export const runWatch: typeof Declared = async (options) => {
         const key = `${e.instId}|${e.side}|${e.bar}|${e.at}`
         groups.set(key, [...(groups.get(key) ?? []), e])
       }
-      const flags = new Map<string, 'sent' | 'failed'>()
+      const flags = new Map<string, 'sent' | 'failed' | 'illiquid'>()
       for (const group of groups.values()) {
-        const message = formatAlert(group, options.appUrl)
+        // A commodity perpetual can charge its longs a fifth of a year in funding: say so in the message.
+        const extra: string[] = []
+        if (isTradTrack(group[0].track) && group[0].okxId) {
+          // Both are one request each; a day with many breakouts would otherwise spend the function's minute waiting in a queue.
+          const [note, liquidity] = await Promise.all([
+            fundingNote(get, group[0].okxId),
+            // A thin book can cost more to enter than the edge pays: say what it costs, or do not wake the phone for it.
+            liquidityNote(get, group[0], market.instruments, cfg.tradMaxCostR),
+          ])
+          if (note) extra.push(note)
+          if (liquidity?.block) {
+            // Recorded and followed like the rest, and on the card; only the buzz is withheld.
+            for (const e of group) flags.set(e.id, 'illiquid')
+            continue
+          }
+          if (liquidity?.line) extra.push(liquidity.line)
+        }
+        const message = formatAlert(group, options.appUrl, extra)
         let ok = false
         for (const n of notifiers) {
           for (let attempt = 0; attempt < 2 && !ok; attempt++) {
@@ -386,7 +577,7 @@ export const runWatch: typeof Declared = async (options) => {
     return done({
       ...base(),
       status: 'ran',
-      tracks: tracks.map((t) => t.key),
+      tracks: [...tracks.map((t) => t.key), ...(tradTrack ? [tradTrack.key] : [])],
       scanned,
       added: merged.added.length,
       closed: merged.closed.length,
@@ -422,5 +613,6 @@ export function describeWatch(env: Env) {
     bars: cfg.bars,
     alertBars: cfg.alertBars,
     alertSides: cfg.alertSides,
+    trad: { enabled: cfg.trad, alert: cfg.tradAlert, kinds: cfg.tradKinds, maxCostR: cfg.tradMaxCostR },
   }
 }

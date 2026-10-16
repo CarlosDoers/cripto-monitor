@@ -429,21 +429,36 @@ const FINDINGS: { verdict: Verdict; what: string; detail: ReactNode }[] = [
   },
   {
     verdict: 'ojo',
-    what: 'La regla de tendencia en otros mercados (ETF, bonos, oro): solo largos',
+    what: 'La regla de tendencia en otros mercados (ETF, oro, acciones): solo largos, y modesta',
     detail: (
       <>
-        La misma regla de «Canal 20 + EMA 200», sin tocar nada, en velas diarias de <strong>41 ETF</strong>
-        durante 25 años: los longs ganan <strong>+0,61 R</strong> por operación frente a +0,16 de una
-        entrada larga al azar con el mismo stop, y los shorts no aportan nada (−0,16 frente a −0,13). Hace
-        falta el filtro de la EMA 200: sin él queda en +0,03. Pero con límites: los últimos cinco años son
-        más flojos (+0,32 R, con un intervalo que incluye el cero); como cuenta gana lo mismo que comprar
-        SPY y mantenerlo (mismo Sharpe, 0,65 frente a 0,64) con un tercio menos de caída máxima y mucho
-        apalancamiento; las cuatro materias primas de OKX por sí solas no bastan para afirmarlo; y las
-        acciones que lista OKX no cuentan, porque son las que hoy están de moda. Lo que sí aporta es
-        diversificar: sus resultados mensuales casi no se parecen a los de la tendencia en cripto
-        (correlación −0,05). Los filtros de volumen y de BTC de las etiquetas no se repiten fuera de
-        cripto. La app no lo vigila: la EMA 200 necesita 620 velas diarias y los contratos de acciones
-        llevan menos de seis meses cotizando.
+        La misma regla de «Canal 20 + EMA 200», sin tocar nada, en velas diarias y con los precios tal como
+        cotizan (sin sumar dividendos: un perpetuo no los paga). En <strong>41 ETF</strong> de todo tipo, comprando y
+        vendiendo en corto, <strong>no hay nada</strong> (+0,06 R por operación). Solo se sostiene la parte larga de los{' '}
+        <strong>20 ETF de índices y sectores</strong>: <strong>+0,45 R</strong> en 25 años frente a +0,17 de una entrada
+        larga al azar con el mismo stop, y +0,29 sin sus diez mejores operaciones. Pero{' '}
+        <strong>OKX solo lista cuatro de esos 20</strong> (SPY, QQQ, EWY y EWZ): en esos cuatro salen +0,76 R en 234
+        operaciones frente a +0,29 de una entrada larga al azar, aunque SPY y QQQ son el mismo mercado, EWY y EWZ no
+        aguantan sin sus diez mejores operaciones y desde 2022 son solo 49 operaciones. Con límites que pesan:{' '}
+        <strong>los últimos cinco años son más flojos</strong> (+0,20 R frente a +0,07 del azar, con un intervalo que
+        incluye el cero, y −0,22 sin las diez mejores); <strong>como cuenta rinde menos que comprar SPY y
+        mantenerlo</strong> (+3,6 % al año y Sharpe 0,32, con una caída máxima de −29 %, frente a +11,3 %, 0,64 y −52 %);
+        las cuatro materias primas de OKX no bastan para afirmarlo, y las acciones que lista son las que hoy están de
+        moda, así que no cuentan; y los filtros de volumen y de BTC de las etiquetas no se repiten fuera de cripto.
+        Tampoco diversifica gratis: sus resultados mensuales casi no se parecen a los de la tendencia en cripto
+        (correlación 0,0), pero rinde mucho menos, así que mezclarlos no mejora a la cripto sola. Una primera versión de
+        este análisis salió mucho mejor porque usaba precios con los dividendos de los bonos añadidos y se comparaba
+        con un SPY al que le faltaban los días de crisis: aquí está corregida. <strong>La app lo sigue</strong> en
+        Seguimiento (una pista diaria sobre los contratos de bolsa, ETF y oro que lista OKX, con aviso al móvil) y en la
+        tarjeta «Qué vigilar · Tendencia diaria en bolsa, ETF y oro» del Screener; los ETF apalancados se muestran y no se siguen. Es un registro para
+        comprobarlo hacia delante, y hacen falta años. <strong>¿Se puede operar en OKX?</strong> Sí: OKX te
+        tiene disponibles esos contratos (acciones, ETF, oro, plata y petróleo, como futuros que siguen el precio, con
+        apalancamiento de hasta 20× y 50×). Pero con la liquidez justa: el 16 de octubre la mediana de las acciones y ETF
+        movía unos 55.000 US$ al día con horquillas de un 0,24 %; SPY y QQQ admiten unos miles de dólares con un coste de
+        entrada de un 0,1 % aproximado, EWZ prácticamente no tiene volumen, y el oro, la plata y el petróleo mueven
+        millones al día. La tarjeta del Screener enseña esa liquidez en una columna y marca los contratos
+        finos; el aviso al móvil lleva lo que costaría entrar con 5.000 US$ según el libro, y no se manda si entrar y
+        salir cuesta más de 0,15 R de horquilla (se apunta y se sigue igual).
       </>
     ),
   },
@@ -455,12 +470,13 @@ const FINDINGS: { verdict: Verdict; what: string; detail: ReactNode }[] = [
         El perpetuo del oro pagó a los cortos un <strong>+12 % anual</strong> de media en las últimas 13
         semanas (8 por encima del 10 %, 3 negativas), y existen <strong>PAXG-USDT</strong> y{' '}
         <strong>XAUT-USDT</strong> en spot para cubrirlo. Con la regla de la página de Financiación (dentro
-        si la última semana pagó más del 10 %, fuera al llegar a cero) salieron <strong>+1,6 % netos</strong>{' '}
-        con comisiones de mercado y +2,3 % con órdenes límite en 95 días, entre un 6 y un 9 % anual sobre
+        si la última semana pagó más del 10 %, fuera al llegar a cero) salieron <strong>+1,7 % netos</strong>{' '}
+        con comisiones de mercado y +2,4 % con órdenes límite en 95 días, entre un 6 y un 9 % anual sobre
         una pata. Son solo tres meses, y hay riesgo de emisor y de base (el perpetuo cotiza entre −0,3 % y
-        +0,5 % sobre PAXG). La página de Financiación hoy no lo ofrece porque busca un par «XAU-USDT» que no
-        existe. El de la plata paga más (+28 %) pero no tiene cobertura en OKX, y el petróleo paga al
-        revés. Y al contrario: operar la tendencia larga del oro con el perpetuo cuesta más de media R al
+        +0,5 % sobre PAXG). La página de Financiación lo ofrece: tener PAXG o XAUT cuenta como la cobertura del
+        perpetuo, y sale en la tabla de «Si compraras el spot» cuando su última semana paga más del 10 % (el día
+        que se probó pagaba un 8 %, no salía, y la página lo dice en una línea). El de la plata paga más (+28 %)
+        pero no tiene cobertura en OKX, y el petróleo paga al revés. Y al contrario: operar la tendencia larga del oro con el perpetuo cuesta más de media R al
         mes en financiación.
       </>
     ),

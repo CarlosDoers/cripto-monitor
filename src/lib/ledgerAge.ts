@@ -46,6 +46,13 @@ export const AGE_CURVES: Record<string, AgeCurve> = {
     mean: [-0.048, -0.045, -0.047, -0.048, -0.038, -0.027, -0.017, 0, 0.029, 0.019, 0.046, 0.07, 0.107, 0.117, 0.138, 0.134, 0.147, 0.143, 0.126, 0.13, 0.133, 0.113, 0.127],
     sd: [0.03, 0.44, 0.58, 0.68, 0.78, 0.92, 1.03, 1.21, 1.4, 1.57, 1.86, 2.13, 2.54, 2.76, 3.1, 3.25, 3.5, 3.59, 3.48, 3.49, 3.5, 3.4, 3.44],
   },
+  // Index and sector ETFs, long only, raw prices, daily bars, 1993–2026 — `npm run novel trad-curves`. The ages of this
+  // track are CALENDAR DAYS (the market is shut at weekends), unlike every other curve here.
+  'trad/trend@1D': {
+    bars: [0, 1, 2, 3, 4, 5, 7, 10, 14, 21, 28, 42, 56, 84, 112, 140, 196, 280, 365, 560, 730],
+    mean: [-0.033, -0.031, -0.029, -0.016, -0.005, -0.003, 0.022, 0.056, 0.111, 0.141, 0.185, 0.237, 0.278, 0.325, 0.372, 0.368, 0.38, 0.447, 0.476, 0.439, 0.447],
+    sd: [0.01, 0.27, 0.35, 0.42, 0.47, 0.53, 0.66, 0.77, 0.91, 1.08, 1.21, 1.44, 1.63, 1.85, 2.06, 2.22, 2.45, 2.8, 2.97, 2.97, 2.91],
+  },
   'reversal/tuned@1D': {
     bars: [0, 1, 2, 3, 4, 6, 8, 12, 18, 24, 36, 48, 72, 96, 144, 192, 288, 384],
     mean: [-0.023, -0.028, 0.016, 0.023, 0.093, 0.106, 0.173, 0.23, 0.306, 0.335, 0.362, 0.388, 0.405, 0.405, 0.389, 0.382, 0.372, 0.407],
@@ -90,6 +97,9 @@ export const NOISE_INFLATION: Record<string, number> = {
   'ema200/base@4H': 2.3,
   'donchian/trend@1H': 2.1,
   'reversal/tuned@1D': 1.1,
+  // 20 index and sector ETFs, 7-to-60-day windows pooled (`npm run novel trad-calibrate`): fewer contracts breaking out on
+  // the same close than twenty crypto coins, so less shared noise than the trend followers above.
+  'trad/trend@1D': 1.7,
 }
 
 /** The factor for a track; a strategy that was never calibrated gets the trend followers' typical one. */

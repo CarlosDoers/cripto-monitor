@@ -4,7 +4,7 @@ import { Badge, Card, DeltaValue, EmptyState, ErrorNotice, Help, ProgressBar, Sk
 import { SideBadge } from '../components/WatchCells'
 import { runWatchNow, testNotify } from '../lib/api'
 import { CONTEXT_EVIDENCE, HIGH_VOLUME } from '../lib/entryContext'
-import { dateTime, plural, price, ratio, timeAgo } from '../lib/format'
+import { dateTime, plural, price, quote, ratio, timeAgo } from '../lib/format'
 import { HELP } from '../lib/glossary'
 import {
   contextSplits,
@@ -25,6 +25,7 @@ import {
 import { MIN_SAMPLE } from '../lib/performance'
 import { useWatchLedger } from '../lib/queries'
 import { routeHref } from '../lib/router'
+import { isTradTrack, TRAD_KIND, TRAD_LIQUIDITY } from '../lib/tradMarkets'
 
 const READING: Record<Reading, { label: string; variant: 'neutral' | 'warn' | 'live'; title: string }> = {
   'sin-muestra': {
@@ -113,7 +114,7 @@ export function Tracking() {
         channels.length === 0
           ? 'No hay ningún canal de avisos configurado en el servidor.'
           : failed.length === 0
-            ? `Enviado por ${channels.map((c) => c.name).join(' y ')}: debería sonar en tu móvil en unos segundos. Si no suena, mira que sigues suscrito al mismo tema y que la app puede avisarte.`
+            ? `Enviado por ${channels.map((c) => c.name).join(' y ')}: deberían sonar dos mensajes en tu móvil en unos segundos, el de prueba y un ejemplo de cómo se verá un aviso de bolsa u oro (con cifras inventadas). Si no suenan, mira que sigues suscrito al mismo tema y que la app puede avisarte.`
             : `No se pudo enviar por ${failed.map((c) => `${c.name} (${c.error ?? 'sin detalle'})`).join(' ni ')}.${
                 failed.length < channels.length ? ' El resto sí salió.' : ''
               }`,
@@ -385,7 +386,8 @@ export function Tracking() {
         <p className="ema-rest">
           <strong>Hoy por señal</strong> cuenta cada señal por lo que vale ahora: la cerrada, por su resultado neto de
           comisiones; la abierta, al último cierre. <strong>Histórico a su edad</strong> es lo que valían las del
-          histórico (30 criptos desde 2022) con esa misma edad, cerradas o no. <strong>Hacen falta</strong> son las
+          histórico (30 criptos desde 2022; para la pista de bolsa, 20 ETF de índices y sectores desde 1993, con la edad
+          en días naturales) con esa misma edad, cerradas o no. <strong>Hacen falta</strong> son las
           operaciones cerradas que necesita una media como la medida al final del histórico para distinguirse de
           cero, contando que las señales simultáneas no son independientes:{' '}
           <Help label="Cuántas hacen falta">{HELP.trackingNeeded}</Help>
@@ -542,7 +544,12 @@ export function Tracking() {
             <code>TELEGRAM_BOT_TOKEN</code> y <code>TELEGRAM_CHAT_ID</code> en Vercel y llegará un mensaje por cada
             señal nueva de 4 h o diaria, con su stop, lo medido y el contexto. Por defecto la de 1 h se apunta sin
             avisar: sale varias veces al día. <code>WATCH_ALERT_BARS</code> y <code>WATCH_ALERT_SIDES</code> lo
-            cambian.{' '}
+            cambian. La pista de bolsa, ETF y oro avisa de índices, materias primas y acciones tras el cierre de Nueva
+            York (no de los ETF apalancados, que midieron sin ventaja): <code>WATCH_TRAD_KINDS</code> elige cuáles,{' '}
+            <code>WATCH_TRAD_ALERT=off</code> la deja solo apuntando y <code>WATCH_TRAD=off</code> la apaga. Tampoco avisa de un
+            contrato cuyo libro de OKX hace que entrar y salir con {new Intl.NumberFormat('es-ES').format(TRAD_LIQUIDITY.refUsd)} $ cueste más de{' '}
+            {ratio(TRAD_LIQUIDITY.maxCostR)} R de horquilla: se apunta y se sigue igual, y la fila lo dice (<code>WATCH_TRAD_MAX_COST_R</code>{' '}
+            cambia el tope; <code>off</code> los avisa todos).{' '}
             {channels.length ? (
               <>
                 Ahora mismo hay configurado: <strong>{channels.join(' y ')}</strong>.
@@ -561,27 +568,36 @@ function SignalRow({ e }: { e: LedgerEntry }) {
   const tags = entryTags(e)
   const open = e.status === 'open'
   const result = currentR(e)
+  const trad = isTradTrack(e.track)
+  const fmt = trad ? quote : price
   return (
     <tr>
       <td>{dateTime(e.at)}</td>
       <td>
-        <span className="ccy">{e.symbol}</span>
+        <span>
+          <span className="ccy">{e.symbol}</span>
+          {trad && e.kind && <span className="sub"> · {TRAD_KIND[e.kind].label.toLowerCase()}</span>}
+        </span>
       </td>
       <td className="watch-what">{trackLabel(e.track)}</td>
       <td>
         <SideBadge side={e.side} />
       </td>
-      <td className="num">{price(e.entry)}</td>
+      <td className="num">{fmt(e.entry)}</td>
       <td className="num">
         <span>
-          {price(open ? (e.stopNow ?? e.stop) : e.stop)}
+          {fmt(open ? (e.stopNow ?? e.stop) : e.stop)}
           {open && e.stopNow !== undefined && e.stopNow !== e.stop && <span className="sub"> · sube</span>}
         </span>
       </td>
       <td>
         <span className="watch-signal">
           <Badge variant={open ? 'live' : 'neutral'}>{open ? 'Abierta' : 'Cerrada'}</Badge>
-          {e.alert && <span className="sub">{e.alert === 'sent' ? 'avisada' : 'aviso fallido'}</span>}
+          {e.alert && (
+            <span className="sub" title={e.alert === 'illiquid' ? 'El libro de OKX no admitía un tamaño normal a un precio razonable: se apunta y se sigue, pero no se avisó.' : undefined}>
+              {e.alert === 'sent' ? 'avisada' : e.alert === 'illiquid' ? 'sin aviso: poca liquidez' : 'aviso fallido'}
+            </span>
+          )}
         </span>
       </td>
       <td className="num">
@@ -608,9 +624,16 @@ function SignalRow({ e }: { e: LedgerEntry }) {
         </span>
       </td>
       <td>
-        <a className="card-link" href={routeHref('estrategias', { inst: e.instId, s: e.strategy, p: e.preset, tf: e.bar })}>
-          Ver →
-        </a>
+        {trad ? (
+          // An equity has no strategy chart of its own: the rule reads the underlying's history. Its card is in the Screener.
+          <a className="card-link" href={routeHref('analisis', { inst: e.okxId ?? e.instId })}>
+            Ver →
+          </a>
+        ) : (
+          <a className="card-link" href={routeHref('estrategias', { inst: e.instId, s: e.strategy, p: e.preset, tf: e.bar })}>
+            Ver →
+          </a>
+        )}
       </td>
     </tr>
   )

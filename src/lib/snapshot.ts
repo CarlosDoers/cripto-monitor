@@ -1,7 +1,17 @@
 import { accountAlerts, type AccountAlert } from './alerts'
 import { feeShareOfGrid, fuelUsed, gridLiquidationRoom, gridPlace, liquidationRoom, rangePosition } from './bots'
 import { instTypeOf } from './instruments'
-import { BASE_FUNDING_APR, CARRY_EVIDENCE, CARRY_RULE, carryStatus, trailingApr } from './carry'
+import {
+  BASE_FUNDING_APR,
+  CARRY_EVIDENCE,
+  CARRY_RULE,
+  carryStatus,
+  GOLD_CARRY_EVIDENCE,
+  heldUnderlyings,
+  isCarryContract,
+  trailingApr,
+  underlyingOf,
+} from './carry'
 import { analyseEmaTouch, compareTouches, dayLabel, EMA_TOUCH_EVIDENCE, emaTouchSummary, structureText, touchesWithin, touchStory, type EmaTouch } from './emaTouch'
 import { activeCurrency, convert } from './currency'
 import { compareDonchianWatch, watchDonchianTrend, type DonchianWatch } from './donchianWatch'
@@ -157,7 +167,7 @@ export async function collectAccount(get: Get): Promise<RawAccount> {
   }
 
   const portfolio = buildPortfolio({ balance, funding, tickers, valuation })
-  const held = new Set(portfolio.holdings.filter((h) => h.total > 0).map((h) => h.ccy))
+  const held = heldUnderlyings(portfolio.holdings.filter((h) => h.total > 0).map((h) => h.ccy))
   const hedges = positions.filter(
     (p) => p.instId.includes('_UM_XPERP') && num(p.pos) < 0 && held.has(p.instId.split('-')[0]),
   )
@@ -734,14 +744,28 @@ export async function fundingText(get: Get, account: AccountSnapshot, market: Ra
   // One X-Perp per coin, the most traded, from the catalogue.
   const byCoin = new Map<string, { instId: string; rate?: FundingBoardRow }>()
   for (const i of market.instruments) {
-    if (!i.instId.includes('_UM_XPERP') || i.state !== 'live' || (i.instCategory ?? '1') !== '1') continue
     const coin = i.instId.split('-')[0]
+    if (!i.instId.includes('_UM_XPERP') || i.state !== 'live' || !isCarryContract(coin, i.instCategory)) continue
     const prev = byCoin.get(coin)
     if (!prev || (vol.get(i.instId) ?? 0) > (vol.get(prev.instId) ?? 0)) byCoin.set(coin, { instId: i.instId, rate: rateById.get(i.instId) })
   }
   const inst = new Map(market.instruments.map((i) => [i.instId, i]))
   const shorts = new Map(account.positions.filter((p) => num(p.pos) < 0).map((p) => [p.instId, -num(p.pos)]))
-  const holdings = account.portfolio.holdings.filter((h) => h.weight >= 0.005 && byCoin.has(h.ccy))
+  // Tokens of one thing are one holding: PAXG and XAUT are gold, and the XAU perpetual is what hedges them.
+  const merged = new Map<string, { ccy: string; usd: number; total: number; weight: number; coins: string[] }>()
+  for (const h of account.portfolio.holdings) {
+    const under = underlyingOf(h.ccy)
+    if (!byCoin.has(under)) continue
+    const prev = merged.get(under)
+    merged.set(under, {
+      ccy: under,
+      usd: (prev?.usd ?? 0) + h.usd,
+      total: (prev?.total ?? 0) + h.total,
+      weight: (prev?.weight ?? 0) + h.weight,
+      coins: [...(prev?.coins ?? []), h.ccy],
+    })
+  }
+  const holdings = [...merged.values()].filter((h) => h.weight >= 0.005)
   const histories = await paced(holdings, (h) =>
     get<FundingRate>('/api/v5/public/funding-rate-history', { instId: byCoin.get(h.ccy)!.instId, limit: 50 }),
   )
@@ -757,7 +781,7 @@ export async function fundingText(get: Get, account: AccountSnapshot, market: Ra
     const ctVal = num(inst.get(r.instId)?.ctVal)
     const hedged = shorts.get(r.instId) ?? 0
     return [
-      h.ccy,
+      h.coins.length === 1 && h.coins[0] === h.ccy ? h.ccy : `${h.ccy} (${h.coins.join(' + ')})`,
       usd(h.usd),
       apr !== undefined ? pct(apr, 1) : '—',
       nowText(r.rate),
@@ -768,6 +792,20 @@ export async function fundingText(get: Get, account: AccountSnapshot, market: Ra
   })
   const liquidNow = [...byCoin.values()].filter((r) => vol.has(r.instId) && r.rate)
   const paying = liquidNow.filter((r) => nowApr(r.rate!) > CARRY_RULE.enter).length
+  // Gold is the one commodity with a spot hedge on OKX: the perpetual pays its shorts, and PAXG or XAUT hold the ounce.
+  const gold = byCoin.get('XAU')
+  let goldLine = ''
+  if (gold) {
+    let trailing: number | undefined
+    try {
+      trailing = trailingApr(await get<FundingRate>('/api/v5/public/funding-rate-history', { instId: gold.instId, limit: 50 }), now)
+    } catch {
+      trailing = undefined
+    }
+    const G = GOLD_CARRY_EVIDENCE
+    const hedged = shorts.get(gold.instId) ?? 0
+    goldLine = `**Oro (XAU):** el perpetuo paga ahora ${nowText(gold.rate)} anual a los cortos y en los últimos 7 días ${trailing !== undefined ? `${pct(trailing, 1)} anual (${carryStatus(trailing, hedged > 0) ?? '—'})` : '—'}. Se cubre con PAXG o XAUT en spot (oro tokenizado: riesgo del emisor, y el perpetuo cotizó entre ${pct(G.basisPaxg.min, 1)} y ${pct(G.basisPaxg.max, 1)} sobre PAXG). En ${G.weeks} semanas pagó ${pct(G.fundingApr, 1)} anual de media (${G.weeksAbove10} por encima del 10 %, ${G.weeksNegative} negativas) y la regla dio entre ${pct(G.ruleMarketApr, 1)} y ${pct(G.ruleLimitApr, 1)} anual netos de comisiones sobre una pata: tres meses, orientativo. Operar la tendencia larga del oro con el perpetuo, en cambio, cuesta esa financiación.`
+  }
   return [
     `# Financiación (carry) — ${when(now)}`,
     `Regla medida: cubrir con un short cuando los últimos 7 días pagaron más del ${share(CARRY_RULE.enter, 0)} anual; deshacer cuando dejan de pagar. Medido: ${pct(CARRY_EVIDENCE.ownApr, 1)} anual desde 2022 cubriendo monedas que ya se tienen (${pct(CARRY_EVIDENCE.spotLimitApr, 1)} comprando el spot). Riesgos: el short necesita margen y puede liquidarse; la financiación se gira; el spot en esta cuenta cuesta 0,20–0,35 % por lado.`,
@@ -775,7 +813,10 @@ export async function fundingText(get: Get, account: AccountSnapshot, market: Ra
     boardMissing
       ? 'OKX no dejó leer ahora la financiación de todo el mercado (límite de peticiones): falta la columna «Ahora», pero la regla usa la última semana, que sí está.'
       : `En el tablero: ${paying} de ${liquidNow.length} X-Perp líquidos pagan ahora más del ${share(CARRY_RULE.enter, 0)} anual (el tipo por defecto es ${share(BASE_FUNDING_APR, 2)}).`,
-  ].join('\n\n')
+    goldLine,
+  ]
+    .filter((x) => x !== '')
+    .join('\n\n')
 }
 
 // ── the whole text, as the copy button produces it ────────────────────────────

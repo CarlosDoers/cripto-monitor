@@ -14,6 +14,8 @@ import {
   netR,
   noiseBand,
   offeredTracks,
+  parseBoard,
+  parseLedger,
   readLive,
   REFERENCE,
   refreshSince,
@@ -330,5 +332,108 @@ describe('reading the ledger', () => {
     expect(text).toContain('las operaciones cerradas de un registro joven son casi todas pérdidas')
     expect(text).toContain('sin muestra para opinar')
     expect(text).toContain('Ruptura · Canal 20 + EMA 200 · 4 h')
+  })
+})
+
+// ── the equities, ETFs and commodities track ─────────────────────────────────────────────────────────────────
+describe('the equities track', () => {
+  const DAYMS = 86_400_000
+  const US_CLOSE = 21.5 * 3_600_000
+  const trad = offeredTracks().find((t) => t.market === 'trad')!
+  const session = (i: number, o: number, h: number, l: number, c: number): Candle => ({
+    time: Date.UTC(2026, 0, 5) + i * DAYMS,
+    open: o,
+    high: h,
+    low: l,
+    close: c,
+    vol: 1000,
+    confirmed: true,
+  })
+  const candlesFor = [...Array.from({ length: 10 }, (_, i) => session(i, 100, 100.5, 99.5, 100)), session(10, 100, 103.5, 99.8, 103)]
+  const long = { index: 10, time: candlesFor[10].time, side: 'long' as const, entry: 103, stop: 100.6, outcome: 'open' as const, feeR: 0.04, stopNow: 101 }
+  const short = { ...long, side: 'short' as const, stop: 105.4, stopNow: undefined }
+  const result = { signals: [long, short], overlays: [], warmup: 0, active: long } as unknown as StrategyResult
+
+  it('is offered on a New York clock, long only, with its own reference and age curve', () => {
+    expect(trad).toMatchObject({ key: 'trad/trend@1D', bar: '1D', market: 'trad', sides: ['long'], closeMs: US_CLOSE })
+    expect(REFERENCE[trad.key].shorts).toBeLessThan(0)
+    // Ages are calendar days: the curve for this track runs to two years, not to the 2 400 bars of a 4 h one.
+    expect(expectedAt(trad.key, 730)).not.toBeNull()
+    expect(offeredTracks().filter((t) => t.market === 'crypto').every((t) => t.closeMs === t.barMs)).toBe(true)
+  })
+
+  it('closes a session at 21:30 UTC, keeps only the longs and remembers what kind of contract it was', () => {
+    const es = entriesFromResult(trad, 'SPY', 'SPY', candlesFor, result, null, NOW, { kind: 'index', okxId: 'SPY-USD_UM_XPERP-310613' })
+    expect(es).toHaveLength(1)
+    expect(es[0]).toMatchObject({ track: 'trad/trend@1D', side: 'long', kind: 'index', okxId: 'SPY-USD_UM_XPERP-310613', btcAbove: null })
+    expect(es[0].at).toBe(candlesFor[10].time + US_CLOSE)
+    expect(es[0].markedAt).toBe(candlesFor[10].time + US_CLOSE)
+    // A crypto entry does not carry the fields.
+    const crypto = entriesFromResult(offeredTracks().find((t) => t.key === 'donchian/trend@4H')!, 'X', 'X', candlesFor, result, null, NOW)
+    expect(crypto.every((e) => e.kind === undefined && e.okxId === undefined)).toBe(true)
+  })
+
+  it('sets aside an open entry older than the window by the candle it began on, not by a daily bar', () => {
+    const e = entry({ id: 'trad/trend@1D:SPY:1', track: 'trad/trend@1D', bar: '1D', instId: 'SPY', at: candlesFor[3].time + US_CLOSE })
+    // The window starts after that session: it can no longer be followed.
+    const lost = mergeObserved(ledgerWith({ entries: [e] }), [], { 'trad/trend@1D|SPY': candlesFor[5].time }, NOW)
+    expect(lost.ledger.entries[0].lost).toBe(true)
+    // The window's first candle is the entry's own: the entry is still inside it.
+    const kept = mergeObserved(ledgerWith({ entries: [e] }), [], { 'trad/trend@1D|SPY': candlesFor[3].time }, NOW)
+    expect(kept.ledger.entries[0].lost).toBeUndefined()
+  })
+
+  it('reads its entries against the New York clock, not OKX\'s daily one', () => {
+    const start = Date.UTC(2026, 8, 1) + US_CLOSE
+    const e = entry({ id: 't1', track: 'trad/trend@1D', bar: '1D', instId: 'SPY', at: start, status: 'closed', resultR: 1, feeR: 0.04, exit: 1, closedAt: start + 3 * DAYMS })
+    const lateUs = start + 30 * DAYMS
+    // `us` is the clock for this track; the crypto daily one is far behind and must not matter.
+    const a = trackStats([e], 'trad/trend@1D', { '1D': start, us: lateUs }).versus!
+    const b = trackStats([e], 'trad/trend@1D', { '1D': lateUs + 300 * DAYMS, us: lateUs }).versus!
+    expect(a.expected).toBeCloseTo(b.expected, 10)
+    // Thirty calendar days old at the last session: the curve at 30 days, between its 28 and 42 day points.
+    expect(a.expected).toBeCloseTo(expectedAt('trad/trend@1D', 30)!.mean, 6)
+  })
+
+  it('keeps the board through the stored form and ignores one that is not a board', () => {
+    const board = {
+      at: 5,
+      asOf: 9,
+      rows: [{ yahoo: 'SPY', okx: 'SPY', instId: 'SPY-USD_UM_XPERP-1', kind: 'index', status: 'cerca', bars: 700, asOf: 9, price: 100 }],
+      errors: ['X: Yahoo 404'],
+    }
+    const parsed = parseLedger(JSON.parse(JSON.stringify({ ...emptyLedger(1), board })))!
+    expect(parsed.board).toEqual(board)
+    expect(parseLedger({ ...emptyLedger(1), board: 'nope' })!.board).toBeUndefined()
+    expect(parseLedger({ ...emptyLedger(1), board: { rows: [{ status: 'nueva' }, 7, null] } })!.board?.rows).toEqual([])
+    expect(parseBoard(undefined)).toBeUndefined()
+  })
+
+  it('writes the board into the text Claude reads, with the evidence and the comparison with SPY', () => {
+    const row = (okx: string, status: 'nueva' | 'cerca' | 'tendencia' | 'fuera' | 'corto', extra = {}) => ({
+      yahoo: okx,
+      okx,
+      instId: `${okx}-USD_UM_XPERP-1`,
+      kind: 'stock' as const,
+      status,
+      bars: 700,
+      asOf: Date.UTC(2026, 9, 15, 21, 30),
+      price: 100,
+      ...extra,
+    })
+    const board = {
+      at: NOW,
+      asOf: Date.UTC(2026, 9, 15, 21, 30),
+      rows: [row('AAPL', 'nueva'), row('GOOGL', 'cerca', { distanceAtr: 1.7 }), row('MSFT', 'tendencia'), row('NVDA', 'fuera'), row('SOXL', 'nueva', { kind: 'leveraged' })],
+    }
+    const text = ledgerText(ledgerWith({ startedAt: Date.UTC(2026, 9, 1), board }), NOW)
+    expect(text).toContain('## Bolsa, ETF y oro · tendencia diaria, solo largos')
+    expect(text).toContain('Señal nueva (las dos últimas sesiones): AAPL (acción)')
+    expect(text).toContain('GOOGL (a 1,7 ATR del máximo)')
+    // The leveraged ETF is on the board but is not something the rule follows.
+    expect(text).not.toContain('SOXL')
+    expect(text).toContain('supervivientes')
+    expect(text).toContain('0,32 de Sharpe contra 0,64 de SPY')
+    expect(text).toContain('contexto, no una recomendación')
   })
 })

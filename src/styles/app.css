@@ -2591,6 +2591,14 @@ table.data td.num {
   font-size: 11px;
 }
 
+/* A second line under a figure, only when it is thin: the Mercados board's warning line, in the warning colour. */
+.thin-line {
+  display: block;
+  margin-top: 3px;
+  font-size: 11px;
+  color: var(--warning);
+}
+
 /* ---------- Anatomía del riesgo de una posición ---------- */
 
 .risk-scale {

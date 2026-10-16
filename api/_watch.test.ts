@@ -206,6 +206,27 @@ describe('the endpoint', () => {
     expect(body.ledger).toBeUndefined()
   })
 
+  it('answers only the equities board when asked for it, behind the password', async () => {
+    const handler = createWatchHandler(deps())
+    const get = (headers: Record<string, string> = { 'x-app-token': 'ok' }) => handler(new Request('https://x/api/watch?board=1', { headers }))
+    expect((await get({})).status).toBe(401)
+    // No ledger yet: the board is null, not an error.
+    expect(await (await get()).json()).toMatchObject({ enabled: true, board: null, lastRun: 0 })
+    const store = ledgerStore()!
+    const board = { at: 5, asOf: 9, rows: [{ yahoo: 'SPY', okx: 'SPY', status: 'fuera' }] }
+    await store.write({ version: 1, startedAt: 5, lastRun: 77, runs: 3, entries: [{ id: 'a' }], board }, null)
+    const body = await (await get()).json()
+    // The board and when it was written come back; the entries do not: the ledger is megabytes and the card has no use for them.
+    expect(body.board).toEqual(board)
+    expect(body.lastRun).toBe(77)
+    expect(body.ledger).toBeUndefined()
+    expect(body.entries).toBeUndefined()
+    // A POST with the same query is still a pass, not a read.
+    const run = deps().runWatch
+    await createWatchHandler(deps(run))(new Request('https://x/api/watch?board=1', { method: 'POST', headers: { 'x-app-token': 'ok' } }))
+    expect(run).toHaveBeenCalledTimes(1)
+  })
+
   describe('the test message', () => {
     const post = (headers: Record<string, string> = { 'x-app-token': 'ok' }, path = '/api/watch?notify=test') =>
       new Request(`https://mi-app.vercel.app${path}`, { method: 'POST', headers })

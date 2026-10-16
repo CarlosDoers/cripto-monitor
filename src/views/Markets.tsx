@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { MIN_LIQUID_VOLUME, useMarkets, type Market } from '../lib/markets'
 import { useClosedPositions, usePositions } from '../lib/queries'
-import { pct, plural, price, ratio, usdCompact } from '../lib/format'
+import { compactUsd, pct, plural, price, ratio } from '../lib/format'
 import { EconomicCalendar } from '../components/EconomicCalendar'
 import { MarketTreemap } from '../components/MarketTreemap'
 import { MarketCard } from '../components/MarketCard'
@@ -38,13 +38,6 @@ const MAP_SIZE = 30
 const MOVERS = 6
 /** Table rows before "show the rest". */
 const TABLE_PAGE = 25
-
-function compactUsd(v: number): string {
-  if (v >= 1e9) return `${ratio(v / 1e9, 2)} B$`
-  if (v >= 1e6) return `${ratio(v / 1e6, 1)} M$`
-  if (v >= 1e3) return `${ratio(v / 1e3, 0)} k$`
-  return usdCompact(v)
-}
 
 /**
  * The tiles in rows of equal length. A fixed `auto-fill` grid put eight

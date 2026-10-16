@@ -41,6 +41,17 @@ export function usdCompact(value: number): string {
 }
 
 /**
+ * A big money figure for a table cell, as the boards print volumes: "158 k$", "7,0 M$", "1,23 B$". The suffix is
+ * dollars whatever the display currency is; under a thousand it is an ordinary amount.
+ */
+export function compactUsd(value: number): string {
+  if (value >= 1e9) return `${ratio(value / 1e9, 2)} B$`
+  if (value >= 1e6) return `${ratio(value / 1e6, 1)} M$`
+  if (value >= 1e3) return `${ratio(value / 1e3, 0)} k$`
+  return usdCompact(value)
+}
+
+/**
  * Crypto amounts span BTC (8 decimals matter) to SHIB (they don't), so the
  * precision follows the magnitude instead of being fixed.
  */
@@ -81,6 +92,17 @@ export function price(value: number): string {
   return new Intl.NumberFormat('es-ES', {
     minimumFractionDigits: 2,
     maximumFractionDigits: decimals,
+  }).format(value)
+}
+
+/**
+ * A price quoted to the cent, the way stocks, ETFs and commodities are: `price()` scales its decimals to the magnitude
+ * a crypto coin needs, and prints 100,6143 for a share that trades at 100,61.
+ */
+export function quote(value: number): string {
+  return new Intl.NumberFormat('es-ES', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: Math.abs(value) >= 1 ? 2 : 4,
   }).format(value)
 }
 

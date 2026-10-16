@@ -333,7 +333,7 @@ const FINDINGS: { verdict: Verdict; what: string; detail: ReactNode }[] = [
     what: 'Fuerza relativa semanal entre las monedas más negociadas (long-short)',
     detail: (
       <>
-        Con las monedas muertas dentro (581 pares de Binance, 2018–2026), comprar cada domingo el tercio de
+        Con las monedas muertas dentro (593 tramos de pares de Binance, 2018–2026), comprar cada domingo el tercio de
         los 30 más negociados más cercano a su máximo de 90 días y vender en short el más lejano gana{' '}
         <strong>+1,7 % por semana</strong> (t 5,0, positivo en los nueve años). El momentum de 1 a 4 semanas
         que se veía en la cesta actual (t 5) era supervivencia: sin ella queda en t 2 a 3 y falla en 2022 y
@@ -418,12 +418,115 @@ const FINDINGS: { verdict: Verdict; what: string; detail: ReactNode }[] = [
     what: 'Comprar los «pumps» de 7 días en monedas poco negociadas',
     detail: (
       <>
-        Un vídeo atribuye a eso el −48 % de un bot de IA. Medido en las 595 monedas de Binance desde 2018,
-        con las 187 que dejaron de cotizar, repartidas por volumen en dólares: el quinto que más sube en 7 días
-        rinde <strong>+0,5 %, −0,3 % y +0,1 %</strong> a la semana sobre su banda (líquidas, medias,
-        ilíquidas), y los que suben más de un 30 %, −0,0 %, −1,8 % y −0,7 %. Ninguna celda pasa el listón (t
-        entre −1,5 y +1,4) y el signo cambia con la definición. No se demuestra que pierda ni que gane; lo
+        Un vídeo atribuye a eso el −48 % de un bot de IA. Medido en las 607 series de pares de Binance desde
+        2018, con las 199 que dejaron de cotizar, repartidas por volumen en dólares: el quinto que más sube en
+        7 días rinde <strong>+0,5 %, −0,2 % y +0,1 %</strong> a la semana sobre su banda (líquidas, medias,
+        ilíquidas), y los que suben más de un 30 %, −0,1 %, −1,8 % y −0,7 %. Ninguna celda pasa el listón (t
+        entre −1,4 y +1,4) y el signo cambia con la definición. No se demuestra que pierda ni que gane; lo
         que sí se ve es una cola derecha que seduce y un resultado típico por debajo de cero.
+      </>
+    ),
+  },
+  {
+    verdict: 'ojo',
+    what: 'La regla de tendencia en otros mercados (ETF, bonos, oro): solo largos',
+    detail: (
+      <>
+        La misma regla de «Canal 20 + EMA 200», sin tocar nada, en velas diarias de <strong>41 ETF</strong>
+        durante 25 años: los longs ganan <strong>+0,61 R</strong> por operación frente a +0,16 de una
+        entrada larga al azar con el mismo stop, y los shorts no aportan nada (−0,16 frente a −0,13). Hace
+        falta el filtro de la EMA 200: sin él queda en +0,03. Pero con límites: los últimos cinco años son
+        más flojos (+0,32 R, con un intervalo que incluye el cero); como cuenta gana lo mismo que comprar
+        SPY y mantenerlo (mismo Sharpe, 0,65 frente a 0,64) con un tercio menos de caída máxima y mucho
+        apalancamiento; las cuatro materias primas de OKX por sí solas no bastan para afirmarlo; y las
+        acciones que lista OKX no cuentan, porque son las que hoy están de moda. Lo que sí aporta es
+        diversificar: sus resultados mensuales casi no se parecen a los de la tendencia en cripto
+        (correlación −0,05). Los filtros de volumen y de BTC de las etiquetas no se repiten fuera de
+        cripto. La app no lo vigila: la EMA 200 necesita 620 velas diarias y los contratos de acciones
+        llevan menos de seis meses cotizando.
+      </>
+    ),
+  },
+  {
+    verdict: 'ojo',
+    what: 'Oro: cubrir el perpetuo XAU con oro tokenizado',
+    detail: (
+      <>
+        El perpetuo del oro pagó a los cortos un <strong>+12 % anual</strong> de media en las últimas 13
+        semanas (8 por encima del 10 %, 3 negativas), y existen <strong>PAXG-USDT</strong> y{' '}
+        <strong>XAUT-USDT</strong> en spot para cubrirlo. Con la regla de la página de Financiación (dentro
+        si la última semana pagó más del 10 %, fuera al llegar a cero) salieron <strong>+1,6 % netos</strong>{' '}
+        con comisiones de mercado y +2,3 % con órdenes límite en 95 días, entre un 6 y un 9 % anual sobre
+        una pata. Son solo tres meses, y hay riesgo de emisor y de base (el perpetuo cotiza entre −0,3 % y
+        +0,5 % sobre PAXG). La página de Financiación hoy no lo ofrece porque busca un par «XAU-USDT» que no
+        existe. El de la plata paga más (+28 %) pero no tiene cobertura en OKX, y el petróleo paga al
+        revés. Y al contrario: operar la tendencia larga del oro con el perpetuo cuesta más de media R al
+        mes en financiación.
+      </>
+    ),
+  },
+  {
+    verdict: 'no',
+    what: 'Comprar una caída fuerte (y venderla en corto)',
+    detail: (
+      <>
+        Entre las 30 monedas más negociadas de Binance, con las que murieron incluidas, una moneda que cierra
+        un día a −20 % o peor <strong>sigue cayendo</strong>: −5,9 % frente a su banda a 3 días y −10,5 % a 7,
+        en los ocho años y también entre las que siguen cotizando. Comprar el rebote pierde. Venderla en
+        corto no lo arregla: con un stop del 10 %, costes y financiación en contra queda en +1,3 % (muy poco
+        fiable) y el stop salta en la mitad de los casos, porque tras un día así sube un 10 % tan a menudo
+        como cae más. Sin stop da +5,4 %, pero es una lotería de apretones.
+      </>
+    ),
+  },
+  {
+    verdict: 'no',
+    what: 'Vender en corto las dos patas de un ETF apalancado (SOXL y SOXS)',
+    detail: (
+      <>
+        Un fondo 3× pierde por composición mucho más de lo que parece, y vender los dos lados por igual
+        sugiere cobrar ese desgaste. Pero el desgaste está en la mediana, no en la esperanza: lo que se cobra
+        casi todos los meses se devuelve en unos pocos. En 19 pares y 227 meses sale <strong>+0,5 % al mes</strong>{' '}
+        sobre el nominal antes de financiación, con un peor mes de <strong>−43,7 %</strong> (SOXL y SOXS), y
+        −0,4 % al mes si el perpetuo cobra la financiación base (que en estos contratos es casi cero).
+      </>
+    ),
+  },
+  {
+    verdict: 'no',
+    what: 'Bots de rejilla',
+    detail: (
+      <>
+        Una rejilla larga de 30 celdas a ±15 % en 33 monedas, en ventanas de 30 días: <strong>−1,0 %</strong>{' '}
+        por ventana de media, frente a −0,1 % para las mismas monedas con sus días barajados (lo que deja a una
+        rejilla en menos sus comisiones). Gana el +4 % típico en un mes lateral y pierde de −8 % a −35 % cuando la
+        moneda cae. Lo decide el mercado, no la rejilla: −7,8 % de media si BTC baja más de un 10 % en el mes,
+        +3,0 % si sube. Muchos aciertos pequeños alrededor de un cero con cola.
+      </>
+    ),
+  },
+  {
+    verdict: 'no',
+    what: 'La tendencia de la relación alt/BTC (fuerza relativa)',
+    detail: (
+      <>
+        Parecía el mejor resultado del proyecto (+0,62 R sobre 4.999 operaciones, y +1,29 R en 2018–2021) y era
+        un espejismo de las velas con que se midió: una relación no tiene máximos ni mínimos reales y un stop
+        que solo ve apertura y cierre no se toca nunca. Reconstruida con datos más finos baja a +0,28 R con
+        extremos horarios y a +0,17 R con extremos de 15 minutos, con la segunda mitad en cero. Lección: una
+        serie derivada hay que medirla con la resolución del stop real.
+      </>
+    ),
+  },
+  {
+    verdict: 'no',
+    what: 'RSI(2) al retroceso y el cambio de mes, en bolsa',
+    detail: (
+      <>
+        En su mercado de origen el RSI(2) al retroceso (por encima de la media de 200 días, RSI de 2 por debajo
+        de 10) sí gana algo, <strong>+0,33 % por operación</strong> en 20 ETF, pero decae (+0,51 % en 2000–2009,
+        +0,17 % después) y la segunda mitad se queda por debajo del listón; en cripto no ganaba. El efecto del
+        cambio de mes en SPY y QQQ desapareció: +0,5 % al mes en 1995–2004 y +0,0 % desde 2015.
       </>
     ),
   },

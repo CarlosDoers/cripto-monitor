@@ -36,18 +36,26 @@ const coins = []
 for (const file of readdirSync(DIR)) {
   const name = file.replace('.json', '')
   if (SKIP.test(name)) continue
-  const rows = JSON.parse(readFileSync(`${DIR}/${file}`, 'utf8'))
-  if (rows.length < 100) continue
-  const days = new Map(rows.map((r, i) => [Math.round(r[0] / DAY), i]))
-  const close = rows.map((r) => r[4])
-  const qv30 = new Array(rows.length).fill(0)
-  let acc = 0
-  for (let i = 0; i < rows.length; i++) {
-    acc += rows[i][6]
-    if (i >= 30) acc -= rows[i - 30][6]
-    qv30[i] = i >= 29 ? acc / 30 : 0
+  const whole = JSON.parse(readFileSync(`${DIR}/${file}`, 'utf8'))
+  // A hole of more than two days is a suspension, a migration or a ticker reused for another asset (LUNA's file runs from
+  // Terra's collapse into Terra 2.0): each stretch is its own pair, so the old one ends at its last price (2026-10-16).
+  for (let from = 0, i = 1, k = 0; i <= whole.length; i++) {
+    if (i < whole.length && whole[i][0] - whole[i - 1][0] <= 2 * DAY) continue
+    const rows = whole.slice(from, i)
+    from = i
+    const label = k++ === 0 ? name : `${name}#${k - 1}`
+    if (rows.length < 100) continue
+    const days = new Map(rows.map((r, j) => [Math.round(r[0] / DAY), j]))
+    const close = rows.map((r) => r[4])
+    const qv30 = new Array(rows.length).fill(0)
+    let acc = 0
+    for (let j = 0; j < rows.length; j++) {
+      acc += rows[j][6]
+      if (j >= 30) acc -= rows[j - 30][6]
+      qv30[j] = j >= 29 ? acc / 30 : 0
+    }
+    coins.push({ name: label, days, close, qv30, last: Math.round(rows[rows.length - 1][0] / DAY), n: rows.length })
   }
-  coins.push({ name, days, close, qv30, last: Math.round(rows[rows.length - 1][0] / DAY), n: rows.length })
 }
 const lastDay = Math.max(...coins.map((c) => c.last))
 const firstDay = Math.round(Date.UTC(2018, 0, 1) / DAY)

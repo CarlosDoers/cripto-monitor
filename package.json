@@ -30,6 +30,7 @@
     "positioning": "node --experimental-strip-types --import ./scripts/_hook.mjs scripts/positioning-research.mjs",
     "pump": "node --experimental-strip-types --import ./scripts/_hook.mjs scripts/pump-research.mjs",
     "improve": "node --experimental-strip-types --import ./scripts/_hook.mjs scripts/improve-research.mjs",
+    "novel": "node --experimental-strip-types --import ./scripts/_hook.mjs scripts/novel-research.mjs",
     "scalp": "node --experimental-strip-types --import ./scripts/_hook.mjs scripts/scalp-research.mjs",
     "transcript": "node scripts/yt-transcript.mjs",
     "test": "vitest run"

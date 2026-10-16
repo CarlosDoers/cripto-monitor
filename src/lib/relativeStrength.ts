@@ -22,7 +22,8 @@ const VOL_WINDOW = 30
 
 /**
  * Every figure the card quotes. Binance spot, USDT pairs, 2018-01 → 2026-09:
- * 581 pairs with at least 120 days (186 stopped trading before the end), each
+ * 593 stretches of at least 120 days (198 stopped trading before the end; a pair that
+ * halted and came back — LUNA's ticker became Terra 2.0 — counts as two), each
  * Sunday the 30 with most dollar volume over the previous 30 days, a pair that
  * stops trading closed at its last price, 425 weeks with at least nine names, 0.05 %
  * a side on the turnover. `npm run research survivor` prints them and exits
@@ -31,8 +32,8 @@ const VOL_WINDOW = 30
  */
 export const RELATIVE_STRENGTH_EVIDENCE = {
   weeks: 425,
-  pairs: 581,
-  dead: 186,
+  pairs: 593,
+  dead: 198,
   years: 9,
   /** Long-short, top third minus bottom third, % a week. */
   perWeek: 1.69,

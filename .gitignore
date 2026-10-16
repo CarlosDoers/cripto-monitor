@@ -39,6 +39,9 @@ dist-ssr
 .funding
 # Board candles for sweeps (scripts/fetch-board.mjs)
 .candles-board-*
+# Ratio and ETF candles for scripts/novel-research.mjs (`npm run novel ratio-build`, the ETF copy for `npm run try`)
+.candles-ratio-*
+.candles-etf-*
 
 # claude.ai connector and tracking-ledger bundles, written by `npm run build` (scripts/build-mcp.mjs)
 api/_mcp.js

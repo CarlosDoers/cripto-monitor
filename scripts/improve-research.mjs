@@ -353,7 +353,14 @@ if (process.argv[2] === 'survivors') {
     if (SKIP.test(coin)) continue
     const j = JSON.parse(readFileSync(`${dir}/${fl}`, 'utf8'))
     const rows = Array.isArray(j) ? j : (j.rows ?? j.candles ?? [])
-    raw[coin] = rows.map((r) => ({ time: r[0] > 1e14 ? r[0] / 1000 : r[0], open: +r[1], high: +r[2], low: +r[3], close: +r[4], vol: +r[5], confirmed: true }))
+    const all = rows.map((r) => ({ time: r[0] > 1e14 ? r[0] / 1000 : r[0], open: +r[1], high: +r[2], low: +r[3], close: +r[4], vol: +r[5], confirmed: true }))
+    // A hole of more than two days is a suspension, a migration or a ticker reused for another asset (LUNA's file runs from
+    // Terra's collapse into Terra 2.0): each stretch is its own pair, so a strategy never runs across the splice (2026-10-16).
+    for (let from = 0, i = 1, k = 0; i <= all.length; i++) {
+      if (i < all.length && all[i].time - all[i - 1].time <= 2 * DAY) continue
+      raw[k++ === 0 ? coin : `${coin}#${k - 1}`] = all.slice(from, i)
+      from = i
+    }
   }
   const btc = raw.BTC
   const btcEma = ema(btc.map((c) => c.close), 200)

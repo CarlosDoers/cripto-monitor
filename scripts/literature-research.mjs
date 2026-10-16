@@ -676,19 +676,31 @@ if (want('survivor')) {
     for (const file of readdirSync(dir)) {
       const name = file.replace('.json', '')
       if (SKIP.test(name)) continue
-      const arr = readJson(`${dir}/${file}`)
-      if (arr.length < 120) continue
-      const c = arr.map(([t, o, h, l, cl, v, qv]) => ({ time: t, open: o, high: h, low: l, close: cl, vol: v, qv }))
-      const days = new Map(c.map((b, i) => [Math.round(b.time / DAY), i]))
-      // trailing 30-day mean of dollar volume
-      const qv30 = new Array(c.length).fill(0)
-      let acc = 0
-      for (let i = 0; i < c.length; i++) {
-        acc += c[i].qv
-        if (i >= 30) acc -= c[i - 30].qv
-        qv30[i] = i >= 29 ? acc / 30 : 0
+      const whole = readJson(`${dir}/${file}`)
+      // A hole of more than two days is a suspension, a migration or a ticker reused for another asset (LUNA's file runs
+      // from Terra's collapse into Terra 2.0, a +17 739 900 % "day"). Each stretch is its own pair, so the old one ends at
+      // its last price — as a dead pair does — instead of being dropped from the week it died in (2026-10-16).
+      const stretches = []
+      for (let from = 0, i = 1; i <= whole.length; i++) {
+        if (i === whole.length || whole[i][0] - whole[i - 1][0] > 2 * DAY) {
+          stretches.push(whole.slice(from, i))
+          from = i
+        }
       }
-      coinsB.push({ name, c, days, qv30, last: Math.round(c[c.length - 1].time / DAY) })
+      stretches.forEach((arr, k) => {
+        if (arr.length < 120) return
+        const c = arr.map(([t, o, h, l, cl, v, qv]) => ({ time: t, open: o, high: h, low: l, close: cl, vol: v, qv }))
+        const days = new Map(c.map((b, i) => [Math.round(b.time / DAY), i]))
+        // trailing 30-day mean of dollar volume
+        const qv30 = new Array(c.length).fill(0)
+        let acc = 0
+        for (let i = 0; i < c.length; i++) {
+          acc += c[i].qv
+          if (i >= 30) acc -= c[i - 30].qv
+          qv30[i] = i >= 29 ? acc / 30 : 0
+        }
+        coinsB.push({ name: k === 0 ? name : `${name}#${k}`, c, days, qv30, last: Math.round(c[c.length - 1].time / DAY) })
+      })
     }
     const firstDay = Math.min(...coinsB.map((x) => Math.round(x.c[0].time / DAY)))
     const lastDay = Math.max(...coinsB.map((x) => x.last))

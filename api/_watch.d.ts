@@ -50,6 +50,14 @@ export interface RunResult {
 
 export function runWatch(options: RunOptions): Promise<RunResult>
 
+/** What happened to a test message, channel by channel. `error` is only a status line. */
+export interface TestResult {
+  channels: { name: string; ok: boolean; error?: string }[]
+}
+
+/** A message that is not a signal, through every configured channel. */
+export function sendTest(env: Record<string, string | undefined>, appUrl?: string): Promise<TestResult>
+
 export function describeWatch(env: Record<string, string | undefined>): {
   channels: string[]
   top: number

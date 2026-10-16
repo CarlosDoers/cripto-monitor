@@ -42,7 +42,7 @@ const { ledgerStore, ledgerStorage } = await import('./_ledger.js')
 const env = { ...process.env }
 const CRON = `Bearer ${'c'.repeat(32)}`
 
-import type { RunResult } from './_watch.js'
+import type { RunResult, TestResult } from './_watch.js'
 
 const result = (patch: Partial<RunResult> = {}): RunResult => ({
   status: 'ran',
@@ -57,9 +57,13 @@ const result = (patch: Partial<RunResult> = {}): RunResult => ({
   ...patch,
 })
 
-const deps = (runWatch = vi.fn(async (): Promise<RunResult> => result())) => ({
+const deps = (
+  runWatch = vi.fn(async (): Promise<RunResult> => result()),
+  sendTest = vi.fn(async (): Promise<TestResult> => ({ channels: [{ name: 'ntfy', ok: true }] })),
+) => ({
   runWatch,
   describeWatch: () => ({ channels: ['ntfy'], top: 20 }),
+  sendTest,
   get: vi.fn(),
 })
 
@@ -200,6 +204,57 @@ describe('the endpoint', () => {
     const body = await res.json()
     expect(body.meta).toMatchObject({ exists: true, startedAt: 5, lastRun: 77, runs: 3, entries: 2 })
     expect(body.ledger).toBeUndefined()
+  })
+
+  describe('the test message', () => {
+    const post = (headers: Record<string, string> = { 'x-app-token': 'ok' }, path = '/api/watch?notify=test') =>
+      new Request(`https://mi-app.vercel.app${path}`, { method: 'POST', headers })
+
+    it('is sent only behind the password, and runs no pass', async () => {
+      const run = deps().runWatch
+      const send = deps().sendTest
+      const handler = createWatchHandler({ ...deps(run, send) })
+      expect((await handler(post({}))).status).toBe(401)
+      expect(send).not.toHaveBeenCalled()
+      const res = await handler(post())
+      expect(res.status).toBe(200)
+      expect(await res.json()).toEqual({ test: { channels: [{ name: 'ntfy', ok: true }] } })
+      expect(send).toHaveBeenCalledTimes(1)
+      expect(run).not.toHaveBeenCalled()
+    })
+
+    it('points its link at the address it was reached on, or at APP_URL', async () => {
+      const send = deps().sendTest
+      const handler = createWatchHandler({ ...deps(undefined, send) })
+      await handler(post())
+      expect(send).toHaveBeenLastCalledWith(expect.anything(), 'https://mi-app.vercel.app')
+      process.env.APP_URL = 'https://panel.mi-dominio.es'
+      await handler(post())
+      expect(send).toHaveBeenLastCalledWith(expect.anything(), 'https://panel.mi-dominio.es')
+    })
+
+    it('does not need the ledger to exist: a deployment without a store can still test its channels', async () => {
+      process.env.VERCEL = '1'
+      delete process.env.BLOB_READ_WRITE_TOKEN
+      const res = await createWatchHandler(deps())(post())
+      expect(res.status).toBe(200)
+      expect((await res.json()).test.channels[0]).toMatchObject({ name: 'ntfy', ok: true })
+    })
+
+    it('is not a way for the scheduler to send one: the cron secret is not the password', async () => {
+      const send = deps().sendTest
+      const res = await createWatchHandler(deps(undefined, send))(post({ authorization: CRON }))
+      expect(res.status).toBe(401)
+      expect(send).not.toHaveBeenCalled()
+    })
+
+    it('a GET never sends anything', async () => {
+      const send = deps().sendTest
+      await createWatchHandler(deps(undefined, send))(
+        new Request('https://x/api/watch?notify=test', { headers: { 'x-app-token': 'ok' } }),
+      )
+      expect(send).not.toHaveBeenCalled()
+    })
   })
 
   it('only answers GET and POST', async () => {

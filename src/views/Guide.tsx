@@ -644,7 +644,8 @@ export function Guide() {
             antes de conocer su resultado y resuelta con las velas siguientes, comparada con lo que valían las del
             histórico a su misma edad. Es la única evidencia que no pudo escogerse mirando cómo acabó; es lenta, y la
             página hace la cuenta de cuánto. Con un canal configurado (ntfy o Telegram) avisa de cada señal nueva
-            de 4 h o diaria al móvil.
+            de 4 h o diaria al móvil, y el botón <em>Probar aviso</em> manda un mensaje de prueba para comprobar que
+            llega sin esperar a una señal.
           </li>
         </ul>
         <p className="sub">

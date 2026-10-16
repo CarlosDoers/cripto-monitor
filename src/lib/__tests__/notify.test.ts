@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { LedgerEntry } from '../ledger'
-import { entryUrl, formatAlert as format, notifiersFromEnv } from '../notify'
+import { entryUrl, formatAlert as format, notifiersFromEnv, sendTestAlerts } from '../notify'
 
 /** Intl puts a no-break space before "%": a test reads the text as a person does. */
 const formatAlert = (...args: Parameters<typeof format>) => {
@@ -103,5 +103,42 @@ describe('the channels', () => {
     const refused = vi.fn(async () => new Response('no', { status: 403, statusText: 'Forbidden' }))
     const [n] = notifiersFromEnv({ NTFY_TOPIC: 't' }, refused as unknown as typeof fetch)
     await expect(n.send(message)).rejects.toThrow('403')
+  })
+})
+
+describe('the test message', () => {
+  const ok = () => vi.fn(async () => new Response('{}', { status: 200 })) as unknown as typeof fetch
+
+  it('says it is a test and that real signals will look like this, with a link to the section', async () => {
+    const fetchImpl = ok()
+    const res = await sendTestAlerts({ NTFY_TOPIC: 'mi-tema' }, 'https://app.test/', fetchImpl)
+    expect(res).toEqual({ channels: [{ name: 'ntfy', ok: true }] })
+    const body = JSON.parse((fetchImpl as unknown as { mock: { calls: [string, { body: string }][] } }).mock.calls[0][1].body)
+    expect(body).toMatchObject({ topic: 'mi-tema', title: 'Aviso de prueba · Cripto Monitor', click: 'https://app.test/#/seguimiento' })
+    expect(body.message).toContain('Esto no es una señal')
+  })
+
+  it('tries every channel and reports each, without throwing when one fails', async () => {
+    const fetchImpl = vi.fn(async (url: string) =>
+      String(url).includes('telegram') ? new Response('no', { status: 403, statusText: 'Forbidden' }) : new Response('{}', { status: 200 }),
+    ) as unknown as typeof fetch
+    const res = await sendTestAlerts({ NTFY_TOPIC: 't', TELEGRAM_BOT_TOKEN: '123:abc', TELEGRAM_CHAT_ID: '42' }, undefined, fetchImpl)
+    expect(res.channels).toEqual([
+      { name: 'ntfy', ok: true },
+      { name: 'telegram', ok: false, error: '403 Forbidden' },
+    ])
+  })
+
+  it('never puts a secret in the error it hands back, even when the network fails', async () => {
+    const down = vi.fn(async () => {
+      throw new TypeError('fetch failed')
+    }) as unknown as typeof fetch
+    const res = await sendTestAlerts({ TELEGRAM_BOT_TOKEN: '123:SECRETO', TELEGRAM_CHAT_ID: '42' }, undefined, down)
+    expect(res.channels[0].ok).toBe(false)
+    expect(JSON.stringify(res)).not.toContain('SECRETO')
+  })
+
+  it('has nothing to report where no channel is configured', async () => {
+    expect(await sendTestAlerts({}, 'https://app.test')).toEqual({ channels: [] })
   })
 })

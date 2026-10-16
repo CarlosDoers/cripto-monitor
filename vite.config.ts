@@ -68,9 +68,18 @@ function handlerFor(server: ViteDevServer, url: string): Handler {
       ])) as [
         typeof import('./api/_okx.js'),
         typeof import('./api/_watchHandler.js'),
-        { runWatch: typeof import('./api/_watch.js').runWatch; describeWatch: typeof import('./api/_watch.js').describeWatch },
+        {
+          runWatch: typeof import('./api/_watch.js').runWatch
+          describeWatch: typeof import('./api/_watch.js').describeWatch
+          sendTest: typeof import('./api/_watch.js').sendTest
+        },
       ]
-      return watch.createWatchHandler({ runWatch: job.runWatch, describeWatch: job.describeWatch, get: okx.okxData })(request)
+      return watch.createWatchHandler({
+        runWatch: job.runWatch,
+        describeWatch: job.describeWatch,
+        sendTest: job.sendTest,
+        get: okx.okxData,
+      })(request)
     }
   }
   if (url.startsWith('/api/history')) {

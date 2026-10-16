@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { Badge, Card, DeltaValue, EmptyState, ErrorNotice, Help, ProgressBar, Skeleton, Stat, TableWrap } from '../components/ui'
 import { SideBadge } from '../components/WatchCells'
-import { runWatchNow } from '../lib/api'
+import { runWatchNow, testNotify } from '../lib/api'
 import { CONTEXT_EVIDENCE, HIGH_VOLUME } from '../lib/entryContext'
 import { dateTime, plural, price, ratio, timeAgo } from '../lib/format'
 import { HELP } from '../lib/glossary'
@@ -88,6 +88,7 @@ export function Tracking() {
   const client = useQueryClient()
   const [running, setRunning] = useState(false)
   const [note, setNote] = useState<string | null>(null)
+  const [testing, setTesting] = useState(false)
   const [all, setAll] = useState(false)
 
   const state = q.data
@@ -99,6 +100,30 @@ export function Tracking() {
     const extra = [...new Set(entries.map((e) => e.track))].filter((k) => !offered.includes(k))
     return [...offered, ...extra]
   }, [entries])
+
+  // A message that is not a signal, through the configured channels. The server accepting it is all it can
+  // know: ntfy says yes even when nobody is subscribed to the topic, so the note sends the person to the phone.
+  const sendTest = async () => {
+    setTesting(true)
+    setNote(null)
+    try {
+      const { channels } = await testNotify()
+      const failed = channels.filter((c) => !c.ok)
+      setNote(
+        channels.length === 0
+          ? 'No hay ningún canal de avisos configurado en el servidor.'
+          : failed.length === 0
+            ? `Enviado por ${channels.map((c) => c.name).join(' y ')}: debería sonar en tu móvil en unos segundos. Si no suena, mira que sigues suscrito al mismo tema y que la app puede avisarte.`
+            : `No se pudo enviar por ${failed.map((c) => `${c.name} (${c.error ?? 'sin detalle'})`).join(' ni ')}.${
+                failed.length < channels.length ? ' El resto sí salió.' : ''
+              }`,
+      )
+    } catch (err) {
+      setNote(err instanceof Error ? err.message : String(err))
+    } finally {
+      setTesting(false)
+    }
+  }
 
   const runNow = async () => {
     setRunning(true)
@@ -219,13 +244,28 @@ export function Tracking() {
             </span>
           }
         />
-        <article className="stat">
+        <article className="stat stat--actions">
           <div className="stat-header">
             <p className="stat-label">Repasar</p>
           </div>
-          <button type="button" className="btn btn--primary" onClick={runNow} disabled={running}>
-            {running ? 'Repasando…' : 'Repasar ahora'}
-          </button>
+          <div className="tracking-actions">
+            <button type="button" className="btn btn--primary" onClick={runNow} disabled={running}>
+              {running ? 'Repasando…' : 'Repasar ahora'}
+            </button>
+            <button
+              type="button"
+              className="btn btn--outline"
+              onClick={sendTest}
+              disabled={testing || channels.length === 0}
+              title={
+                channels.length === 0
+                  ? 'Sin canal configurado: define NTFY_TOPIC (o TELEGRAM_BOT_TOKEN y TELEGRAM_CHAT_ID) en Vercel y despliega.'
+                  : `Manda un mensaje de prueba por ${channels.join(' y ')}, sin esperar a una señal.`
+              }
+            >
+              {testing ? 'Enviando…' : 'Probar aviso'}
+            </button>
+          </div>
           <div className="stat-foot">
             <span>{note ?? 'El servidor lo hace solo cada hora que la app está abierta y una vez al día'}</span>
           </div>

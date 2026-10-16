@@ -139,5 +139,39 @@ export function notifiersFromEnv(env: Env, fetchImpl: Fetch = fetch): Notifier[]
   return out
 }
 
+export interface TestResult {
+  channels: { name: Notifier['name']; ok: boolean; error?: string }[]
+}
+
+/**
+ * A message that is not a signal, through every configured channel: the way to
+ * find out that the topic, the token and the phone are right without waiting
+ * for the market. `ok` means the channel's server accepted it — ntfy answers
+ * yes even when nobody is subscribed to the topic — so the view tells the
+ * person to look at their phone, and what to check if nothing arrives. A
+ * failure comes back as a result, never as an exception, and carries only the
+ * status line: a Telegram address has the bot's token in it.
+ */
+export async function sendTestAlerts(env: Env, appUrl?: string, fetchImpl: Fetch = fetch): Promise<TestResult> {
+  const message: AlertMessage = {
+    title: 'Aviso de prueba · Cripto Monitor',
+    body: [
+      'Si lees esto, los avisos funcionan: el servidor ha podido mandarte un mensaje.',
+      'Las señales reales llegarán así, con su stop, lo medido y el contexto. Esto no es una señal.',
+    ].join('\n'),
+    url: appUrl ? `${appUrl.replace(/\/+$/, '')}/#/seguimiento` : undefined,
+  }
+  const channels: TestResult['channels'] = []
+  for (const n of notifiersFromEnv(env, fetchImpl)) {
+    try {
+      await n.send(message)
+      channels.push({ name: n.name, ok: true })
+    } catch (err) {
+      channels.push({ name: n.name, ok: false, error: (err instanceof Error ? err.message : String(err)).slice(0, 120) })
+    }
+  }
+  return { channels }
+}
+
 /** Which channels are configured, by name only: a secret never travels to the browser. */
 export const channelNames = (env: Env): string[] => notifiersFromEnv(env, fetch).map((n) => n.name)

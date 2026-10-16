@@ -1,4 +1,4 @@
-import type { runWatch as Declared } from '../../api/_watch'
+import type { runWatch as Declared, sendTest as DeclaredTest } from '../../api/_watch'
 import { btcRegime, REGIME_MIN_BARS, type BtcRegime } from './entryContext'
 import { strategyByKey } from './indicators/registry'
 import type { SignalSide } from './indicators/types'
@@ -16,7 +16,7 @@ import {
   type TrackBar,
   type TrackDef,
 } from './ledger'
-import { formatAlert, notifiersFromEnv, type Notifier } from './notify'
+import { formatAlert, notifiersFromEnv, sendTestAlerts, type Notifier } from './notify'
 import { measuredContracts } from './opportunities'
 import { toCandles } from './signals'
 import { collectMarket, liquidCrypto, patient, type Get } from './snapshot'
@@ -409,6 +409,9 @@ export const runWatch: typeof Declared = async (options) => {
     return done(result({ status: 'failed', reason: message, ledger }))
   }
 }
+
+/** A message that is not a signal, through every configured channel (`notify.ts`). */
+export const sendTest: typeof DeclaredTest = (env, appUrl) => sendTestAlerts(env, appUrl)
 
 /** What the browser is told about the configuration: names and numbers, never a secret. */
 export function describeWatch(env: Env) {

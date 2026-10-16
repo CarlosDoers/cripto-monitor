@@ -1102,10 +1102,16 @@ table.data td.num {
   transition: color 0.12s ease, border-color 0.12s ease;
 }
 
-.btn--outline:hover {
+.btn--outline:hover:not(:disabled) {
   border-color: var(--baseline);
   color: var(--ink-primary);
   background: var(--surface-2);
+}
+
+/* A button that cannot be pressed has to look it: "Probar aviso" with no channel configured. */
+.btn--outline:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 
 /* ---------- Segmented Controls & Tabs ---------- */
@@ -4474,6 +4480,24 @@ table.data td.watch-what {
   flex-direction: column;
   gap: 4px;
   min-width: 190px;
+}
+
+/* On a phone the actions tile takes the whole row: beside it half the width sat empty. */
+@media (max-width: 720px) {
+  .stat--actions {
+    grid-column: 1 / -1;
+  }
+}
+
+/* The pass button and the test of the alerts, side by side where there is room and stacked where there is not. */
+.tracking-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.tracking-actions .btn--primary {
+  flex: 1 1 150px;
 }
 
 /* A count and, under it, the figure that must not be read alone. */

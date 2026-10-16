@@ -183,6 +183,16 @@ export async function watchMeta(): Promise<WatchMeta> {
   return (await request('meta=1', '/api/watch')) as WatchMeta
 }
 
+/** What happened to a test message, channel by channel. */
+export interface TestNotify {
+  channels: { name: string; ok: boolean; error?: string }[]
+}
+
+/** A message that is not a signal through every configured channel: the "Probar aviso" button. */
+export async function testNotify(): Promise<TestNotify> {
+  return ((await request('notify=test', '/api/watch', 'POST')) as { test: TestNotify }).test
+}
+
 /** A pass now. The server skips it when one has just run. */
 export async function runWatchNow(): Promise<WatchState> {
   return (await request('', '/api/watch', 'POST')) as WatchState

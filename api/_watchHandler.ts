@@ -1,7 +1,7 @@
 import { isCron } from './_cron.js'
 import { ledgerStorage, ledgerStore } from './_ledger.js'
 import { checkAccess } from './_okx.js'
-import type { Get, RunOptions, RunResult } from './_watch.js'
+import type { Get, RunOptions, RunResult, TestResult } from './_watch.js'
 
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json', 'cache-control': 'no-store' } })
@@ -9,6 +9,7 @@ const json = (body: unknown, status = 200) =>
 export interface WatchDeps {
   runWatch(options: RunOptions): Promise<RunResult>
   describeWatch(env: Record<string, string | undefined>): Record<string, unknown>
+  sendTest(env: Record<string, string | undefined>, appUrl?: string): Promise<TestResult>
   /** The signed, allowlisted OKX read. */
   get: Get
 }
@@ -23,6 +24,9 @@ export interface WatchDeps {
  *                                skips it when one just ran
  *   GET  /api/watch?run=cron   → a pass from a scheduler (Vercel's daily cron, a
  *                                GitHub workflow), authenticated by CRON_SECRET
+ *   POST /api/watch?notify=test → a message that is not a signal through every
+ *                                configured channel (the app's "Probar aviso"),
+ *                                behind the password; it runs no pass
  *
  * The job and its bundle are injected: in production `api/watch.ts` passes the
  * bundle `npm run build` writes, in development `vite.config.ts` passes the
@@ -33,6 +37,15 @@ export function createWatchHandler(deps: WatchDeps) {
     const url = new URL(request.url)
     const env = process.env
     const config = deps.describeWatch(env)
+    const appUrl = env.APP_URL || url.origin
+
+    // A test of the channels needs no ledger, so it is answered before the store is looked at.
+    if (request.method === 'POST' && url.searchParams.get('notify') === 'test') {
+      const denied = checkAccess(request)
+      if (denied) return denied
+      return json({ test: await deps.sendTest(env, appUrl) })
+    }
+
     const store = ledgerStore()
     if (!store) return json({ enabled: false, ledger: null, config })
 
@@ -55,7 +68,7 @@ export function createWatchHandler(deps: WatchDeps) {
           store,
           env,
           // Where the links in a notification point: the address this request came to, unless told otherwise.
-          appUrl: env.APP_URL || url.origin,
+          appUrl,
           dry,
           pretendStart: dry && pretend > 0 ? Date.now() - Math.min(pretend, 24 * 30) * 3_600_000 : undefined,
           force: url.searchParams.get('force') === '1' && cron,

@@ -1,6 +1,6 @@
 import { createWatchHandler } from './_watchHandler.js'
 import { okxData } from './_okx.js'
-import { describeWatch, runWatch } from './_watch.js'
+import { describeWatch, runWatch, sendTest } from './_watch.js'
 
 /**
  * The tracking ledger's endpoint. The job is `src/lib/watchJob.ts`; `_watch.js`
@@ -8,7 +8,7 @@ import { describeWatch, runWatch } from './_watch.js'
  * Vercel compiles each file under `api/` on its own and the app's extensionless
  * imports would not resolve at runtime.
  */
-const handler = createWatchHandler({ runWatch, describeWatch, get: okxData })
+const handler = createWatchHandler({ runWatch, describeWatch, sendTest, get: okxData })
 
 export default {
   fetch: (request: Request): Promise<Response> => handler(request),

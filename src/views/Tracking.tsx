@@ -492,9 +492,10 @@ export function Tracking() {
             velas siguientes: el stop, el trailing y la salida son los de la regla. Nada de esto toca tu cuenta.
           </p>
           <p>
-            Corre solo en tres sitios, y da igual cuál: el cron diario de Vercel, esta página cada hora que está
-            abierta y, si lo configuras, un planificador externo cada hora (hay un flujo de GitHub Actions listo en{' '}
-            <code>.github/workflows/watch.yml</code>). Repasar dos veces no duplica nada.
+            Corre solo en tres sitios, y da igual cuál: el cron diario de Vercel (que puede retrasarse casi una hora),
+            esta página cada hora que está abierta y, si lo configuras, un planificador externo: hay un flujo de
+            GitHub Actions listo en <code>.github/workflows/watch.yml</code>, que en la práctica llega cada una o dos
+            horas porque GitHub retrasa y salta ejecuciones. Repasar dos veces no duplica nada.
           </p>
           <p>
             <strong>Avisos.</strong> Define <code>NTFY_TOPIC</code> (un nombre largo y aleatorio) o{' '}

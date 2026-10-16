@@ -1,5 +1,10 @@
-# Un repaso horario del seguimiento (src/lib/watchJob.ts), para que las señales de 4 h y de 1 h
-# se apunten —y se avisen— sin esperar al cron diario de Vercel.
+# Un repaso del seguimiento (src/lib/watchJob.ts) pedido desde fuera, para que las señales de 4 h y
+# de 1 h se apunten —y se avisen— sin esperar al cron diario de Vercel.
+#
+# GitHub no cumple el reloj: lo pedido cada hora a menudo llega cada una o dos horas, y alguna
+# ejecución se salta (en el primer día corrió a las 01:01 y a las 03:15). Para 4 h sobra; si hace
+# falta puntualidad, un planificador externo de verdad (cron-job.org, gratis) llama a la misma
+# dirección con la misma cabecera.
 #
 # Hace falta que existan dos secretos del repositorio (Settings → Secrets and variables → Actions):
 #   WATCH_URL    la dirección de la app, sin barra final: https://tu-app.vercel.app

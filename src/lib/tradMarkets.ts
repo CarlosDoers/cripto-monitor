@@ -1,6 +1,6 @@
 import type { BookCost } from './depthCost'
 import { ratio, share } from './format'
-import { analyseDonchian, DONCHIAN_TREND_SETTINGS } from './indicators/donchianBreakout'
+import { analyseDonchian, DONCHIAN_TREND_SETTINGS, type LateBucket } from './indicators/donchianBreakout'
 import { atr, ema, highest } from './indicators/ta'
 import type { Candle } from './indicators/types'
 import type { TradBoardRow, TradKind } from './ledgerModel'
@@ -117,6 +117,20 @@ export const TRAD_TREND_EVIDENCE = {
     interval: [0.37, 1.28] as [number, number],
     ewyEwzWithoutBest10: -0.35,
     recent: { n: 49, net: 0.67, random: 0.18, withoutBest10: -0.8 },
+  },
+  /**
+   * Entering late on the daily, longs, the 20 index and sector ETFs since 1993 (`npm run late trad`): unlike crypto it holds
+   * up to two weeks with intervals clear of zero — and an ETF's long also earns the drift, which a random long does too.
+   */
+  late: {
+    sample: '20 ETF de índices y sectores, diario, desde 1993, solo longs',
+    buckets: [
+      { from: 1, to: 1, n: 1160, net: 0.43, halves: [0.52, 0.34], withoutBest10: 0.26, riskPct: 0.032, interval: [0.17, 0.7] },
+      { from: 2, to: 3, n: 1129, net: 0.44, halves: [0.57, 0.31], withoutBest10: 0.24, riskPct: 0.032, interval: [0.13, 0.82] },
+      { from: 4, to: 7, n: 1043, net: 0.44, halves: [0.56, 0.33], withoutBest10: 0.21, riskPct: 0.036, interval: [0.18, 0.8] },
+      { from: 8, to: 15, n: 903, net: 0.32, halves: [0.44, 0.2], withoutBest10: 0.13, riskPct: 0.043, interval: [0.04, 0.65] },
+      { from: 16, to: 30, n: 772, net: 0.19, halves: [0.22, 0.15], withoutBest10: 0.05, riskPct: 0.054, interval: [-0.03, 0.38] },
+    ] as LateBucket[],
   },
   /** Both sides on the same ETFs: the shorts are why the ledger follows longs only. */
   indexBothSides: 0.11,

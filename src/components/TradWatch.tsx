@@ -5,6 +5,7 @@ import { compactUsd, pct, plural, quote, ratio } from '../lib/format'
 import type { TradBoardRow } from '../lib/ledgerModel'
 import type { Market } from '../lib/markets'
 import { useTradBoard } from '../lib/queries'
+import { lateBucket, lateSentence, lateSummary } from '../lib/lateEntry'
 import { routeHref } from '../lib/router'
 import {
   tradDisplay,
@@ -32,6 +33,14 @@ const thousands = (n: number) => new Intl.NumberFormat('es-ES').format(n)
 const day = (ms: number) => new Intl.DateTimeFormat('es-ES', { day: 'numeric', month: 'short', timeZone: 'UTC' }).format(new Date(ms))
 const sessions = (n: number) => plural(n, 'sesión', 'sesiones')
 
+/** What entering this long at its age measured on the index ETFs (daily): not measured on stocks or commodities, which say so in their kind's note. */
+function late(r: TradBoardRow): string {
+  if (r.kind !== 'index' || r.age === undefined) return ''
+  const b = lateBucket(r.age, E.late.buckets)
+  if (b) return ` · ${lateSentence(b)}`
+  return r.age > E.late.buckets[E.late.buckets.length - 1].to ? ' · con más de 30 sesiones no se midió entrar' : ''
+}
+
 /** What the row says in a sentence. */
 function what(r: TradBoardRow): string {
   switch (r.status) {
@@ -42,7 +51,7 @@ function what(r: TradBoardRow): string {
     case 'cerca':
       return `sobre la EMA 200, a ${ratio(r.distanceAtr ?? 0, 1)} ATR del máximo de 20 días: si una sesión cierra por encima, abre un long`
     case 'tendencia':
-      return `long desde hace ${sessions(r.age ?? 0)}${r.entryAt ? `, entró el ${day(r.entryAt)}` : ''}`
+      return `long desde hace ${sessions(r.age ?? 0)}${r.entryAt ? `, entró el ${day(r.entryAt)}` : ''}${late(r)}`
     case 'fuera':
       if (r.shortOpen) return 'bajo la EMA 200: la regla mantendría un short, que no se sigue'
       return r.above
@@ -171,8 +180,14 @@ export function TradWatch({ markets }: { markets: Market[] }) {
         se manda si entrar y salir cuesta más de {ratio(TRAD_LIQUIDITY.maxCostR)} R de horquilla: se apunta y se sigue igual.
       </p>
       <p>
+        <strong>Entrar con la tendencia ya empezada</strong> solo se midió en los ETF de índices y sectores ({E.late.sample}): entrando a cada tramo,{' '}
+        {lateSummary(E.late.buckets, (b) => (b.from === b.to ? `${b.from} sesión` : `${b.from}–${b.to} sesiones`))}. Con intervalos claros por encima de cero hasta dos semanas, pero un
+        ETF que sube ya premia a cualquier largo (el azar mide {signed(E.index.random)} R), y el stop queda más lejos cuanto más tarde. En acciones y
+        materias primas no se midió.
+      </p>
+      <p>
         <strong>Señal nueva</strong> es una entrada de las dos últimas sesiones; <strong>cerca</strong> y <strong>en tendencia</strong> son
-        para tenerlos a la vista (entrar con la tendencia ya empezada no está medido). Es contexto, no una recomendación.
+        para tenerlos a la vista. Es contexto, no una recomendación.
       </p>
     </Help>
   )

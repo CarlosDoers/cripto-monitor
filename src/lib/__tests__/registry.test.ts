@@ -1,5 +1,14 @@
 import { describe, expect, it } from 'vitest'
-import { blockReason, profileOf, STRATEGIES, strategyByKey, tradableTimeframes } from '../indicators/registry'
+import {
+  blockReason,
+  EVIDENCE_REFRESH_DAYS,
+  evidenceAge,
+  MEASURED_THROUGH,
+  profileOf,
+  STRATEGIES,
+  strategyByKey,
+  tradableTimeframes,
+} from '../indicators/registry'
 import type { Candle } from '../indicators/types'
 
 const bars = (n: number): Candle[] =>
@@ -65,5 +74,20 @@ describe('every preset declares what the audit compares', () => {
         expect(() => strategy.run(bars(900), preset.key), `${strategy.key}/${preset.key}`).not.toThrow()
       }
     }
+  })
+})
+
+describe('the age of the measured figures', () => {
+  const through = Date.parse(`${MEASURED_THROUGH}T00:00:00Z`)
+  const day = 86_400_000
+
+  it('is silent for five weeks and then says the monthly refresh is due', () => {
+    expect(evidenceAge(through + 3 * day)).toEqual({ days: 3, stale: false })
+    expect(evidenceAge(through + EVIDENCE_REFRESH_DAYS * day).stale).toBe(false)
+    expect(evidenceAge(through + (EVIDENCE_REFRESH_DAYS + 1) * day)).toEqual({ days: EVIDENCE_REFRESH_DAYS + 1, stale: true })
+  })
+
+  it('never reads a negative age, for a clock behind the data', () => {
+    expect(evidenceAge(through - 10 * day)).toEqual({ days: 0, stale: false })
   })
 })

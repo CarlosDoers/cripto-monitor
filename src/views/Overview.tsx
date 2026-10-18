@@ -34,6 +34,7 @@ import { useFlash } from '../lib/useFlash'
 import { DUST, HoldingsTable } from '../components/HoldingsTable'
 import { ProtectionBadge } from '../components/PositionGuard'
 import { Opportunities } from '../components/Opportunities'
+import { RegimeBand } from '../components/RegimeBand'
 import { isShort, LIQ_DANGER, LIQ_WATCH, liquidationDistance, positionSize } from '../lib/guards'
 import { NEARLY_DRY } from '../lib/bots'
 import { accountAlerts } from '../lib/alerts'
@@ -470,6 +471,8 @@ export function Overview() {
       {/* What to look at next, right under how the account stands: the live
           signals of the strongest measured strategy. */}
       {narrow && positionsCard}
+
+      <RegimeBand />
 
       <Opportunities />
 

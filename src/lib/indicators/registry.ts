@@ -127,6 +127,19 @@ export const measuredThroughText = () =>
     new Date(`${MEASURED_THROUGH}T00:00:00Z`),
   )
 
+/** Days after which the declared figures are due a refresh: the policy is monthly, with a few days of grace. */
+export const EVIDENCE_REFRESH_DAYS = 35
+
+/**
+ * How old the data behind the declared figures is, and whether it is time to refresh them. Nothing breaks when it is
+ * stale — the figures are still the ones measured — but a strategy that is decaying is only seen by re-measuring, and a
+ * policy that lives in a note gets forgotten: the views say so.
+ */
+export function evidenceAge(now: number = Date.now()): { days: number; stale: boolean } {
+  const days = Math.max(0, Math.floor((now - Date.parse(`${MEASURED_THROUGH}T00:00:00Z`)) / 86_400_000))
+  return { days, stale: days > EVIDENCE_REFRESH_DAYS }
+}
+
 /** Above this the edge is solid rather than merely positive. */
 const STRONG_R = 0.25
 

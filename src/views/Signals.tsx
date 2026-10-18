@@ -33,6 +33,7 @@ import { FAST, movingAverages, SEED_FACTOR, SLOW } from '../lib/indicators/movin
 import { analyseSmc } from '../lib/indicators/smc'
 import { smcAnnotations, smcReading } from '../lib/smcView'
 import { IconAlert, IconActivity } from '../components/icons'
+import { StaleEvidence } from '../components/StaleEvidence'
 import {
   Badge,
   Card,
@@ -587,6 +588,8 @@ export function Signals({ section }: { section: 'analysis' | 'strategies' }) {
         ))}
       </div>
       )}
+
+      {section === 'strategies' && <StaleEvidence />}
 
       {/* Control / Filter Bar */}
       <div className="filter-row">

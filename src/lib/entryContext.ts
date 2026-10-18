@@ -108,6 +108,40 @@ export function btcRegime(candles: Candle[], barMs = REGIME_BAR_MS, length = REG
 /** Closed 4 h candles BTC needs before its EMA has settled: the SMA seed is gone after three lengths. */
 export const REGIME_MIN_BARS = REGIME_LENGTH * 3
 
+export interface RegimeReading {
+  above: boolean
+  /** BTC's close against its EMA, as a fraction: +0.03 is 3 % above. */
+  distance: number
+  /** Whole days BTC has stood on that side, or null when the run is older than the history read can say. */
+  days: number | null
+  /** At least this many days, when `days` is null: what the history read does cover. */
+  atLeastDays: number
+  /** What the lead trend strategy's longs measured on each side, for the sentence under it. */
+  longsAbove: number
+  longsBelow: number
+  sample: string
+}
+
+/**
+ * What the Resumen says about BTC's regime: which side of its 4 h EMA 200 it is on, since when, and what the shipped trend
+ * strategy's longs measured on each side. Null while the EMA has not settled. It is context — a split of an existing
+ * strategy's entries — and says so; the figures are `CONTEXT_EVIDENCE`'s, never typed here.
+ */
+export function regimeReading(regime: BtcRegime | null, now: number): RegimeReading | null {
+  if (!regime || regime.latest.above === null || !(regime.latest.ema > 0)) return null
+  const ev = CONTEXT_EVIDENCE['donchian/trend@4H']
+  const settledBars = Math.max(0, regime.bars - REGIME_MIN_BARS)
+  return {
+    above: regime.latest.above,
+    distance: regime.latest.close / regime.latest.ema - 1,
+    days: regime.since === null ? null : Math.max(0, Math.floor((now - regime.since) / 86_400_000)),
+    atLeastDays: Math.floor((settledBars * REGIME_BAR_MS) / 86_400_000),
+    longsAbove: ev.longs.with,
+    longsBelow: ev.longs.without,
+    sample: ev.sample,
+  }
+}
+
 export interface EntryContext {
   /** Entry candle's volume against the mean of the 20 before it. NaN when unknown. */
   volume: number

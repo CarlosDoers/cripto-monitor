@@ -117,7 +117,9 @@ export function configFromEnv(env: Env): WatchConfig {
     top: Number.isFinite(top) && top > 0 ? Math.min(40, Math.max(5, top)) : 20,
     bars: bars(env.WATCH_BARS, TRACK_BARS),
     alertBars: bars(env.WATCH_ALERT_BARS, ['4H', '1D']),
-    alertSides: sides.length ? sides : ['long', 'short'],
+    // Longs only unless told otherwise: the trend strategies' shorts measured +0.01 to +0.12 R against +0.26 to +0.61 for their longs
+    // (the reversal's +0.16 against +0.64), so a buzz for a short is one for the weaker half. They are recorded and shown all the same.
+    alertSides: sides.length ? sides : ['long'],
     maxAlertAgeMs: (Number.isFinite(hours) && hours > 0 ? hours : 8) * 3_600_000,
     trad: !off(env.WATCH_TRAD),
     tradAlert: !off(env.WATCH_TRAD_ALERT),

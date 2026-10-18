@@ -7,6 +7,7 @@ import {
 } from '../lib/donchianWatch'
 import { pct, plural, price, ratio } from '../lib/format'
 import { DONCHIAN_TREND_EVIDENCE as EVIDENCE } from '../lib/indicators/donchianBreakout'
+import { lateBucket, lateSentence, lateSummary } from '../lib/lateEntry'
 import { profileOf, strategyByKey } from '../lib/indicators/registry'
 import { type Market } from '../lib/markets'
 import { routeHref } from '../lib/router'
@@ -32,6 +33,18 @@ const thousands = (n: number) => new Intl.NumberFormat('es-ES').format(n)
 /** A reading of one contract on one bar: the watch itself and the bar it was made on. */
 type Row = Watch & { bar: WatchBar }
 
+/**
+ * What entering a long at this age measured (4 h only, longs only: the shorts have no edge to arrive late to, and 1 h was not
+ * measured). Past the last bucket, which is fifteen days, it says so instead of staying quiet.
+ */
+function late(w: Row): string {
+  if (w.bar !== '4H' || w.side !== 'long') return ''
+  const b = lateBucket(w.age, EVIDENCE.late.buckets)
+  if (b) return ` · ${lateSentence(b)}`
+  const last = EVIDENCE.late.buckets[EVIDENCE.late.buckets.length - 1]
+  return w.age > last.to ? ' · con más de 15 días no se midió entrar' : ''
+}
+
 function what(w: Row): string {
   const span = (candles: number) => spanText(candles, w.bar)
   const label = barOf(w.bar).label
@@ -48,7 +61,7 @@ function what(w: Row): string {
     case 'cerca':
       return `${ofEma} la EMA 200, a ${ratio(w.distanceAtr, 1)} ATR del ${long ? 'máximo' : 'mínimo'} de 20 velas: si una vela cierra más allá, ${turn}`
     case 'tendencia':
-      return `${w.side} desde hace ${span(w.age)}${w.side !== w.bias ? ' · ya perdió la EMA 200' : ''}`
+      return `${w.side} desde hace ${span(w.age)}${w.side !== w.bias ? ' · ya perdió la EMA 200' : ''}${late(w)}`
     case 'fuera':
       return `${ofEma} la EMA 200, sin ruptura: espera un cierre ${long ? 'sobre' : 'bajo'} ${edge} de 20 velas para abrir un ${w.bias}`
     case 'corto':
@@ -144,15 +157,25 @@ export function DonchianWatch({ markets }: { markets: Market[] }) {
               <p>
                 Los longs ganan {signed(EVIDENCE.hourly.longs)} R y los shorts {signed(EVIDENCE.hourly.shorts)} R: en 1
                 h un short no tiene ventaja medida. Salta más a menudo que en 4 h, el stop queda más cerca (un
-                movimiento normal lo toca) y no está medido para entrar con la tendencia ya empezada. Úsala como
+                movimiento normal lo toca) y entrar con la tendencia ya empezada no se midió en 1 h. Úsala como
                 lectura de plazo corto junto a la de 4 h, no en su lugar.
               </p>
             </>
           )}
           <p>
             <strong>Señal nueva</strong> es la entrada medida, en las dos últimas velas. <strong>Rompiendo</strong> y{' '}
-            <strong>cerca</strong> son para tenerlos a la vista. Entrar en una tendencia ya empezada no está medido.
+            <strong>cerca</strong> son para tenerlos a la vista.
           </p>
+          {longer && (
+            <p>
+              <strong>Entrar con la tendencia ya empezada se midió</strong> (solo longs, 4 h, {EVIDENCE.late.sample.split(', ').slice(0, 3).join(', ')}): entrando a cada tramo de edad,{' '}
+              {lateSummary(EVIDENCE.late.buckets, (b) => (b.from === 1 ? `en el primer día` : `desde el día ${Math.ceil(b.from / 6)}`))}. Todos pasan el listón en las dos mitades, pero
+              ninguno tiene el intervalo claramente por encima de cero y, pasados tres días, sin las diez mejores operaciones queda en cero o menos:
+              llegar tarde es apostar a que esta sea una de las pocas tendencias largas. Y el stop queda mucho más lejos (del{' '}
+              {pct(EVIDENCE.late.buckets[0].riskPct, 0)} al {pct(EVIDENCE.late.buckets[EVIDENCE.late.buckets.length - 1].riskPct, 0)} del precio), así que el mismo riesgo
+              en dólares compra menos posición. En 1 h no se midió.
+            </p>
+          )}
           <p>
             La columna <strong>Señal</strong> es la entrada que se está gestando y la <strong>Posición ahora</strong> la
             que la regla ya tiene abierta, simulada: no es tu cuenta. Pueden ser contrarias — por ejemplo, un short

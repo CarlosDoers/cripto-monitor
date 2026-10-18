@@ -18,6 +18,7 @@ import { compareDonchianWatch, watchDonchianTrend, type DonchianWatch } from './
 import { compareWatch, watchEmaCross, type EmaWatch } from './emaWatch'
 import { btcRegime, contextLine, type BtcRegime } from './entryContext'
 import { DONCHIAN_TREND_EVIDENCE } from './indicators/donchianBreakout'
+import { lateSummary } from './lateEntry'
 import { rowContext } from './watchContext'
 import { barChoice } from './watchBars'
 import { duration, num, pct, plural, price, qty, ratio, share, signedUsd, usd } from './format'
@@ -600,7 +601,7 @@ export async function signalsText(get: Get, market: RawMarket, opts: { ema: numb
     watching.length ? `A vigilar (fuera de su banda; si la próxima vela diaria cierra dentro, salta la señal): ${watching.map((w) => w.x.symbol).join(', ')}` : '',
     '',
     `## Ruptura + EMA 200 en 4 h (${emaSet.length} más negociados)`,
-    'Long si cierra sobre el máximo de 20 velas y sobre la EMA 200; short bajo el mínimo y bajo la EMA. Solo la "señal nueva" es la entrada medida; entrar en una tendencia ya empezada no está medido. "Señal" es la entrada que abriría la regla si la vela cierra como está (→ su dirección); "Posición ahora" es la que la regla ya tiene abierta, simulada, y a ella pertenece el stop: puede ser contraria (un short abierto con un long en camino). El stop es el vigente: el trailing de 8 ATR cuando ha pasado al inicial.',
+    `Long si cierra sobre el máximo de 20 velas y sobre la EMA 200; short bajo el mínimo y bajo la EMA. Solo la "señal nueva" es la entrada medida. Entrar con la tendencia ya empezada se midió solo para los longs (${DONCHIAN_TREND_EVIDENCE.late.sample}; una entrada por operación): ${lateSummary(DONCHIAN_TREND_EVIDENCE.late.buckets, (b) => `${b.from}–${b.to} velas`)} R; ningún intervalo queda claro por encima de cero y el stop se aleja del ${Math.round(DONCHIAN_TREND_EVIDENCE.late.buckets[0].riskPct * 100)} % al ${Math.round(DONCHIAN_TREND_EVIDENCE.late.buckets[3].riskPct * 100)} % del precio. "Señal" es la entrada que abriría la regla si la vela cierra como está (→ su dirección); "Posición ahora" es la que la regla ya tiene abierta, simulada, y a ella pertenece el stop: puede ser contraria (un short abierto con un long en camino). El stop es el vigente: el trailing de 8 ATR cuando ha pasado al inicial.`,
     table(
       ['Activo', 'Señal', 'Posición ahora', 'Desde', 'Contexto', 'Precio', 'Ruptura en', 'Distancia', 'Stop de la posición'],
       trend.map((w) => [

@@ -21,7 +21,9 @@ import { PnlCurve } from '../components/PnlCurve'
 import { RiskCard } from '../components/RiskCard'
 import { SpotResults } from '../components/SpotResults'
 import { TradingCalendar } from '../components/TradingCalendar'
+import { HabitsCard } from '../components/HabitsCard'
 import { HourlyBars } from '../components/HourlyBars'
+import { SignalAlignment } from '../components/SignalAlignment'
 import { AvgCompare, DivergingBars, WinLossBar } from '../components/PerfCharts'
 import {
   Badge,
@@ -537,6 +539,10 @@ export function Performance() {
           </Card>
         </div>
       )}
+
+      <HabitsCard trades={p.trades} dimmed={dimmed} />
+
+      <SignalAlignment trades={p.trades} dimmed={dimmed} />
 
       <Card
         title="Operaciones cerradas"

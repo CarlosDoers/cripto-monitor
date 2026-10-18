@@ -26,6 +26,7 @@ import { MIN_SAMPLE } from '../lib/performance'
 import { useWatchLedger } from '../lib/queries'
 import { routeHref } from '../lib/router'
 import { isTradTrack, TRAD_KIND, TRAD_LIQUIDITY } from '../lib/tradMarkets'
+import { StaleEvidence } from '../components/StaleEvidence'
 
 const READING: Record<Reading, { label: string; variant: 'neutral' | 'warn' | 'live'; title: string }> = {
   'sin-muestra': {
@@ -272,6 +273,8 @@ export function Tracking() {
           </div>
         </article>
       </div>
+
+      <StaleEvidence />
 
       {ledger?.lastError && (
         <Card title="El último repaso tuvo un problema">
@@ -543,8 +546,8 @@ export function Tracking() {
             <strong>Avisos.</strong> Define <code>NTFY_TOPIC</code> (un nombre largo y aleatorio) o{' '}
             <code>TELEGRAM_BOT_TOKEN</code> y <code>TELEGRAM_CHAT_ID</code> en Vercel y llegará un mensaje por cada
             señal nueva de 4 h o diaria, con su stop, lo medido y el contexto. Por defecto la de 1 h se apunta sin
-            avisar: sale varias veces al día. <code>WATCH_ALERT_BARS</code> y <code>WATCH_ALERT_SIDES</code> lo
-            cambian. La pista de bolsa, ETF y oro avisa de índices, materias primas y acciones tras el cierre de Nueva
+            avisar: sale varias veces al día. Tampoco avisa de los cortos, que midieron bastante menos que los largos: se
+            apuntan y se ven igual. <code>WATCH_ALERT_BARS</code> y <code>WATCH_ALERT_SIDES</code> lo cambian. La pista de bolsa, ETF y oro avisa de índices, materias primas y acciones tras el cierre de Nueva
             York (no de los ETF apalancados, que midieron sin ventaja): <code>WATCH_TRAD_KINDS</code> elige cuáles,{' '}
             <code>WATCH_TRAD_ALERT=off</code> la deja solo apuntando y <code>WATCH_TRAD=off</code> la apaga. Tampoco avisa de un
             contrato cuyo libro de OKX hace que entrar y salir con {new Intl.NumberFormat('es-ES').format(TRAD_LIQUIDITY.refUsd)} $ cueste más de{' '}

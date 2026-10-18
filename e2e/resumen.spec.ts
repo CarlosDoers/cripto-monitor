@@ -17,6 +17,8 @@ for (const theme of ['dark', 'light'] as const) {
     await expect(page.getByText('Salud de la cuenta').first()).toBeVisible({ timeout: 45_000 })
     await expect(page.getByText('Ganancia abierta').first()).toBeVisible()
     await expect(page.getByText('Cerrado en 30 días').first()).toBeVisible()
+    // BTC's regime band, once its 4 h candles have arrived (it draws nothing before the average has settled).
+    await expect(page.getByText('Régimen de BTC').first()).toBeVisible({ timeout: 30_000 })
     // The skeletons are gone: nothing is left loading.
     await expect(page.locator('.skeleton')).toHaveCount(0, { timeout: 30_000 })
     await expectNoOverflow(page)

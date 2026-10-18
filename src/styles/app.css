@@ -5226,3 +5226,22 @@ table.data tr.rs-leg-row > td {
   font-weight: 400;
   color: var(--ink-faint);
 }
+
+/* ---------- Cómo operas / frente a la regla ---------- */
+
+.habits {
+  display: grid;
+  gap: 18px;
+}
+
+.habit-block {
+  display: grid;
+  gap: 8px;
+}
+
+.habit-line {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--ink-secondary);
+}

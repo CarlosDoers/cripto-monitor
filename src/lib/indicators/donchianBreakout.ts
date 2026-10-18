@@ -61,6 +61,25 @@ export const DONCHIAN_SETTINGS: DonchianSettings = {
 export const DONCHIAN_TREND_SETTINGS: DonchianSettings = { ...DONCHIAN_SETTINGS, trendLen: 200 }
 
 /**
+ * What a long that arrives LATE is worth: the rule's own trade, entered `from`–`to` bars after its signal at that bar's close,
+ * with the stop in force then and the trade's own exit, in R of the late entrant's own risk. One entry per trade, at the
+ * bucket's first bar. `npm run late` measures it and `npm run late check` fails when these drift.
+ */
+export interface LateBucket {
+  /** Ages, in bars of the strategy's timeframe, that the bucket stands for; `from` is the bar it was measured at. */
+  from: number
+  to: number
+  n: number
+  net: number
+  halves: [number, number]
+  withoutBest10: number
+  /** Median distance from that late entry to its stop, as a share of the price: the stop of a late entrant is far. */
+  riskPct: number
+  /** 95 % by months (a random draw: not checked). */
+  interval: [number, number]
+}
+
+/**
  * What `npm run ideas trend` measures for that preset — the figures the preset's
  * note and the Screener's help quote, and the ones that script checks and fails
  * on when they drift. Net R per trade after a 0.1 % round trip.
@@ -77,6 +96,19 @@ export const DONCHIAN_TREND_EVIDENCE = {
     shorts: 0.12,
     /** Without its ten best trades; the trend followers live on a few. */
     withoutBest10: 0.19,
+  },
+  /**
+   * Entering late, longs on 4 h over the 30 coins, 2022–2026 (`npm run late`). Every bucket clears the bar (≥ +0.1 R in both
+   * halves), none has an interval clear of zero, and from three days on the mean without the ten best is zero or less.
+   */
+  late: {
+    sample: '30 criptos, 4 h, 2022–2026, solo longs',
+    buckets: [
+      { from: 1, to: 6, n: 1547, net: 0.46, halves: [0.8, 0.12], withoutBest10: 0.13, riskPct: 0.044, interval: [-0.09, 1.13] },
+      { from: 7, to: 18, n: 1175, net: 0.34, halves: [0.37, 0.32], withoutBest10: 0.0, riskPct: 0.057, interval: [-0.15, 0.89] },
+      { from: 19, to: 42, n: 773, net: 0.15, halves: [0.18, 0.13], withoutBest10: -0.08, riskPct: 0.087, interval: [-0.18, 0.6] },
+      { from: 43, to: 90, n: 490, net: 0.14, halves: [0.15, 0.13], withoutBest10: -0.06, riskPct: 0.117, interval: [-0.15, 0.58] },
+    ] as LateBucket[],
   },
   /** The same rule on 14 coins in 2018–2021, a period nothing was tuned on. */
   old: { n: 1009, net: 1.07, plain: 0.46 },

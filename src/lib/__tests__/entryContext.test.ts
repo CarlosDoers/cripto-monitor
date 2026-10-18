@@ -3,9 +3,11 @@ import {
   btcRegime,
   closesAtWeekend,
   contextTags,
+  CONTEXT_EVIDENCE,
   entryContext,
   HIGH_VOLUME,
   REGIME_BAR_MS,
+  regimeReading,
   volumeRatio,
   withRegime,
 } from '../entryContext'
@@ -146,5 +148,45 @@ describe('contextTags', () => {
   it('states the facts without a verdict for a strategy that was not measured', () => {
     const tags = contextTags({ btcAbove: false, volume: 0.5, weekend: true }, 'long', 'reversal/tuned@1D')
     expect(tags.map((t) => t.tone)).toEqual(['neutral', 'neutral', 'neutral'])
+  })
+})
+
+describe('regimeReading', () => {
+  const now = 740 * H4
+
+  it('says which side BTC is on, how far, and since when, with the figures the tags quote', () => {
+    const r = regimeReading(btcRegime(climbing()), now)!
+    expect(r.above).toBe(true)
+    expect(r.distance).toBeGreaterThan(0)
+    // The climb began at candle 700: a few days before `now`, counted in whole days.
+    expect(r.days).toBeGreaterThanOrEqual(0)
+    expect(r.days).toBeLessThanOrEqual(7)
+    const ev = CONTEXT_EVIDENCE['donchian/trend@4H']
+    expect(r.longsAbove).toBe(ev.longs.with)
+    expect(r.longsBelow).toBe(ev.longs.without)
+    expect(r.sample).toBe(ev.sample)
+  })
+
+  it('reads below the average as below, with a negative distance', () => {
+    const falling = [
+      ...Array.from({ length: 700 }, (_, i) => candle(i, 100)),
+      ...Array.from({ length: 40 }, (_, k) => candle(700 + k, 100 - 1.5 * (k + 1))),
+    ]
+    const r = regimeReading(btcRegime(falling), now)!
+    expect(r.above).toBe(false)
+    expect(r.distance).toBeLessThan(0)
+  })
+
+  it('does not know the day the run began when it is older than the history read, and says how much it does cover', () => {
+    const old = Array.from({ length: 1500 }, (_, i) => candle(i, 100 + i))
+    const r = regimeReading(btcRegime(old), 1500 * H4)!
+    expect(r.days).toBeNull()
+    // 1 500 candles less the 600 the EMA needs to settle, at six a day.
+    expect(r.atLeastDays).toBe(150)
+  })
+
+  it('says nothing until the average has settled, or without candles', () => {
+    expect(regimeReading(btcRegime(climbing().slice(0, 100)), now)).toBeNull()
+    expect(regimeReading(null, now)).toBeNull()
   })
 })

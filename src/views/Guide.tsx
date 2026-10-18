@@ -464,6 +464,22 @@ const FINDINGS: { verdict: Verdict; what: string; detail: ReactNode }[] = [
   },
   {
     verdict: 'ojo',
+    what: 'Entrar tarde en una tendencia ya empezada',
+    detail: (
+      <>
+        Las filas «en tendencia» del Screener son contratos cuya señal saltó hace días. Se midió qué vale entrar entonces, con el
+        stop que tenía la operación en ese momento y su misma salida (solo longs, en 4 h, sobre 30 criptos desde 2022):{' '}
+        <strong>+0,46 R</strong> si llegas dentro del primer día, <strong>+0,34 R</strong> a los tres días, +0,15 R a la semana y
+        +0,14 R a los 15 días. Pero ningún intervalo queda claramente por encima de cero; pasados tres días, sin las diez mejores
+        operaciones sale cero o menos (llegar tarde es apostar a que esta sea una de las pocas tendencias largas); y el stop queda
+        mucho más lejos, del 4 % al 12 % del precio, así que el mismo riesgo en dólares compra menos posición. En los ETF de
+        índices, en diario, aguanta mejor (+0,44 R hasta una semana, +0,32 R hasta dos), en parte porque un ETF que sube premia a
+        cualquier largo. Los cortos no tienen ventaja a la que llegar tarde, y en 1 h no se midió. Cada fila lo dice con su cifra.
+      </>
+    ),
+  },
+  {
+    verdict: 'ojo',
     what: 'Oro: cubrir el perpetuo XAU con oro tokenizado',
     detail: (
       <>
@@ -730,7 +746,10 @@ export function Guide() {
           </li>
           <li>
             <strong>Rendimiento</strong>: tus operaciones cerradas analizadas: qué activos, qué lado,
-            qué horas y qué días te dan o te quitan dinero.
+            qué horas y qué días te dan o te quitan dinero. «Cómo operas» mira tus hábitos (cuánto aguantas lo que pierde, qué
+            haces tras una pérdida, con qué apalancamiento) y, bajo demanda, cuántas operaciones abriste con la regla de
+            tendencia a favor o en contra. Siempre con el tamaño de cada grupo y la mediana, porque una sola operación enorme
+            puede hacer pasar por hábito lo que fue un accidente.
           </li>
           <li>
             <strong>Historial</strong>: el registro de todo: órdenes, ejecuciones, bots detenidos,
@@ -866,7 +885,7 @@ export function Guide() {
             <strong>Qué vigilo</strong> (las dos tarjetas siguientes): una por cada estrategia de
             tendencia que pasó el listón en 4 h —la ruptura de 20 velas a favor de la EMA 200 y el cruce de
             la EMA 200—. Escanean los 10 o 20 contratos más negociados y dicen cuáles tienen la señal nueva,
-            la están rompiendo ahora o están cerca. Entrar con una tendencia ya empezada no está medido.
+            la están rompiendo ahora o están cerca. Entrar con una tendencia ya empezada solo está medido para los longs de la ruptura (en 4 h) y de los ETF de índices (en diario): cada fila «en tendencia» lo dice.
           </li>
           <li>
             <strong>Filtros</strong>: combínalos para buscar algo concreto, por ejemplo «acciones en

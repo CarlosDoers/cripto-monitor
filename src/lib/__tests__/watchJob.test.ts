@@ -99,12 +99,14 @@ const env = { WATCH_TOP: '5', WATCH_BARS: '4H', NTFY_TOPIC: 'topic-de-prueba' }
 describe('configuration', () => {
   it('has sane defaults and clamps what it is given', () => {
     const d = configFromEnv({})
-    expect(d).toMatchObject({ top: 20, bars: ['4H', '1H', '1D'], alertBars: ['4H', '1D'], alertSides: ['long', 'short'] })
+    expect(d).toMatchObject({ top: 20, bars: ['4H', '1H', '1D'], alertBars: ['4H', '1D'], alertSides: ['long'] })
     expect(d.maxAlertAgeMs).toBe(8 * 3_600_000)
     expect(configFromEnv({ WATCH_TOP: '1000' }).top).toBe(40)
     expect(configFromEnv({ WATCH_TOP: '2' }).top).toBe(5)
     expect(configFromEnv({ WATCH_BARS: '4h, nope, 1d' }).bars).toEqual(['4H', '1D'])
     expect(configFromEnv({ WATCH_ALERT_SIDES: 'LONG' }).alertSides).toEqual(['long'])
+    expect(configFromEnv({ WATCH_ALERT_SIDES: 'long, short' }).alertSides).toEqual(['long', 'short'])
+    expect(configFromEnv({ WATCH_ALERT_SIDES: 'nada' }).alertSides).toEqual(['long'])
   })
 
   it('names the channels and never prints a secret', () => {
@@ -112,6 +114,13 @@ describe('configuration', () => {
     expect(d.channels).toEqual(['ntfy', 'telegram'])
     expect(JSON.stringify(d)).not.toContain('secret-token')
     expect(describeWatch({}).channels).toEqual([])
+  })
+
+  it('announces longs and not shorts unless the config says otherwise, and records both', () => {
+    const e = { bar: '4H', side: 'short', at: T0 - H4 } as Parameters<typeof alertEligible>[0]
+    expect(alertEligible(e, configFromEnv({}), T0)).toBe(false)
+    expect(alertEligible({ ...e, side: 'long' }, configFromEnv({}), T0)).toBe(true)
+    expect(alertEligible(e, configFromEnv({ WATCH_ALERT_SIDES: 'long,short' }), T0)).toBe(true)
   })
 
   it('announces only what the config asks for, and nothing stale', () => {

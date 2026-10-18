@@ -7,3 +7,7 @@
 .research
 # The tracking ledger kept on disk by `npm run dev` (api/_ledger.ts).
 .watch
+.watch-e2e
+test-results
+playwright-report
+e2e

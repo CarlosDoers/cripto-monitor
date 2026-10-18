@@ -52,3 +52,6 @@ api/_watch.js
 
 # Public-API data fetched by scripts/literature-research.mjs
 .research
+.watch-e2e
+test-results
+playwright-report

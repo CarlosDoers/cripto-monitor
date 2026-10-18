@@ -11,7 +11,7 @@ npm run dev              # Vite dev server; also runs the api/ function (see bel
 npm run build            # tsc -b && vitest run && vite build && the connector bundle — the gate
 npm test                 # vitest: the pure functions, the connector, OAuth, the history, the CSP hash
 npm run lint             # oxlint (the React Compiler rules are off in .oxlintrc.json: no compiler here)
-npm run e2e              # Playwright on the installed Chrome, desktop and 390 px: starts its own dev server (port 5198, no password, scratch ledger in .watch-e2e, no alert channel) against live OKX; not part of the build. e2e/screener-trad.spec.ts: the equities card's liquidity column, no overflow, the phone card layout
+npm run e2e              # Playwright on the installed Chrome, desktop and 390 px: starts its own dev server (port 5198, no password, scratch ledger in .watch-e2e, no alert channel) against live OKX; not part of the build. specs in `e2e/`: `screener-trad` (the equities card's liquidity column, no overflow, the phone card layout, with a fixed board), `resumen` (the live account in both themes: loads, no overflow, no NaN/undefined on screen, every section reachable on a phone) and `seguimiento` (a fixed ledger: announced and kept-quiet signals, the *Probar aviso* flow); `e2e/helpers.ts` has the shared checks
 npm run candles          # populate ./.candles, or extend it to today (incremental; needs npm run dev up, DEV_URL if not :5174)
 npm run audit            # every strategy vs. the profile it claims — exits non-zero on drift
 npm run orb              # the evidence behind the opening range, which the audit does not check
